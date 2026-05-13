@@ -1,0 +1,25 @@
+# Backend
+backend/bin/
+backend/static/frontend_dist/
+backend/todolist.db
+*.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (keep example, ignore local)
+config.yaml
+
+# Build
+todolist

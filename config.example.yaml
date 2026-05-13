@@ -1,0 +1,35 @@
+server:
+  port: 8080
+
+db:
+  driver: sqlite
+  dsn: "todolist.db"
+
+auth:
+  mode: basic
+  basic:
+    users:
+      - username: admin
+        password: admin123
+        display_name: Admin
+      - username: user1
+        password: user123
+        display_name: User One
+  oidc:
+    issuer: ""
+    client_id: ""
+    client_secret: ""
+    redirect_url: ""
+    scopes:
+      - openid
+      - profile
+      - email
+
+session:
+  secret: "change-me-in-production"
+  max_age: 86400
+  cleanup_interval: 3600
+
+log:
+  format: text
+  level: info
