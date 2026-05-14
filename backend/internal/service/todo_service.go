@@ -46,7 +46,6 @@ type CreateTodoInput struct {
 	Priority      string     `json:"priority"`
 	Tags          []string   `json:"tags"`
 	DueAt         *time.Time `json:"due_at"`
-	ParentID      *uint      `json:"parent_id"`
 	DependsOnIDs  []uint     `json:"depends_on_ids"`
 	DuplicateOfID *uint      `json:"duplicate_of_id"`
 }
@@ -57,7 +56,6 @@ type UpdateTodoInput struct {
 	Priority      *string     `json:"priority"`
 	Tags          *[]string   `json:"tags"`
 	DueAt         **time.Time `json:"due_at"`
-	ParentID      *uint       `json:"parent_id"`
 	DependsOnIDs  *[]uint     `json:"depends_on_ids"`
 	DuplicateOfID *uint       `json:"duplicate_of_id"`
 }
@@ -87,13 +85,6 @@ func (s *TodoService) CreateTodo(userID uint, input CreateTodoInput) (*model.Tod
 		return nil, fmt.Errorf("invalid priority: %s", input.Priority)
 	}
 
-	if input.ParentID != nil {
-		_, err := s.todoRepo.FindByID(nil, *input.ParentID, userID)
-		if err != nil {
-			return nil, fmt.Errorf("parent not found")
-		}
-	}
-
 	todo := &model.Todo{}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -110,7 +101,6 @@ func (s *TodoService) CreateTodo(userID uint, input CreateTodoInput) (*model.Tod
 		todo.Category = category
 		todo.Priority = priority
 		todo.DueAt = input.DueAt
-		todo.ParentID = input.ParentID
 		todo.CreatedAt = now
 		todo.UpdatedAt = now
 
@@ -155,16 +145,6 @@ func (s *TodoService) UpdateTodo(userID, todoID uint, input UpdateTodoInput) (*m
 	}
 	if input.DueAt != nil {
 		todo.DueAt = *input.DueAt
-	}
-	if input.ParentID != nil {
-		if *input.ParentID != 0 {
-			if err := s.validateParentCycle(nil, todo.ID, *input.ParentID, userID); err != nil {
-				return nil, err
-			}
-			todo.ParentID = input.ParentID
-		} else {
-			todo.ParentID = nil
-		}
 	}
 
 	todo.UpdatedAt = time.Now()
@@ -234,9 +214,6 @@ func (s *TodoService) DeleteTodo(userID, todoID uint) error {
 			return err
 		}
 		if err := s.relationRepo.DeleteBySourceOrTarget(tx, todoID); err != nil {
-			return err
-		}
-		if err := s.todoRepo.OrphanChildren(tx, todoID); err != nil {
 			return err
 		}
 		return s.todoRepo.Delete(tx, todoID, userID)
@@ -315,7 +292,7 @@ func (s *TodoService) ReopenTodo(userID, todoID uint, cascadeDependents bool) (*
 	if err != nil {
 		return nil, fmt.Errorf("todo not found")
 	}
-	if todo.Status != model.StatusCompleted {
+	if todo.Status == model.StatusCompleted {
 		return nil, nil
 	}
 
@@ -401,22 +378,6 @@ func (s *TodoService) createRelations(tx *gorm.DB, todoID, userID uint, dependsO
 		}
 	}
 
-	return nil
-}
-
-func (s *TodoService) validateParentCycle(tx *gorm.DB, todoID, parentID, userID uint) error {
-	if todoID == parentID {
-		return fmt.Errorf("self-parent not allowed")
-	}
-	chain, err := s.todoRepo.WalkParentChain(tx, parentID)
-	if err != nil {
-		return err
-	}
-	for _, id := range chain {
-		if id == todoID {
-			return fmt.Errorf("parent would create cycle")
-		}
-	}
 	return nil
 }
 

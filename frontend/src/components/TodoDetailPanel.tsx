@@ -247,26 +247,10 @@ export function TodoDetailPanel({ todoId, onEdit, onNavigate, onAddPrerequisite 
       </Descriptions>
 
       {/* Relationships */}
-      {(todo.parent || todo.children.length > 0 || todo.depends_on.length > 0 || todo.depended_by.length > 0) && (
+      {(todo.depends_on.length > 0 || todo.depended_by.length > 0) && (
         <>
           <Divider style={{ margin: '8px 0' }} />
           <div style={{ marginBottom: 12 }}>
-            {todo.parent && (
-              <div style={{ marginBottom: 4 }}>
-                <Text strong>{t('detail.parent')}: </Text>
-                <SummaryLink item={todo.parent} />
-              </div>
-            )}
-            {todo.children.length > 0 && (
-              <div style={{ marginBottom: 4 }}>
-                <Text strong>{t('detail.children')}: </Text>
-                <div style={{ paddingLeft: 16 }}>
-                  {todo.children.map((child) => (
-                    <div key={child.id}><SummaryLink item={child} /></div>
-                  ))}
-                </div>
-              </div>
-            )}
             {todo.depends_on.length > 0 && (
               <div style={{ marginBottom: 4 }}>
                 <Text strong>{t('detail.dependsOn')}: </Text>

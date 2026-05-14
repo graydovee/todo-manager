@@ -12,7 +12,6 @@ type Todo struct {
 	Priority    string     `gorm:"not null;size:10;default:p2" json:"priority"`
 	Status      string     `gorm:"not null;size:20;default:open" json:"status"`
 	DueAt       *time.Time `json:"due_at"`
-	ParentID    *uint      `gorm:"index" json:"parent_id"`
 	CreatedAt   time.Time  `gorm:"not null" json:"created_at"`
 	UpdatedAt   time.Time  `gorm:"not null" json:"updated_at"`
 

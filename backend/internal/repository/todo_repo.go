@@ -136,44 +136,6 @@ func (r *TodoRepo) List(tx *gorm.DB, userID uint, filters TodoFilters) ([]*model
 	return todos, total, nil
 }
 
-func (r *TodoRepo) FindChildren(tx *gorm.DB, parentID uint, userID uint) ([]*model.Todo, error) {
-	db := r.getDB(tx)
-	var todos []*model.Todo
-	if err := db.Where("parent_id = ? AND user_id = ?", parentID, userID).Find(&todos).Error; err != nil {
-		return nil, err
-	}
-	return todos, nil
-}
-
-func (r *TodoRepo) OrphanChildren(tx *gorm.DB, parentID uint) error {
-	db := r.getDB(tx)
-	return db.Model(&model.Todo{}).Where("parent_id = ?", parentID).Update("parent_id", nil).Error
-}
-
-func (r *TodoRepo) WalkParentChain(tx *gorm.DB, todoID uint) ([]uint, error) {
-	db := r.getDB(tx)
-	var chain []uint
-	currentID := todoID
-	visited := make(map[uint]bool)
-
-	for {
-		if visited[currentID] {
-			return nil, fmt.Errorf("cycle detected in parent chain")
-		}
-		visited[currentID] = true
-
-		var todo model.Todo
-		if err := db.Select("id, parent_id").Where("id = ?", currentID).First(&todo).Error; err != nil {
-			return chain, nil
-		}
-		if todo.ParentID == nil {
-			return chain, nil
-		}
-		chain = append(chain, *todo.ParentID)
-		currentID = *todo.ParentID
-	}
-}
-
 func (r *TodoRepo) getDB(tx *gorm.DB) *gorm.DB {
 	if tx != nil {
 		return tx

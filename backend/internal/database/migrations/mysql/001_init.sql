@@ -16,14 +16,12 @@ CREATE TABLE IF NOT EXISTS todos (
     description TEXT,
     category ENUM('bug', 'feature', 'task') NOT NULL,
     priority ENUM('p0', 'p1', 'p2', 'p3') NOT NULL DEFAULT 'p2',
-    completed TINYINT(1) NOT NULL DEFAULT 0,
+    status ENUM('open', 'in_progress', 'completed') NOT NULL DEFAULT 'open',
     due_at DATETIME NULL,
-    parent_id BIGINT UNSIGNED NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT idx_user_code UNIQUE (user_id, code),
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (parent_id) REFERENCES todos(id)
+    FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS todo_tags (
@@ -62,6 +60,19 @@ CREATE TABLE IF NOT EXISTS sessions (
     UNIQUE KEY idx_sessions_session_id (session_id),
     KEY idx_sessions_expires_at (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS comments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    todo_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_comments_todo_id ON comments(todo_id);
+CREATE INDEX idx_comments_user_id ON comments(user_id);
 
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version VARCHAR(255) PRIMARY KEY,

@@ -7,6 +7,7 @@ import { TodoFilter } from '../components/TodoFilter';
 import { TodoDetailPanel } from '../components/TodoDetailPanel';
 import { TodoForm } from '../components/TodoForm';
 import { useTodos } from '../hooks/useTodos';
+import { getTodo, updateTodo } from '../api/todos';
 import type { TodoFilters, Category, TodoSummary } from '../types';
 
 export function TodoListPage() {
@@ -70,9 +71,17 @@ export function TodoListPage() {
     setFormOpen(true);
   };
 
+  const handlePrerequisiteCreated = useCallback(async (newTodoId: number) => {
+    if (prerequisiteForId) {
+      const currentTodo = await getTodo(prerequisiteForId);
+      const existingIds = currentTodo.depends_on.map((d) => d.id);
+      await updateTodo(prerequisiteForId, { depends_on_ids: [...existingIds, newTodoId] });
+      setPrerequisiteForId(undefined);
+    }
+  }, [prerequisiteForId]);
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>{t('todo.title')}</h2>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
@@ -80,12 +89,9 @@ export function TodoListPage() {
         </Button>
       </div>
 
-      {/* Filter bar */}
       <TodoFilter filters={filters} onChange={handleFilterChange} />
 
-      {/* Main area: left list + right detail */}
       <div style={{ flex: 1, display: 'flex', gap: 16, minHeight: 0, marginTop: 12 }}>
-        {/* Left panel: table */}
         <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
           <TodoTable
             data={data}
@@ -102,7 +108,6 @@ export function TodoListPage() {
           />
         </div>
 
-        {/* Right panel: detail */}
         <div style={{ flex: 1, overflow: 'auto', borderLeft: '1px solid #f0f0f0', background: '#fff', minWidth: 0 }}>
           <TodoDetailPanel
             todoId={selectedTodoId}
@@ -122,6 +127,7 @@ export function TodoListPage() {
         }}
         defaultCategory={undefined as unknown as Category}
         lockedPrerequisite={lockedPrerequisite}
+        onCreated={prerequisiteForId ? handlePrerequisiteCreated : undefined}
       />
     </div>
   );

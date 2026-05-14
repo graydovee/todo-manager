@@ -16,9 +16,8 @@ CREATE TABLE IF NOT EXISTS todos (
     description TEXT DEFAULT '',
     category VARCHAR(20) NOT NULL CHECK (category IN ('bug', 'feature', 'task')),
     priority VARCHAR(10) NOT NULL DEFAULT 'p2' CHECK (priority IN ('p0', 'p1', 'p2', 'p3')),
-    completed BOOLEAN NOT NULL DEFAULT FALSE,
+    status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'completed')),
     due_at TIMESTAMPTZ,
-    parent_id BIGINT REFERENCES todos(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT idx_user_code UNIQUE (user_id, code)
@@ -56,13 +55,24 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at TIMESTAMPTZ NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS comments (
+    id BIGSERIAL PRIMARY KEY,
+    todo_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (todo_id) REFERENCES todos(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_todos_user_id ON todos(user_id);
-CREATE INDEX IF NOT EXISTS idx_todos_parent_id ON todos(parent_id);
 CREATE INDEX IF NOT EXISTS idx_todo_tags_todo_id ON todo_tags(todo_id);
 CREATE INDEX IF NOT EXISTS idx_todo_relations_source_id ON todo_relations(source_id);
 CREATE INDEX IF NOT EXISTS idx_todo_relations_target_id ON todo_relations(target_id);
+CREATE INDEX IF NOT EXISTS idx_comments_todo_id ON comments(todo_id);
+CREATE INDEX IF NOT EXISTS idx_comments_user_id ON comments(user_id);
 
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version VARCHAR(255) PRIMARY KEY,

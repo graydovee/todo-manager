@@ -31,7 +31,6 @@ type TodoResponse struct {
 	Priority    string     `json:"priority"`
 	Status      string     `json:"status"`
 	DueAt       *time.Time `json:"due_at"`
-	ParentID    *uint      `json:"parent_id"`
 	Tags        []string   `json:"tags"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
@@ -43,8 +42,6 @@ type TodoDetailResponse struct {
 	DependedBy  []TodoSummaryDTO `json:"depended_by"`
 	DuplicateOf *TodoSummaryDTO  `json:"duplicate_of"`
 	Duplicates  []TodoSummaryDTO `json:"duplicates"`
-	Parent      *TodoSummaryDTO  `json:"parent"`
-	Children    []TodoSummaryDTO `json:"children"`
 }
 
 type PaginatedResponse struct {
@@ -85,9 +82,8 @@ func todoToResponse(todo *model.Todo) TodoResponse {
 		Description: todo.Description,
 		Category:    todo.Category,
 		Priority:    todo.Priority,
-		Status:    todo.Status,
+		Status:      todo.Status,
 		DueAt:       todo.DueAt,
-		ParentID:    todo.ParentID,
 		Tags:        tags,
 		CreatedAt:   todo.CreatedAt,
 		UpdatedAt:   todo.UpdatedAt,

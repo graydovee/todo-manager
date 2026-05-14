@@ -324,7 +324,6 @@ func (h *TodoHandler) DeleteComment(c echo.Context) error {
 func (h *TodoHandler) buildDetailResponse(todo *model.Todo, userID uint) TodoDetailResponse {
 	resp := TodoDetailResponse{TodoResponse: todoToResponse(todo)}
 
-	// Load related todo summaries
 	var dependsOn, dependedBy, duplicates []TodoSummaryDTO
 	var duplicateOf *TodoSummaryDTO
 
@@ -342,7 +341,6 @@ func (h *TodoHandler) buildDetailResponse(todo *model.Todo, userID uint) TodoDet
 		}
 	}
 
-	// Find reverse relations (depended_by, duplicates pointing to this)
 	var reverseRels []model.TodoRelation
 	h.db.Where("target_id = ?", todo.ID).Find(&reverseRels)
 	for _, rel := range reverseRels {
@@ -362,24 +360,6 @@ func (h *TodoHandler) buildDetailResponse(todo *model.Todo, userID uint) TodoDet
 	resp.DependedBy = ensureNonNil(dependedBy)
 	resp.Duplicates = ensureNonNil(duplicates)
 	resp.DuplicateOf = duplicateOf
-
-	// Parent
-	if todo.ParentID != nil {
-		var parent model.Todo
-		if h.db.Select("id, code, title").Where("id = ? AND user_id = ?", *todo.ParentID, userID).First(&parent).Error == nil {
-			resp.Parent = &TodoSummaryDTO{ID: parent.ID, Code: parent.Code, Title: parent.Title}
-		}
-	}
-
-	// Children
-	children, err := h.todoRepo.FindChildren(nil, todo.ID, userID)
-	if err == nil {
-		var childSummaries []TodoSummaryDTO
-		for _, child := range children {
-			childSummaries = append(childSummaries, TodoSummaryDTO{ID: child.ID, Code: child.Code, Title: child.Title})
-		}
-		resp.Children = ensureNonNil(childSummaries)
-	}
 
 	return resp
 }

@@ -22,7 +22,6 @@ export interface Todo {
   priority: Priority;
   status: Status;
   due_at: string | null;
-  parent_id: number | null;
   tags: string[];
   created_at: string;
   updated_at: string;
@@ -33,8 +32,6 @@ export interface TodoDetail extends Todo {
   depended_by: TodoSummary[];
   duplicate_of: TodoSummary | null;
   duplicates: TodoSummary[];
-  parent: TodoSummary | null;
-  children: TodoSummary[];
 }
 
 export interface Comment {
@@ -82,7 +79,6 @@ export interface CreateTodoInput {
   priority?: Priority;
   tags?: string[];
   due_at?: string;
-  parent_id?: number;
   depends_on_ids?: number[];
   duplicate_of_id?: number;
 }
@@ -93,7 +89,6 @@ export interface UpdateTodoInput {
   priority?: Priority;
   tags?: string[];
   due_at?: string | null;
-  parent_id?: number | null;
   depends_on_ids?: number[];
   duplicate_of_id?: number | null;
 }

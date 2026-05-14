@@ -81,12 +81,7 @@ export function TodoForm({ open, todoId, onClose, defaultCategory, lockedPrerequ
       } else {
         form.resetFields();
         if (defaultCategory) form.setFieldValue('category', defaultCategory);
-        if (lockedPrerequisite) {
-          setDepsOptions([lockedPrerequisite]);
-          form.setFieldValue('depends_on_ids', [lockedPrerequisite.id]);
-        } else {
-          setDepsOptions([]);
-        }
+        setDepsOptions([]);
       }
     }
   }, [open, todo, defaultCategory, lockedPrerequisite, form]);
@@ -168,7 +163,6 @@ export function TodoForm({ open, todoId, onClose, defaultCategory, lockedPrerequ
             mode="multiple"
             showSearch
             allowClear
-            disabled={hasLockedPrerequisite}
             filterOption={false}
             placeholder={t('todo.enterTodoIds')}
             onSearch={(q) => {
