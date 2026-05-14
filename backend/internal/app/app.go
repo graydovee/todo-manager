@@ -77,6 +77,7 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 	authMW := middleware.Auth(sessionStore, userRepo)
 	todos := api.Group("/todos", authMW)
 	todos.GET("", todoHandler.List)
+	todos.GET("/graph", todoHandler.Graph)
 	todos.GET("/:id", todoHandler.Get)
 	todos.POST("", todoHandler.Create)
 	todos.PATCH("/:id", todoHandler.Update)

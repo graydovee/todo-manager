@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
 import type { Todo, PaginatedResponse } from '../types';
 import { useStartTodo, useCompleteTodo, useReopenTodo, useDeleteTodo } from '../hooks/useTodos';
+import type { HttpErrorLike, RelationConflictItem } from '../types/errors';
 
 const PRIORITY_COLORS: Record<string, string> = {
   p0: 'red',
@@ -46,6 +47,11 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
   const reopenMutation = useReopenTodo();
   const deleteMutation = useDeleteTodo();
 
+  const getConflictItems = (error: unknown, key: 'pending_dependencies' | 'completed_dependents'): RelationConflictItem[] => {
+    const httpError = error as HttpErrorLike;
+    return httpError.response?.data?.[key] || [];
+  };
+
   const handleStart = async (id: number) => {
     await startMutation.mutateAsync(id);
     message.success(t('confirm.todoStarted'));
@@ -55,16 +61,17 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
     try {
       await completeMutation.mutateAsync({ id: todo.id, cascade: false });
       message.success(t('confirm.todoCompleted'));
-    } catch (error: any) {
-      if (error?.response?.status === 409) {
-        const pending = error.response.data.pending_dependencies || [];
+    } catch (error: unknown) {
+      const httpError = error as HttpErrorLike;
+      if (httpError.response?.status === 409) {
+        const pending = getConflictItems(error, 'pending_dependencies');
         Modal.confirm({
           title: t('confirm.completeWithDeps'),
           content: (
             <div>
               <p>{t('confirm.hasIncompleteDeps')}</p>
               <ul>
-                {pending.map((item: any) => (
+                {pending.map((item) => (
                   <li key={item.id}>{item.code} - {item.title}</li>
                 ))}
               </ul>
@@ -84,16 +91,17 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
     try {
       await reopenMutation.mutateAsync({ id: todo.id, cascade: false });
       message.success(t('confirm.todoReopened'));
-    } catch (error: any) {
-      if (error?.response?.status === 409) {
-        const completed = error.response.data.completed_dependents || [];
+    } catch (error: unknown) {
+      const httpError = error as HttpErrorLike;
+      if (httpError.response?.status === 409) {
+        const completed = getConflictItems(error, 'completed_dependents');
         Modal.confirm({
           title: t('confirm.reopenWithDependents'),
           content: (
             <div>
               <p>{t('confirm.reopenAffects')}</p>
               <ul>
-                {completed.map((item: any) => (
+                {completed.map((item) => (
                   <li key={item.id}>{item.code} - {item.title}</li>
                 ))}
               </ul>
@@ -173,7 +181,7 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
       title: t('todo.actions'),
       key: 'actions',
       width: 120,
-      render: (_: any, record: Todo) => (
+      render: (_value: unknown, record: Todo) => (
         <Space size={0}>
           {record.status === 'open' && (
             <Tooltip title={t('detail.startProgress')}>

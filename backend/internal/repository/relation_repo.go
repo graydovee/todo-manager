@@ -74,6 +74,27 @@ func (r *RelationRepo) FindBySourceAndType(tx *gorm.DB, sourceID uint, relationT
 	return relations, nil
 }
 
+func (r *RelationRepo) FindByUserAndType(tx *gorm.DB, userID uint, relationType model.RelationType) ([]*model.TodoRelation, error) {
+	db := tx
+	if db == nil {
+		db = r.db
+	}
+
+	var relations []*model.TodoRelation
+	if err := db.
+		Table("todo_relations").
+		Select("todo_relations.id, todo_relations.source_id, todo_relations.target_id, todo_relations.relation_type").
+		Joins("JOIN todos source_todos ON source_todos.id = todo_relations.source_id").
+		Joins("JOIN todos target_todos ON target_todos.id = todo_relations.target_id").
+		Where("source_todos.user_id = ? AND target_todos.user_id = ? AND todo_relations.relation_type = ?", userID, userID, relationType).
+		Order("todo_relations.id ASC").
+		Scan(&relations).Error; err != nil {
+		return nil, err
+	}
+
+	return relations, nil
+}
+
 func (r *RelationRepo) ReplaceRelations(tx *gorm.DB, sourceID uint, relations []*model.TodoRelation) error {
 	db := tx
 	if db == nil {

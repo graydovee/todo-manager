@@ -1,9 +1,10 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { Drawer, Form, Input, Select, DatePicker, Button, Space, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useCreateTodo, useUpdateTodo, useTodo } from '../hooks/useTodos';
 import { listTodos } from '../api/todos';
 import type { Todo, Category, TodoSummary } from '../types';
+import type { Dayjs } from 'dayjs';
 
 interface Props {
   open: boolean;
@@ -18,6 +19,16 @@ interface TodoOption {
   id: number;
   code: string;
   title: string;
+}
+
+interface TodoFormValues {
+  title: string;
+  description?: string;
+  category: Category;
+  priority?: Todo['priority'];
+  tags?: string[];
+  due_at?: Dayjs;
+  depends_on_ids?: number[];
 }
 
 function useTodoSearch() {
@@ -57,10 +68,12 @@ export function TodoForm({ open, todoId, onClose, defaultCategory, lockedPrerequ
   const { data: todo } = useTodo(todoId || 0);
   const depsSearch = useTodoSearch();
 
-  const [depsOptions, setDepsOptions] = useState<TodoOption[]>([]);
-
   const isEdit = !!todoId;
   const hasLockedPrerequisite = !!lockedPrerequisite;
+  const depsOptions = useMemo<TodoOption[]>(
+    () => todo?.depends_on?.map((dep) => ({ id: dep.id, code: dep.code, title: dep.title })) || [],
+    [todo],
+  );
 
   useEffect(() => {
     if (open) {
@@ -73,20 +86,14 @@ export function TodoForm({ open, todoId, onClose, defaultCategory, lockedPrerequ
           tags: todo.tags,
           depends_on_ids: todo.depends_on?.map((d) => d.id) || [],
         });
-        if (todo.depends_on?.length) {
-          setDepsOptions(todo.depends_on.map((d) => ({ id: d.id, code: d.code, title: d.title })));
-        } else {
-          setDepsOptions([]);
-        }
       } else {
         form.resetFields();
         if (defaultCategory) form.setFieldValue('category', defaultCategory);
-        setDepsOptions([]);
       }
     }
   }, [open, todo, defaultCategory, lockedPrerequisite, form]);
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: TodoFormValues) => {
     const input = {
       ...values,
       tags: values.tags || [],

@@ -1,0 +1,94 @@
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background:
+    linear-gradient(120deg, rgba(11, 35, 59, 0.96), rgba(18, 68, 80, 0.95)),
+    radial-gradient(circle at top right, rgba(255, 209, 102, 0.35), transparent 36%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-brand-mark {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ffd166, #f07167);
+  box-shadow: 0 0 18px rgba(255, 209, 102, 0.55);
+}
+
+.app-brand-title.ant-typography {
+  margin: 0;
+  color: #f7fbff;
+  letter-spacing: 0.02em;
+}
+
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-header-user {
+  color: #f7fbff;
+}
+
+.app-sider {
+  background:
+    linear-gradient(180deg, rgba(246, 250, 255, 0.96), rgba(233, 242, 247, 0.96)),
+    radial-gradient(circle at top left, rgba(69, 123, 157, 0.18), transparent 36%);
+  border-right: 1px solid rgba(17, 44, 60, 0.08);
+}
+
+.app-sider-top {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 12px 6px;
+}
+
+.app-collapse-btn.ant-btn {
+  color: #335c67;
+}
+
+.app-menu {
+  background: transparent;
+  border-inline-end: none !important;
+  padding: 8px;
+}
+
+.app-menu .ant-menu-item {
+  margin: 6px 0;
+  border-radius: 14px;
+  height: 44px;
+  line-height: 44px;
+}
+
+.app-menu .ant-menu-item-selected {
+  background: linear-gradient(135deg, rgba(30, 136, 168, 0.18), rgba(255, 209, 102, 0.16));
+  color: #143642;
+  font-weight: 600;
+}
+
+.app-content {
+  padding: 18px;
+  height: calc(100vh - 64px);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, rgba(255, 209, 102, 0.12), transparent 28%),
+    linear-gradient(180deg, #f8fbfd 0%, #edf4f8 100%);
+}
+
+.app-content-body {
+  height: 100%;
+  min-width: 0;
+}

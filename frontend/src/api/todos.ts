@@ -8,6 +8,7 @@ import type {
   PaginatedResponse,
   Comment,
   SetStatusInput,
+  TodoGraphResponse,
 } from '../types';
 
 export async function listTodos(filters: TodoFilters = {}): Promise<PaginatedResponse<Todo>> {
@@ -32,6 +33,11 @@ export async function getTodo(id: number): Promise<TodoDetail> {
   return res.data;
 }
 
+export async function getTodoGraph(): Promise<TodoGraphResponse> {
+  const res = await client.get('/todos/graph');
+  return res.data;
+}
+
 export async function createTodo(input: CreateTodoInput): Promise<Todo> {
   const res = await client.post('/todos', input);
   return res.data;
@@ -46,22 +52,22 @@ export async function deleteTodo(id: number): Promise<void> {
   await client.delete(`/todos/${id}`);
 }
 
-export async function startTodo(id: number): Promise<any> {
+export async function startTodo(id: number): Promise<unknown> {
   const res = await client.post(`/todos/${id}/start`);
   return res.data;
 }
 
-export async function completeTodo(id: number, cascadeDependencies = false): Promise<any> {
+export async function completeTodo(id: number, cascadeDependencies = false): Promise<unknown> {
   const res = await client.post(`/todos/${id}/complete`, { cascade_dependencies: cascadeDependencies });
   return res.data;
 }
 
-export async function reopenTodo(id: number, cascadeDependents = false): Promise<any> {
+export async function reopenTodo(id: number, cascadeDependents = false): Promise<unknown> {
   const res = await client.post(`/todos/${id}/reopen`, { cascade_dependents: cascadeDependents });
   return res.data;
 }
 
-export async function setTodoStatus(id: number, input: SetStatusInput): Promise<any> {
+export async function setTodoStatus(id: number, input: SetStatusInput): Promise<unknown> {
   const res = await client.patch(`/todos/${id}/status`, input);
   return res.data;
 }

@@ -136,6 +136,21 @@ func (r *TodoRepo) List(tx *gorm.DB, userID uint, filters TodoFilters) ([]*model
 	return todos, total, nil
 }
 
+func (r *TodoRepo) ListAllWithTags(tx *gorm.DB, userID uint) ([]*model.Todo, error) {
+	db := r.getDB(tx)
+
+	var todos []*model.Todo
+	if err := db.
+		Where("todos.user_id = ?", userID).
+		Preload("Tags").
+		Order("todos.id ASC").
+		Find(&todos).Error; err != nil {
+		return nil, err
+	}
+
+	return todos, nil
+}
+
 func (r *TodoRepo) getDB(tx *gorm.DB) *gorm.DB {
 	if tx != nil {
 		return tx

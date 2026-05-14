@@ -10,6 +10,7 @@ import { Layout } from './components/Layout';
 import { AuthGuard } from './components/AuthGuard';
 import { LoginPage } from './pages/LoginPage';
 import { TodoListPage } from './pages/TodoListPage';
+import { TodoGraphPage } from './pages/TodoGraphPage';
 import i18n from './i18n';
 
 const queryClient = new QueryClient({
@@ -21,7 +22,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const antLocales: Record<string, any> = { en: enUS, zh: zhCN };
+const antLocales: Record<string, typeof enUS> = { en: enUS, zh: zhCN };
 
 function getLang(): string {
   return localStorage.getItem('lang') || (navigator.language.startsWith('zh') ? 'zh' : 'en');
@@ -48,12 +49,14 @@ function App() {
                   path="/"
                   element={
                     <AuthGuard>
-                      <Layout>
-                        <TodoListPage />
-                      </Layout>
+                      <Layout />
                     </AuthGuard>
                   }
-                />
+                >
+                  <Route index element={<Navigate to="/todos" replace />} />
+                  <Route path="todos" element={<TodoListPage />} />
+                  <Route path="todos/graph" element={<TodoGraphPage />} />
+                </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </LangProvider>

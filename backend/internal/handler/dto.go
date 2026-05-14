@@ -44,6 +44,39 @@ type TodoDetailResponse struct {
 	Duplicates  []TodoSummaryDTO `json:"duplicates"`
 }
 
+type TodoGraphNodeResponse struct {
+	ID                uint       `json:"id"`
+	Code              string     `json:"code"`
+	Title             string     `json:"title"`
+	Category          string     `json:"category"`
+	Priority          string     `json:"priority"`
+	Status            string     `json:"status"`
+	DueAt             *time.Time `json:"due_at"`
+	PrerequisiteCount int        `json:"prerequisite_count"`
+	DependentCount    int        `json:"dependent_count"`
+	ComponentID       string     `json:"component_id"`
+	IsComponentRoot   bool       `json:"is_component_root"`
+}
+
+type TodoGraphEdgeResponse struct {
+	SourceID uint `json:"source_id"`
+	TargetID uint `json:"target_id"`
+}
+
+type TodoGraphComponentResponse struct {
+	ID            string           `json:"id"`
+	RootIDs       []uint           `json:"root_ids"`
+	RootSummaries []TodoSummaryDTO `json:"root_summaries"`
+	NodeIDs       []uint           `json:"node_ids"`
+	AllCompleted  bool             `json:"all_completed"`
+}
+
+type TodoGraphResponse struct {
+	Nodes      []TodoGraphNodeResponse      `json:"nodes"`
+	Edges      []TodoGraphEdgeResponse      `json:"edges"`
+	Components []TodoGraphComponentResponse `json:"components"`
+}
+
 type PaginatedResponse struct {
 	Items    []TodoResponse `json:"items"`
 	Total    int64          `json:"total"`

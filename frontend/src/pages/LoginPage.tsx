@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, message } from 'antd';
 import { UserOutlined, LockOutlined, GlobalOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../stores/authStore';
+import { useAuth } from '../stores/authContext';
 import { useLang } from '../stores/langStore';
 import { getAuthMode } from '../api/auth';
 import type { AuthMode } from '../types';

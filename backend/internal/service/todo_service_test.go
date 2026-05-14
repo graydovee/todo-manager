@@ -24,11 +24,12 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	sqlDB, _ := db.DB()
 	tables := []string{
 		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, auth_provider TEXT NOT NULL, auth_subject TEXT NOT NULL, display_name TEXT NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(auth_provider, auth_subject))`,
-		`CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, code TEXT NOT NULL, title TEXT NOT NULL, description TEXT DEFAULT '', category TEXT NOT NULL CHECK(category IN ('bug','feature','task')), priority TEXT NOT NULL DEFAULT 'p2' CHECK(priority IN ('p0','p1','p2','p3')), completed INTEGER NOT NULL DEFAULT 0, due_at DATETIME, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, code))`,
+		`CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, code TEXT NOT NULL, title TEXT NOT NULL, description TEXT DEFAULT '', category TEXT NOT NULL CHECK(category IN ('bug','feature','task')), priority TEXT NOT NULL DEFAULT 'p2' CHECK(priority IN ('p0','p1','p2','p3')), status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','completed')), due_at DATETIME, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, code))`,
 		`CREATE TABLE IF NOT EXISTS todo_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, tag TEXT NOT NULL, UNIQUE(todo_id, tag))`,
 		`CREATE TABLE IF NOT EXISTS todo_relations (id INTEGER PRIMARY KEY AUTOINCREMENT, source_id INTEGER NOT NULL, target_id INTEGER NOT NULL, relation_type TEXT NOT NULL CHECK(relation_type IN ('depends_on','duplicate_of')), UNIQUE(source_id, target_id, relation_type))`,
 		`CREATE TABLE IF NOT EXISTS code_counters (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, category TEXT NOT NULL, last_code INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id, category))`,
 		`CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, user_id INTEGER NOT NULL, data BLOB, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL)`,
+		`CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, user_id INTEGER NOT NULL, content TEXT NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
 	}
 	for _, ddl := range tables {
 		if _, err := sqlDB.Exec(ddl); err != nil {
@@ -257,6 +258,145 @@ func TestTagNormalization(t *testing.T) {
 	}
 	if tags[0] != "hello" || tags[1] != "world" {
 		t.Errorf("expected [hello, world], got %v", tags)
+	}
+}
+
+func TestGetTodoGraph_EmptyGraph(t *testing.T) {
+	svc, _ := setupService(t)
+
+	graph, err := svc.GetTodoGraph(1)
+	if err != nil {
+		t.Fatalf("get graph: %v", err)
+	}
+
+	if len(graph.Nodes) != 0 || len(graph.Edges) != 0 || len(graph.Components) != 0 {
+		t.Fatalf("expected empty graph, got %+v", graph)
+	}
+}
+
+func TestGetTodoGraph_SingleNodeComponent(t *testing.T) {
+	svc, _ := setupService(t)
+
+	todo, err := svc.CreateTodo(1, CreateTodoInput{Title: "Solo", Category: "task"})
+	if err != nil {
+		t.Fatalf("create todo: %v", err)
+	}
+
+	graph, err := svc.GetTodoGraph(1)
+	if err != nil {
+		t.Fatalf("get graph: %v", err)
+	}
+
+	if len(graph.Nodes) != 1 || len(graph.Components) != 1 || len(graph.Edges) != 0 {
+		t.Fatalf("unexpected graph sizes: %+v", graph)
+	}
+
+	node := graph.Nodes[0]
+	if node.ID != todo.ID || !node.IsComponentRoot || node.PrerequisiteCount != 0 || node.DependentCount != 0 {
+		t.Fatalf("unexpected node: %+v", node)
+	}
+
+	component := graph.Components[0]
+	if len(component.RootIDs) != 1 || component.RootIDs[0] != todo.ID || len(component.NodeIDs) != 1 || component.NodeIDs[0] != todo.ID {
+		t.Fatalf("unexpected component: %+v", component)
+	}
+	if component.AllCompleted {
+		t.Fatalf("expected component to be incomplete")
+	}
+}
+
+func TestGetTodoGraph_ComponentRootsAndCompletion(t *testing.T) {
+	svc, _ := setupService(t)
+
+	parent, _ := svc.CreateTodo(1, CreateTodoInput{Title: "Parent", Category: "feature"})
+	childA, _ := svc.CreateTodo(1, CreateTodoInput{Title: "Child A", Category: "feature"})
+	childB, _ := svc.CreateTodo(1, CreateTodoInput{Title: "Child B", Category: "feature"})
+
+	_, err := svc.UpdateTodo(1, parent.ID, UpdateTodoInput{DependsOnIDs: &[]uint{childA.ID, childB.ID}})
+	if err != nil {
+		t.Fatalf("update dependencies: %v", err)
+	}
+
+	_, err = svc.CompleteTodo(1, parent.ID, true)
+	if err != nil {
+		t.Fatalf("complete graph: %v", err)
+	}
+
+	graph, err := svc.GetTodoGraph(1)
+	if err != nil {
+		t.Fatalf("get graph: %v", err)
+	}
+
+	if len(graph.Components) != 1 {
+		t.Fatalf("expected 1 component, got %d", len(graph.Components))
+	}
+
+	component := graph.Components[0]
+	if !component.AllCompleted {
+		t.Fatalf("expected completed component")
+	}
+	if len(component.RootIDs) != 1 || component.RootIDs[0] != parent.ID {
+		t.Fatalf("unexpected roots: %+v", component.RootIDs)
+	}
+
+	nodeByID := map[uint]TodoGraphNode{}
+	for _, node := range graph.Nodes {
+		nodeByID[node.ID] = node
+	}
+
+	if !nodeByID[parent.ID].IsComponentRoot {
+		t.Fatalf("expected parent to be root")
+	}
+	if nodeByID[parent.ID].PrerequisiteCount != 2 {
+		t.Fatalf("expected parent prerequisite count 2, got %+v", nodeByID[parent.ID])
+	}
+	if nodeByID[childA.ID].DependentCount != 1 || nodeByID[childB.ID].DependentCount != 1 {
+		t.Fatalf("expected children dependent counts to be 1")
+	}
+}
+
+func TestGetTodoGraph_SharedDependencySingleNode(t *testing.T) {
+	svc, _ := setupService(t)
+
+	rootA, _ := svc.CreateTodo(1, CreateTodoInput{Title: "Root A", Category: "task"})
+	rootB, _ := svc.CreateTodo(1, CreateTodoInput{Title: "Root B", Category: "task"})
+	shared, _ := svc.CreateTodo(1, CreateTodoInput{Title: "Shared", Category: "task"})
+
+	_, err := svc.UpdateTodo(1, rootA.ID, UpdateTodoInput{DependsOnIDs: &[]uint{shared.ID}})
+	if err != nil {
+		t.Fatalf("update rootA dependencies: %v", err)
+	}
+	_, err = svc.UpdateTodo(1, rootB.ID, UpdateTodoInput{DependsOnIDs: &[]uint{shared.ID}})
+	if err != nil {
+		t.Fatalf("update rootB dependencies: %v", err)
+	}
+
+	graph, err := svc.GetTodoGraph(1)
+	if err != nil {
+		t.Fatalf("get graph: %v", err)
+	}
+
+	if len(graph.Nodes) != 3 {
+		t.Fatalf("expected 3 nodes, got %d", len(graph.Nodes))
+	}
+	if len(graph.Edges) != 2 {
+		t.Fatalf("expected 2 edges, got %d", len(graph.Edges))
+	}
+	if len(graph.Components) != 1 {
+		t.Fatalf("expected 1 component, got %d", len(graph.Components))
+	}
+
+	component := graph.Components[0]
+	if len(component.RootIDs) != 2 || component.RootIDs[0] != rootA.ID || component.RootIDs[1] != rootB.ID {
+		t.Fatalf("unexpected shared roots: %+v", component.RootIDs)
+	}
+
+	nodeIDs := map[uint]bool{}
+	for _, node := range graph.Nodes {
+		nodeIDs[node.ID] = true
+	}
+	if !nodeIDs[shared.ID] {
+		t.Fatalf("expected shared node present once")
 	}
 }
 

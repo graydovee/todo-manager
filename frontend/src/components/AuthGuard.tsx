@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../stores/authStore';
+import { useAuth } from '../stores/authContext';
 import { Spin } from 'antd';
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {

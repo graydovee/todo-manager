@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -69,6 +70,39 @@ type TodoSummary struct {
 	ID    uint   `json:"id"`
 	Code  string `json:"code"`
 	Title string `json:"title"`
+}
+
+type TodoGraphNode struct {
+	ID                uint       `json:"id"`
+	Code              string     `json:"code"`
+	Title             string     `json:"title"`
+	Category          string     `json:"category"`
+	Priority          string     `json:"priority"`
+	Status            string     `json:"status"`
+	DueAt             *time.Time `json:"due_at"`
+	PrerequisiteCount int        `json:"prerequisite_count"`
+	DependentCount    int        `json:"dependent_count"`
+	ComponentID       string     `json:"component_id"`
+	IsComponentRoot   bool       `json:"is_component_root"`
+}
+
+type TodoGraphEdge struct {
+	SourceID uint `json:"source_id"`
+	TargetID uint `json:"target_id"`
+}
+
+type TodoGraphComponent struct {
+	ID            string        `json:"id"`
+	RootIDs       []uint        `json:"root_ids"`
+	RootSummaries []TodoSummary `json:"root_summaries"`
+	NodeIDs       []uint        `json:"node_ids"`
+	AllCompleted  bool          `json:"all_completed"`
+}
+
+type TodoGraphSnapshot struct {
+	Nodes      []TodoGraphNode      `json:"nodes"`
+	Edges      []TodoGraphEdge      `json:"edges"`
+	Components []TodoGraphComponent `json:"components"`
 }
 
 func (s *TodoService) CreateTodo(userID uint, input CreateTodoInput) (*model.Todo, error) {
@@ -292,7 +326,7 @@ func (s *TodoService) ReopenTodo(userID, todoID uint, cascadeDependents bool) (*
 	if err != nil {
 		return nil, fmt.Errorf("todo not found")
 	}
-	if todo.Status == model.StatusCompleted {
+	if todo.Status != model.StatusCompleted {
 		return nil, nil
 	}
 
@@ -331,6 +365,153 @@ func (s *TodoService) GetTodo(userID, todoID uint) (*model.Todo, error) {
 
 func (s *TodoService) ListTodos(userID uint, filters repository.TodoFilters) ([]*model.Todo, int64, error) {
 	return s.todoRepo.List(nil, userID, filters)
+}
+
+func (s *TodoService) GetTodoGraph(userID uint) (*TodoGraphSnapshot, error) {
+	todos, err := s.todoRepo.ListAllWithTags(nil, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	relations, err := s.relationRepo.FindByUserAndType(nil, userID, model.RelationDependsOn)
+	if err != nil {
+		return nil, err
+	}
+
+	todoByID := make(map[uint]*model.Todo, len(todos))
+	neighbors := make(map[uint]map[uint]struct{}, len(todos))
+	prerequisiteCount := make(map[uint]int, len(todos))
+	dependentCount := make(map[uint]int, len(todos))
+	seenNodeIDs := make([]uint, 0, len(todos))
+
+	for _, todo := range todos {
+		todoByID[todo.ID] = todo
+		neighbors[todo.ID] = make(map[uint]struct{})
+		prerequisiteCount[todo.ID] = 0
+		dependentCount[todo.ID] = 0
+		seenNodeIDs = append(seenNodeIDs, todo.ID)
+	}
+
+	edges := make([]TodoGraphEdge, 0, len(relations))
+	for _, rel := range relations {
+		if todoByID[rel.SourceID] == nil || todoByID[rel.TargetID] == nil {
+			continue
+		}
+
+		edges = append(edges, TodoGraphEdge{
+			SourceID: rel.SourceID,
+			TargetID: rel.TargetID,
+		})
+
+		prerequisiteCount[rel.SourceID]++
+		dependentCount[rel.TargetID]++
+		neighbors[rel.SourceID][rel.TargetID] = struct{}{}
+		neighbors[rel.TargetID][rel.SourceID] = struct{}{}
+	}
+
+	componentIDByTodo := make(map[uint]string, len(todos))
+	componentNodeIDs := make(map[string][]uint)
+	componentAllCompleted := make(map[string]bool)
+	componentRoots := make(map[string][]uint)
+
+	visited := make(map[uint]bool, len(todos))
+	componentIndex := 0
+
+	for _, startID := range seenNodeIDs {
+		if visited[startID] {
+			continue
+		}
+
+		componentIndex++
+		componentID := fmt.Sprintf("component-%d", componentIndex)
+		queue := []uint{startID}
+		visited[startID] = true
+		componentAllCompleted[componentID] = true
+
+		for len(queue) > 0 {
+			current := queue[0]
+			queue = queue[1:]
+
+			componentIDByTodo[current] = componentID
+			componentNodeIDs[componentID] = append(componentNodeIDs[componentID], current)
+
+			if todoByID[current].Status != model.StatusCompleted {
+				componentAllCompleted[componentID] = false
+			}
+
+			for next := range neighbors[current] {
+				if visited[next] {
+					continue
+				}
+				visited[next] = true
+				queue = append(queue, next)
+			}
+		}
+	}
+
+	components := make([]TodoGraphComponent, 0, len(componentNodeIDs))
+	nodes := make([]TodoGraphNode, 0, len(todos))
+
+	for _, todoID := range seenNodeIDs {
+		componentID := componentIDByTodo[todoID]
+		if dependentCount[todoID] == 0 {
+			componentRoots[componentID] = append(componentRoots[componentID], todoID)
+		}
+	}
+
+	componentOrder := make([]string, 0, len(componentNodeIDs))
+	for i := 1; i <= componentIndex; i++ {
+		componentOrder = append(componentOrder, fmt.Sprintf("component-%d", i))
+	}
+
+	for _, componentID := range componentOrder {
+		nodeIDs := componentNodeIDs[componentID]
+		rootIDs := componentRoots[componentID]
+		sort.Slice(nodeIDs, func(i, j int) bool { return nodeIDs[i] < nodeIDs[j] })
+		sort.Slice(rootIDs, func(i, j int) bool { return rootIDs[i] < rootIDs[j] })
+
+		rootSummaries := make([]TodoSummary, 0, len(rootIDs))
+		for _, rootID := range rootIDs {
+			root := todoByID[rootID]
+			rootSummaries = append(rootSummaries, TodoSummary{
+				ID:    root.ID,
+				Code:  root.Code,
+				Title: root.Title,
+			})
+		}
+
+		components = append(components, TodoGraphComponent{
+			ID:            componentID,
+			RootIDs:       rootIDs,
+			RootSummaries: rootSummaries,
+			NodeIDs:       nodeIDs,
+			AllCompleted:  componentAllCompleted[componentID],
+		})
+	}
+
+	for _, todoID := range seenNodeIDs {
+		todo := todoByID[todoID]
+		componentID := componentIDByTodo[todoID]
+		nodes = append(nodes, TodoGraphNode{
+			ID:                todo.ID,
+			Code:              todo.Code,
+			Title:             todo.Title,
+			Category:          todo.Category,
+			Priority:          todo.Priority,
+			Status:            todo.Status,
+			DueAt:             todo.DueAt,
+			PrerequisiteCount: prerequisiteCount[todo.ID],
+			DependentCount:    dependentCount[todo.ID],
+			ComponentID:       componentID,
+			IsComponentRoot:   dependentCount[todo.ID] == 0,
+		})
+	}
+
+	return &TodoGraphSnapshot{
+		Nodes:      nodes,
+		Edges:      edges,
+		Components: components,
+	}, nil
 }
 
 func (s *TodoService) createRelations(tx *gorm.DB, todoID, userID uint, dependsOnIDs []uint, duplicateOfID *uint) error {

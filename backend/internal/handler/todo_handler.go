@@ -95,6 +95,60 @@ func (h *TodoHandler) Get(c echo.Context) error {
 	return c.JSON(http.StatusOK, detail)
 }
 
+func (h *TodoHandler) Graph(c echo.Context) error {
+	user := middleware.GetUser(c)
+	if user == nil {
+		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
+	}
+
+	graph, err := h.todoService.GetTodoGraph(user.ID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+	}
+
+	nodes := make([]TodoGraphNodeResponse, len(graph.Nodes))
+	for i, node := range graph.Nodes {
+		nodes[i] = TodoGraphNodeResponse{
+			ID:                node.ID,
+			Code:              node.Code,
+			Title:             node.Title,
+			Category:          node.Category,
+			Priority:          node.Priority,
+			Status:            node.Status,
+			DueAt:             node.DueAt,
+			PrerequisiteCount: node.PrerequisiteCount,
+			DependentCount:    node.DependentCount,
+			ComponentID:       node.ComponentID,
+			IsComponentRoot:   node.IsComponentRoot,
+		}
+	}
+
+	edges := make([]TodoGraphEdgeResponse, len(graph.Edges))
+	for i, edge := range graph.Edges {
+		edges[i] = TodoGraphEdgeResponse{
+			SourceID: edge.SourceID,
+			TargetID: edge.TargetID,
+		}
+	}
+
+	components := make([]TodoGraphComponentResponse, len(graph.Components))
+	for i, component := range graph.Components {
+		components[i] = TodoGraphComponentResponse{
+			ID:            component.ID,
+			RootIDs:       component.RootIDs,
+			RootSummaries: toDTOs(component.RootSummaries),
+			NodeIDs:       component.NodeIDs,
+			AllCompleted:  component.AllCompleted,
+		}
+	}
+
+	return c.JSON(http.StatusOK, TodoGraphResponse{
+		Nodes:      nodes,
+		Edges:      edges,
+		Components: components,
+	})
+}
+
 func (h *TodoHandler) Create(c echo.Context) error {
 	user := middleware.GetUser(c)
 	if user == nil {

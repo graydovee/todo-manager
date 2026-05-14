@@ -1,0 +1,256 @@
+.todo-graph-page {
+  --graph-panel-bg: rgba(248, 251, 253, 0.84);
+  --graph-card-shadow: 0 18px 40px rgba(17, 44, 60, 0.12);
+  --graph-border: rgba(17, 44, 60, 0.1);
+  --graph-node-open: #94a3b8;
+  --graph-node-progress: #1d4ed8;
+  --graph-node-done: #2f855a;
+  --graph-node-feature: #1f7a8c;
+  --graph-node-bug: #c44536;
+  --graph-node-task: #5b8c5a;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.todo-graph-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  padding: 24px 26px;
+  background:
+    radial-gradient(circle at 15% 15%, rgba(255, 209, 102, 0.32), transparent 26%),
+    radial-gradient(circle at 88% 22%, rgba(29, 78, 216, 0.28), transparent 24%),
+    linear-gradient(135deg, rgba(11, 35, 59, 0.96), rgba(20, 64, 80, 0.94));
+  color: #eff7ff;
+  box-shadow: 0 22px 50px rgba(10, 25, 41, 0.2);
+}
+
+.todo-graph-hero::after {
+  content: '';
+  position: absolute;
+  inset: auto -12% -60% auto;
+  width: 360px;
+  height: 360px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.13), transparent 60%);
+}
+
+.todo-graph-hero-title.ant-typography,
+.todo-graph-hero-subtitle.ant-typography {
+  color: inherit !important;
+}
+
+.todo-graph-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: var(--graph-panel-bg);
+  border: 1px solid var(--graph-border);
+  backdrop-filter: blur(16px);
+}
+
+.todo-graph-toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.todo-graph-toolbar-search {
+  width: 320px;
+}
+
+.todo-graph-surface {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(17, 44, 60, 0.08);
+  background:
+    radial-gradient(circle at top left, rgba(255, 209, 102, 0.1), transparent 24%),
+    radial-gradient(circle at 85% 15%, rgba(29, 78, 216, 0.08), transparent 18%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(236, 244, 248, 0.94));
+  box-shadow: var(--graph-card-shadow);
+}
+
+.todo-graph-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(17, 44, 60, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 44, 60, 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at center, black 55%, transparent 100%);
+}
+
+.todo-graph-empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.todo-graph-empty-card {
+  max-width: 440px;
+  text-align: center;
+  border-radius: 24px;
+  border: 1px solid rgba(17, 44, 60, 0.08);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 18px 42px rgba(17, 44, 60, 0.12);
+}
+
+.todo-graph-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.todo-graph-surface .react-flow__attribution {
+  display: none;
+}
+
+.todo-graph-node {
+  min-width: 244px;
+  max-width: 280px;
+  padding: 14px 14px 12px;
+  border-radius: 22px;
+  border: 1px solid rgba(17, 44, 60, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(245, 250, 252, 0.92));
+  box-shadow: 0 16px 36px rgba(17, 44, 60, 0.14);
+  backdrop-filter: blur(14px);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.todo-graph-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 42px rgba(17, 44, 60, 0.18);
+}
+
+.todo-graph-node.is-selected {
+  border-color: rgba(24, 119, 242, 0.42);
+  box-shadow: 0 0 0 3px rgba(24, 119, 242, 0.13), 0 20px 44px rgba(17, 44, 60, 0.18);
+}
+
+.todo-graph-node.is-neighbor {
+  border-color: rgba(255, 209, 102, 0.42);
+}
+
+.todo-graph-node__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.todo-graph-node__code {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #335c67;
+}
+
+.todo-graph-node__root {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 209, 102, 0.18);
+  color: #946200;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.todo-graph-node__title {
+  margin: 8px 0 10px;
+  color: #0f1f2e;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.38;
+}
+
+.todo-graph-node__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.todo-graph-node__chip {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.todo-graph-node__chip.status-open {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--graph-node-open);
+}
+
+.todo-graph-node__chip.status-in_progress {
+  background: rgba(29, 78, 216, 0.14);
+  color: var(--graph-node-progress);
+}
+
+.todo-graph-node__chip.status-completed {
+  background: rgba(47, 133, 90, 0.14);
+  color: var(--graph-node-done);
+}
+
+.todo-graph-node__chip.category-bug {
+  background: rgba(196, 69, 54, 0.12);
+  color: var(--graph-node-bug);
+}
+
+.todo-graph-node__chip.category-feature {
+  background: rgba(31, 122, 140, 0.12);
+  color: var(--graph-node-feature);
+}
+
+.todo-graph-node__chip.category-task {
+  background: rgba(91, 140, 90, 0.12);
+  color: var(--graph-node-task);
+}
+
+.todo-graph-node__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(17, 44, 60, 0.08);
+}
+
+.todo-graph-node__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.todo-graph-node__metric-label {
+  color: #6b7d8d;
+  font-size: 11px;
+}
+
+.todo-graph-node__metric-value {
+  color: #102436;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.todo-graph-minimap {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(17, 44, 60, 0.12);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(17, 44, 60, 0.12);
+}

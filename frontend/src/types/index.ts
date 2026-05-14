@@ -52,6 +52,39 @@ export interface TodoSummary {
   title: string;
 }
 
+export interface TodoGraphNode {
+  id: number;
+  code: string;
+  title: string;
+  category: Category;
+  priority: Priority;
+  status: Status;
+  due_at: string | null;
+  prerequisite_count: number;
+  dependent_count: number;
+  component_id: string;
+  is_component_root: boolean;
+}
+
+export interface TodoGraphEdge {
+  source_id: number;
+  target_id: number;
+}
+
+export interface TodoGraphComponent {
+  id: string;
+  root_ids: number[];
+  root_summaries: TodoSummary[];
+  node_ids: number[];
+  all_completed: boolean;
+}
+
+export interface TodoGraphResponse {
+  nodes: TodoGraphNode[];
+  edges: TodoGraphEdge[];
+  components: TodoGraphComponent[];
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;

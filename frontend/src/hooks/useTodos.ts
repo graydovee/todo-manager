@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listTodos, getTodo, createTodo, updateTodo, deleteTodo, startTodo, setTodoStatus, completeTodo, reopenTodo, listComments, createComment, deleteComment } from '../api/todos';
+import { listTodos, getTodo, getTodoGraph, createTodo, updateTodo, deleteTodo, startTodo, setTodoStatus, completeTodo, reopenTodo, listComments, createComment, deleteComment } from '../api/todos';
 import type { TodoFilters, CreateTodoInput, UpdateTodoInput, SetStatusInput } from '../types';
 
 export function useTodos(filters: TodoFilters) {
@@ -14,6 +14,13 @@ export function useTodo(id: number) {
     queryKey: ['todos', id],
     queryFn: () => getTodo(id),
     enabled: !!id,
+  });
+}
+
+export function useTodoGraph() {
+  return useQuery({
+    queryKey: ['todos', 'graph'],
+    queryFn: () => getTodoGraph(),
   });
 }
 
