@@ -85,18 +85,6 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
         return <Tag className={STATUS_COLORS[status]}>{labels[status] || status}</Tag>;
       },
     },
-    {
-      title: t('todo.dueDate'),
-      dataIndex: 'due_at',
-      key: 'due_at',
-      width: 100,
-      sorter: true,
-      sortOrder: sortBy === 'due_at' ? (sortOrder === 'asc' ? 'ascend' : sortOrder === 'desc' ? 'descend' : null) : null,
-      render: (due: string | null) => {
-        if (!due) return <span style={{ color: '#ccc' }}>-</span>;
-        return new Date(due).toLocaleDateString();
-      },
-    },
   ];
 
   return (

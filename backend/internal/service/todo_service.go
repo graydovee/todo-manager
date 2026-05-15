@@ -330,18 +330,22 @@ func (s *TodoService) ReopenTodo(userID, todoID uint, cascadeDependents bool) (*
 		return nil, nil
 	}
 
-	completedDependents, err := s.getCompletedDependents(todoID, userID)
+	allCompletedDependents, err := s.getAllCompletedDependentsRecursive(todoID, userID, make(map[uint]bool))
 	if err != nil {
 		return nil, err
 	}
 
-	if len(completedDependents) > 0 && !cascadeDependents {
-		conflict := &ConflictInfo{CompletedDependents: toSummaries(completedDependents)}
+	if len(allCompletedDependents) > 0 && !cascadeDependents {
+		conflict := &ConflictInfo{CompletedDependents: toSummaries(allCompletedDependents)}
 		return conflict, nil
 	}
 
 	return nil, s.db.Transaction(func(tx *gorm.DB) error {
 		if cascadeDependents {
+			completedDependents, err := s.getCompletedDependents(todoID, userID)
+			if err != nil {
+				return err
+			}
 			for _, dep := range completedDependents {
 				if err := s.cascadeReopen(tx, dep.ID, userID); err != nil {
 					return err
@@ -599,6 +603,32 @@ func (s *TodoService) getCompletedDependents(todoID, userID uint) ([]*model.Todo
 		}
 	}
 	return completed, nil
+}
+
+func (s *TodoService) getAllCompletedDependentsRecursive(todoID, userID uint, visited map[uint]bool) ([]*model.Todo, error) {
+	if visited[todoID] {
+		return nil, nil
+	}
+	visited[todoID] = true
+
+	directDeps, err := s.getCompletedDependents(todoID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	var all []*model.Todo
+	for _, dep := range directDeps {
+		if visited[dep.ID] {
+			continue
+		}
+		all = append(all, dep)
+		nested, err := s.getAllCompletedDependentsRecursive(dep.ID, userID, visited)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, nested...)
+	}
+	return all, nil
 }
 
 func (s *TodoService) cascadeComplete(tx *gorm.DB, todoID, userID uint) error {

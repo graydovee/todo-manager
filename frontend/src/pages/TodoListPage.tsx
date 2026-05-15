@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from 'react';
-import { Button } from 'antd';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { Button, Drawer } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { TodoTable } from '../components/TodoTable';
@@ -11,10 +11,22 @@ import { getTodo, updateTodo } from '../api/todos';
 import type { TodoFilters, Category, TodoSummary } from '../types';
 import './TodoListPage.css';
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
+
 export function TodoListPage() {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const [filters, setFilters] = useState<TodoFilters>({ sort_by: 'created_at', sort_order: 'desc', status: 'open,in_progress' });
   const [selectedTodoId, setSelectedTodoId] = useState<number | null>(null);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [prerequisiteForId, setPrerequisiteForId] = useState<number | undefined>(undefined);
@@ -44,7 +56,10 @@ export function TodoListPage() {
 
   const handleSelect = useCallback((id: number) => {
     setSelectedTodoId(id);
-  }, []);
+    if (isMobile) {
+      setMobileDetailOpen(true);
+    }
+  }, [isMobile]);
 
   const handleNavigate = useCallback((id: number) => {
     if (id === 0) {
@@ -109,15 +124,36 @@ export function TodoListPage() {
           />
         </div>
 
-        <div className="todo-list-page__detail">
+        {!isMobile && (
+          <div className="todo-list-page__detail">
+            <TodoDetailPanel
+              todoId={selectedTodoId}
+              onEdit={handleEdit}
+              onNavigate={handleNavigate}
+              onAddPrerequisite={handleAddPrerequisite}
+            />
+          </div>
+        )}
+      </div>
+
+      {isMobile && (
+        <Drawer
+          title={t('todo.detail')}
+          placement="right"
+          width="85%"
+          open={mobileDetailOpen}
+          onClose={() => setMobileDetailOpen(false)}
+          className="todo-list-mobile-drawer"
+          destroyOnClose={false}
+        >
           <TodoDetailPanel
             todoId={selectedTodoId}
             onEdit={handleEdit}
             onNavigate={handleNavigate}
             onAddPrerequisite={handleAddPrerequisite}
           />
-        </div>
-      </div>
+        </Drawer>
+      )}
 
       <TodoForm
         open={formOpen}

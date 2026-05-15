@@ -153,7 +153,7 @@ export function TodoDetailContent({
         }}
       >
         <Space wrap>
-          <span className="detail-panel-code">{todo.code}</span>
+          <span className={`detail-panel-code detail-panel-code-${todo.category}`}>{todo.code}</span>
           <span className="detail-panel-title">{todo.title}</span>
           <Tag className={`detail-panel-tag-status-${todo.status}`}>{t(STATUS_LABELS[todo.status])}</Tag>
           <Tag className={`detail-panel-tag-category-${todo.category}`}>{todo.category.toUpperCase()}</Tag>

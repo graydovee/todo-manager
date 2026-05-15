@@ -152,3 +152,35 @@
     padding: 12px;
   }
 }
+
+/* 768px mobile breakpoint */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 0 12px;
+  }
+
+  .app-content {
+    padding: 10px;
+    height: calc(100vh - 64px);
+  }
+}
+
+/* Mobile menu button */
+.app-mobile-menu-btn.ant-btn {
+  color: var(--color-text-inverse);
+  font-size: 18px;
+}
+
+/* Mobile drawer footer */
+.app-mobile-drawer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border-subtle);
+  margin-top: auto;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}

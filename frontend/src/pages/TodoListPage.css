@@ -135,3 +135,23 @@
   border-radius: var(--radius-sm);
   padding: 2px 8px;
 }
+
+/* --- Mobile Responsive --- */
+@media (max-width: 768px) {
+  .todo-list-page__body {
+    flex-direction: column;
+  }
+
+  .todo-list-page__detail {
+    display: none;
+  }
+
+  .todo-list-page__table {
+    flex: 1;
+  }
+}
+
+/* --- Mobile Detail Drawer --- */
+.todo-list-mobile-drawer .ant-drawer-body {
+  padding: 0;
+}
