@@ -38,7 +38,44 @@ function App() {
   };
 
   return (
-    <ConfigProvider locale={antLocales[lang] || enUS}>
+    <ConfigProvider
+      locale={antLocales[lang] || enUS}
+      theme={{
+        token: {
+          colorPrimary: '#1e88a8',
+          colorSuccess: '#10b981',
+          colorWarning: '#f59e0b',
+          colorInfo: '#3b82f6',
+          colorError: '#dc2626',
+          colorBgContainer: '#ffffff',
+          colorBgElevated: '#ffffff',
+          colorTextBase: '#0b233b',
+          colorTextSecondary: '#5f7184',
+          borderRadius: 14,
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+          fontSize: 14,
+        },
+        components: {
+          Button: {
+            borderRadius: 14,
+            controlHeight: 36,
+          },
+          Tag: {
+            borderRadiusSM: 999,
+          },
+          Card: {
+            borderRadiusLG: 24,
+          },
+          Segmented: {
+            trackPadding: 4,
+          },
+          Select: {
+            borderRadius: 14,
+            controlHeight: 36,
+          },
+        },
+      }}
+    >
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AuthProvider>

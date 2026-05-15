@@ -14,27 +14,11 @@ import { useCompleteTodo, useDeleteTodo, useReopenTodo, useSetTodoStatus, useSta
 import { TodoComments } from './TodoComments';
 import type { Status, TodoDetail, TodoSummary } from '../types';
 import type { HttpErrorLike, RelationConflictItem } from '../types/errors';
+import './TodoDetailPanel.css';
 
 const { Title, Text, Paragraph } = Typography;
 
-const CATEGORY_COLORS: Record<string, string> = {
-  bug: 'red',
-  feature: 'blue',
-  task: 'green',
-};
 
-const PRIORITY_COLORS: Record<string, string> = {
-  p0: 'red',
-  p1: 'orange',
-  p2: 'gold',
-  p3: 'default',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  open: 'default',
-  in_progress: 'blue',
-  completed: 'green',
-};
 
 const STATUS_LABELS: Record<string, string> = {
   open: 'todo.open',
@@ -161,47 +145,38 @@ export function TodoDetailContent({
   );
 
   return (
-    <div style={{ padding: '0 16px 16px 16px', height: '100%', overflow: 'auto' }}>
+    <div className="detail-panel-content">
       <div
+        className="detail-panel-header"
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          paddingBottom: 12,
-          marginBottom: 12,
-          borderBottom: '1px solid #f0f0f0',
           position: stickyHeader ? 'sticky' : 'static',
-          top: 0,
-          background: '#fff',
-          zIndex: 1,
-          paddingTop: 12,
         }}
       >
         <Space wrap>
-          <Text code style={{ fontSize: 13 }}>{todo.code}</Text>
-          <Text strong style={{ fontSize: 15 }}>{todo.title}</Text>
-          <Tag color={STATUS_COLORS[todo.status]}>{t(STATUS_LABELS[todo.status])}</Tag>
-          <Tag color={CATEGORY_COLORS[todo.category]}>{todo.category.toUpperCase()}</Tag>
-          <Tag color={PRIORITY_COLORS[todo.priority]}>{todo.priority.toUpperCase()}</Tag>
+          <span className="detail-panel-code">{todo.code}</span>
+          <span className="detail-panel-title">{todo.title}</span>
+          <Tag className={`detail-panel-tag-status-${todo.status}`}>{t(STATUS_LABELS[todo.status])}</Tag>
+          <Tag className={`detail-panel-tag-category-${todo.category}`}>{todo.category.toUpperCase()}</Tag>
+          <Tag className={`detail-panel-tag-priority-${todo.priority}`}>{todo.priority.toUpperCase()}</Tag>
         </Space>
         <Space>
           <Button size="small" icon={<EditOutlined />} onClick={() => onEdit(todo.id)}>
             {t('common.edit')}
           </Button>
           <Popconfirm title={t('confirm.deleteTodo')} onConfirm={handleDelete}>
-            <Button size="small" danger icon={<DeleteOutlined />} />
+            <Button className="detail-panel-btn-delete" size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
       </div>
 
       <Space wrap style={{ marginBottom: 16 }}>
         {todo.status === 'open' && (
-          <Button type="primary" icon={<PlayCircleOutlined />} onClick={handleNextStage} loading={startMutation.isPending}>
+          <Button className="detail-panel-btn-start" type="primary" icon={<PlayCircleOutlined />} onClick={handleNextStage} loading={startMutation.isPending}>
             {t('detail.startProgress')}
           </Button>
         )}
         {todo.status === 'in_progress' && (
-          <Button type="primary" icon={<CheckCircleOutlined />} onClick={handleNextStage} loading={completeMutation.isPending}>
+          <Button className="detail-panel-btn-complete" type="primary" icon={<CheckCircleOutlined />} onClick={handleNextStage} loading={completeMutation.isPending}>
             {t('detail.markComplete')}
           </Button>
         )}
@@ -230,13 +205,13 @@ export function TodoDetailContent({
       </Space>
 
       {todo.description && (
-        <>
+        <div className="detail-panel-description">
           <Title level={5}>{t('todo.description')}</Title>
           <Paragraph>{todo.description}</Paragraph>
-        </>
+        </div>
       )}
 
-      <Descriptions size="small" column={2} style={{ marginBottom: 12 }}>
+      <Descriptions className="detail-panel-metadata" size="small" column={2} style={{ marginBottom: 12 }}>
         <Descriptions.Item label={t('todo.dueDate')}>
           {todo.due_at ? new Date(todo.due_at).toLocaleDateString() : '-'}
         </Descriptions.Item>
@@ -254,11 +229,11 @@ export function TodoDetailContent({
       {(todo.depends_on.length > 0 || todo.depended_by.length > 0) && (
         <>
           <Divider style={{ margin: '8px 0' }} />
-          <div style={{ marginBottom: 12 }}>
+          <div className="detail-panel-dependencies">
             {todo.depends_on.length > 0 && (
               <div style={{ marginBottom: 4 }}>
                 <Text strong>{t('detail.dependsOn')}: </Text>
-                <div style={{ paddingLeft: 16 }}>
+                <div className="detail-panel-dependencies-list">
                   {todo.depends_on.map((dep) => (
                     <div key={dep.id}><SummaryLink item={dep} /></div>
                   ))}
@@ -268,7 +243,7 @@ export function TodoDetailContent({
             {todo.depended_by.length > 0 && (
               <div style={{ marginBottom: 4 }}>
                 <Text strong>{t('detail.dependedBy')}: </Text>
-                <div style={{ paddingLeft: 16 }}>
+                <div className="detail-panel-dependencies-list">
                   {todo.depended_by.map((dep) => (
                     <div key={dep.id}><SummaryLink item={dep} /></div>
                   ))}

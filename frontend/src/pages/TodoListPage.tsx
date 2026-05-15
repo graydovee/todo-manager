@@ -9,6 +9,7 @@ import { TodoForm } from '../components/TodoForm';
 import { useTodos } from '../hooks/useTodos';
 import { getTodo, updateTodo } from '../api/todos';
 import type { TodoFilters, Category, TodoSummary } from '../types';
+import './TodoListPage.css';
 
 export function TodoListPage() {
   const { t } = useTranslation();
@@ -81,9 +82,9 @@ export function TodoListPage() {
   }, [prerequisiteForId]);
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>{t('todo.title')}</h2>
+    <div className="todo-list-page">
+      <div className="todo-list-page__header">
+        <h2>{t('todo.title')}</h2>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
           {t('todo.newTodo')}
         </Button>
@@ -91,8 +92,8 @@ export function TodoListPage() {
 
       <TodoFilter filters={filters} onChange={handleFilterChange} />
 
-      <div style={{ flex: 1, display: 'flex', gap: 16, minHeight: 0, marginTop: 12 }}>
-        <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
+      <div className="todo-list-page__body">
+        <div className="todo-list-page__table">
           <TodoTable
             data={data}
             loading={isLoading}
@@ -108,7 +109,7 @@ export function TodoListPage() {
           />
         </div>
 
-        <div style={{ flex: 1, overflow: 'auto', borderLeft: '1px solid #f0f0f0', background: '#fff', minWidth: 0 }}>
+        <div className="todo-list-page__detail">
           <TodoDetailPanel
             todoId={selectedTodoId}
             onEdit={handleEdit}

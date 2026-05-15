@@ -30,10 +30,11 @@ const { Title, Paragraph, Text } = Typography;
 
 const elk = new ELK();
 
-const NODE_WIDTH = 268;
-const NODE_HEIGHT = 170;
+const NODE_WIDTH = 260;
+const NODE_HEIGHT = 120;
 const COMPONENT_GAP_X = 320;
 const COMPONENT_GAP_Y = 260;
+const EDGE_COLOR = 'rgba(30, 64, 175, 0.40)';
 
 interface GraphNodeData {
   [key: string]: unknown;
@@ -41,9 +42,6 @@ interface GraphNodeData {
   selected: boolean;
   neighbor: boolean;
   statusLabel: string;
-  dueLabel: string;
-  prereqLabel: string;
-  dependentLabel: string;
   rootLabel: string;
   onSelect: (todoId: number) => void;
 }
@@ -58,34 +56,31 @@ function TodoGraphCardNode({ data }: NodeProps<GraphFlowNode>) {
     <div
       className={[
         'todo-graph-node',
+        `status-${data.todo.status}`,
+        `priority-${data.todo.priority}`,
+        `category-${data.todo.category}`,
         data.selected ? 'is-selected' : '',
         data.neighbor ? 'is-neighbor' : '',
       ].filter(Boolean).join(' ')}
       onClick={() => data.onSelect(data.todo.id)}
     >
-      <div className="todo-graph-node__top">
-        <div className="todo-graph-node__code">{data.todo.code}</div>
-        {data.todo.is_component_root && <div className="todo-graph-node__root">{data.rootLabel}</div>}
-      </div>
-      <div className="todo-graph-node__title">{data.todo.title}</div>
-      <div className="todo-graph-node__meta">
-        <span className={`todo-graph-node__chip status-${data.todo.status}`}>{data.statusLabel}</span>
-        <span className={`todo-graph-node__chip category-${data.todo.category}`}>{data.todo.category.toUpperCase()}</span>
-        <span className="todo-graph-node__chip">{data.todo.priority.toUpperCase()}</span>
-      </div>
-      <div className="todo-graph-node__footer">
-        <div className="todo-graph-node__metric">
-          <span className="todo-graph-node__metric-label">{data.prereqLabel}</span>
-          <span className="todo-graph-node__metric-value">{data.todo.prerequisite_count}</span>
+      <div className="todo-graph-node__body">
+        <div className="todo-graph-node__title">
+          <span className="todo-graph-node__code">{data.todo.code}</span>
+          {data.todo.title}
         </div>
-        <div className="todo-graph-node__metric">
-          <span className="todo-graph-node__metric-label">{data.dependentLabel}</span>
-          <span className="todo-graph-node__metric-value">{data.todo.dependent_count}</span>
+        <div className="todo-graph-node__tags">
+          <span className={`todo-graph-node__tag tag-status status-${data.todo.status}`}>{data.statusLabel}</span>
+          <span className={`todo-graph-node__tag tag-category category-${data.todo.category}`}>{data.todo.category.toUpperCase()}</span>
+          <span className={`todo-graph-node__tag tag-priority priority-${data.todo.priority}`}>{data.todo.priority.toUpperCase()}</span>
         </div>
-        <div className="todo-graph-node__metric">
-          <span className="todo-graph-node__metric-label">{data.dueLabel}</span>
-          <span className="todo-graph-node__metric-value">{dueAt || '-'}</span>
-        </div>
+        {(data.todo.prerequisite_count > 0 || data.todo.dependent_count > 0 || dueAt) && (
+          <div className="todo-graph-node__stats">
+            {data.todo.prerequisite_count > 0 && <span>↑{data.todo.prerequisite_count}</span>}
+            {data.todo.dependent_count > 0 && <span>↓{data.todo.dependent_count}</span>}
+            {dueAt && <span>{dueAt}</span>}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -146,9 +141,6 @@ async function layoutComponent(
         selected: false,
         neighbor: false,
         statusLabel: '',
-        dueLabel: '',
-        prereqLabel: '',
-        dependentLabel: '',
         rootLabel: '',
         onSelect: () => {},
       },
@@ -206,8 +198,8 @@ function TodoGraphPageInner() {
         source: String(edge.source_id),
         target: String(edge.target_id),
         type: 'smoothstep',
-        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: 'rgba(30, 64, 175, 0.55)' },
-        style: { stroke: 'rgba(30, 64, 175, 0.38)', strokeWidth: 2.2 },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: EDGE_COLOR },
+        style: { stroke: EDGE_COLOR, strokeWidth: 2.0 },
         animated: false,
       }));
 
@@ -281,9 +273,6 @@ function TodoGraphPageInner() {
               selected: node.data.todo.id === selectedTodoId,
               neighbor: neighborIds.has(node.data.todo.id),
               statusLabel: statusLabelMap[node.data.todo.status],
-              dueLabel: t('graph.dueLabel'),
-              prereqLabel: t('graph.prerequisites'),
-              dependentLabel: t('graph.dependents'),
               rootLabel,
               onSelect: setSelectedTodoId,
             },
@@ -410,11 +399,19 @@ function TodoGraphPageInner() {
         <div className="todo-graph-toolbar-group">
           <Space>
             <Text>{t('graph.showCompletedComponents')}</Text>
-            <Switch checked={showCompletedComponents} onChange={(checked) => updateParams({ show_completed_components: checked ? '1' : null })} />
+            <Switch
+              checked={showCompletedComponents}
+              disabled={!!focusComponent}
+              onChange={(checked) => updateParams({ show_completed_components: checked ? '1' : null })}
+            />
           </Space>
           <Space>
             <Text>{t('graph.hideCompletedNodes')}</Text>
-            <Switch checked={hideCompletedNodes} onChange={(checked) => updateParams({ hide_completed_nodes: checked ? '1' : null })} />
+            <Switch
+              checked={hideCompletedNodes}
+              disabled={!!focusComponent?.all_completed}
+              onChange={(checked) => updateParams({ hide_completed_nodes: checked ? '1' : null })}
+            />
           </Space>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh}>{t('graph.refresh')}</Button>
           <Button onClick={resetFilters}>{t('graph.reset')}</Button>
@@ -465,10 +462,10 @@ function TodoGraphPageInner() {
                 zoomable
                 nodeColor={(node) => {
                   const todo = (node as GraphFlowNode).data?.todo;
-                  if (!todo) return 'rgba(17, 44, 60, 0.22)';
-                  if (todo.status === 'completed') return '#2f855a';
-                  if (todo.status === 'in_progress') return '#1d4ed8';
-                  return '#94a3b8';
+                  if (!todo) return 'rgba(17, 44, 60, 0.18)';
+                  if (todo.status === 'in_progress') return '#f59e0b';
+                  if (todo.status === 'completed') return '#10b981';
+                  return '#3b82f6';
                 }}
               />
             </ReactFlow>
@@ -482,6 +479,7 @@ function TodoGraphPageInner() {
         width={520}
         open={!!selectedTodoId}
         onClose={() => setSelectedTodoId(null)}
+        className="todo-graph-drawer"
         destroyOnClose={false}
       >
         <TodoDetailPanel

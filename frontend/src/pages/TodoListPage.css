@@ -1,0 +1,137 @@
+.todo-list-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.todo-list-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.todo-list-page__header h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+}
+
+.todo-list-page__body {
+  flex: 1;
+  display: flex;
+  gap: var(--space-4);
+  min-height: 0;
+  margin-top: var(--space-3);
+}
+
+.todo-list-page__table {
+  flex: 1;
+  overflow: auto;
+  min-width: 0;
+}
+
+/* --- Table Container Styles --- */
+.todo-list-page__table .ant-table {
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+}
+
+/* --- Selected Row --- */
+.todo-list-page__table .ant-table-row-selected > td {
+  background-color: var(--color-primary-lighter) !important;
+}
+
+/* --- Hover Row --- */
+.todo-list-page__table .ant-table-row {
+  transition: background-color 150ms ease;
+}
+
+.todo-list-page__table .ant-table-row:hover > td {
+  background-color: var(--color-bg-elevated) !important;
+}
+
+/* --- Completed Status Row --- */
+.todo-list-page__table .ant-table-row.row-completed > td {
+  opacity: 0.65;
+}
+
+.todo-list-page__detail {
+  flex: 1;
+  overflow: auto;
+  border-left: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* --- Action Button Hover Styles --- */
+.todo-list-page__table .btn-action-delete:hover {
+  color: var(--color-priority-p0) !important;
+}
+
+.todo-list-page__table .btn-action-complete:hover {
+  color: var(--color-status-completed) !important;
+}
+
+.todo-list-page__table .btn-action-start:hover {
+  color: var(--color-status-in-progress) !important;
+}
+
+/* --- Status Tag Styles --- */
+.tag-status-open {
+  background-color: var(--color-status-open) !important;
+  color: var(--color-text-inverse) !important;
+  border-color: var(--color-status-open) !important;
+}
+
+.tag-status-in_progress {
+  background-color: var(--color-status-in-progress) !important;
+  color: var(--color-text-inverse) !important;
+  border-color: var(--color-status-in-progress) !important;
+}
+
+.tag-status-completed {
+  background-color: var(--color-status-completed) !important;
+  color: var(--color-text-inverse) !important;
+  border-color: var(--color-status-completed) !important;
+}
+
+/* --- Priority Tag Styles --- */
+.tag-priority-p0 {
+  background-color: var(--color-priority-p0) !important;
+  color: var(--color-text-inverse) !important;
+  border-color: var(--color-priority-p0) !important;
+}
+
+.tag-priority-p1 {
+  background-color: var(--color-priority-p1) !important;
+  color: var(--color-text-inverse) !important;
+  border-color: var(--color-priority-p1) !important;
+}
+
+.tag-priority-p2 {
+  background-color: var(--color-priority-p2) !important;
+  color: var(--color-text-inverse) !important;
+  border-color: var(--color-priority-p2) !important;
+}
+
+.tag-priority-p3 {
+  background-color: var(--color-priority-p3) !important;
+  color: var(--color-text-inverse) !important;
+  border-color: var(--color-priority-p3) !important;
+}
+
+/* --- Code Column Badge --- */
+.todo-code-badge {
+  font-family: var(--font-mono);
+  font-weight: var(--font-bold);
+  font-size: var(--text-sm);
+  background: var(--color-primary-lighter);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+}

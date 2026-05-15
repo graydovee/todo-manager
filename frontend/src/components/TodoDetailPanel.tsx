@@ -1,7 +1,8 @@
-import { Typography } from 'antd';
+import { Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useTodo } from '../hooks/useTodos';
 import { TodoDetailContent } from './TodoDetailContent';
+import './TodoDetailPanel.css';
 
 const { Text } = Typography;
 
@@ -19,21 +20,27 @@ export function TodoDetailPanel({ todoId, onEdit, onNavigate, onAddPrerequisite,
 
   if (!todoId) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-        <Text type="secondary">{t('detail.noSelection')}</Text>
+      <div className="detail-panel">
+        <div className="detail-panel-empty">
+          <Text type="secondary">{t('detail.noSelection')}</Text>
+        </div>
       </div>
     );
   }
 
   if (isLoading || !todo) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-        <Text type="secondary">Loading...</Text>
+      <div className="detail-panel">
+        <div className="detail-panel-loading">
+          <Spin />
+        </div>
       </div>
     );
   }
 
   return (
-    <TodoDetailContent todo={todo} onEdit={onEdit} onNavigate={onNavigate} onAddPrerequisite={onAddPrerequisite} onDelete={onDelete} />
+    <div className="detail-panel">
+      <TodoDetailContent todo={todo} onEdit={onEdit} onNavigate={onNavigate} onAddPrerequisite={onAddPrerequisite} onDelete={onDelete} />
+    </div>
   );
 }

@@ -3,14 +3,21 @@
 }
 
 .app-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background:
-    linear-gradient(120deg, rgba(11, 35, 59, 0.96), rgba(18, 68, 80, 0.95)),
-    radial-gradient(circle at top right, rgba(255, 209, 102, 0.35), transparent 36%);
+  background: var(--color-bg-header-dark);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.app-header::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--color-bg-header-accent-radial);
+  pointer-events: none;
 }
 
 .app-brand {
@@ -29,7 +36,7 @@
 
 .app-brand-title.ant-typography {
   margin: 0;
-  color: #f7fbff;
+  color: var(--color-text-inverse);
   letter-spacing: 0.02em;
 }
 
@@ -40,14 +47,22 @@
 }
 
 .app-header-user {
-  color: #f7fbff;
+  color: var(--color-text-inverse);
 }
 
 .app-sider {
-  background:
-    linear-gradient(180deg, rgba(246, 250, 255, 0.96), rgba(233, 242, 247, 0.96)),
-    radial-gradient(circle at top left, rgba(69, 123, 157, 0.18), transparent 36%);
-  border-right: 1px solid rgba(17, 44, 60, 0.08);
+  position: relative;
+  background: var(--color-bg-sidebar);
+  border-right: 1px solid var(--color-border-subtle);
+  transition: width var(--transition-normal);
+}
+
+.app-sider::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--color-bg-sidebar-accent-radial);
+  pointer-events: none;
 }
 
 .app-sider-top {
@@ -57,7 +72,7 @@
 }
 
 .app-collapse-btn.ant-btn {
-  color: #335c67;
+  color: var(--color-primary-light);
 }
 
 .app-menu {
@@ -68,7 +83,7 @@
 
 .app-menu .ant-menu-item {
   margin: 6px 0;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   height: 44px;
   line-height: 44px;
 }
@@ -84,11 +99,56 @@
   height: calc(100vh - 64px);
   overflow: hidden;
   background:
-    radial-gradient(circle at top right, rgba(255, 209, 102, 0.12), transparent 28%),
-    linear-gradient(180deg, #f8fbfd 0%, #edf4f8 100%);
+    var(--color-bg-content-accent-radial),
+    var(--color-bg-content);
 }
 
 .app-content-body {
   height: 100%;
   min-width: 0;
+}
+
+/* Interactive element hover/click feedback */
+.app-menu .ant-menu-item:hover {
+  opacity: 0.85;
+  transition: opacity 150ms ease, background-color 150ms ease;
+}
+
+.app-menu .ant-menu-item:active {
+  transform: scale(0.97);
+  transition: transform 100ms ease;
+}
+
+.app-header-actions .ant-btn:hover {
+  opacity: 0.85;
+  transition: opacity 150ms ease;
+}
+
+.app-header-actions .ant-btn:active {
+  transform: scale(0.95);
+  transition: transform 100ms ease;
+}
+
+.app-collapse-btn.ant-btn:hover {
+  opacity: 0.85;
+  transition: opacity 150ms ease;
+}
+
+.app-collapse-btn.ant-btn:active {
+  transform: scale(0.92);
+  transition: transform 100ms ease;
+}
+
+/* 960px responsive breakpoint */
+@media (max-width: 960px) {
+  .app-sider {
+    width: 84px !important;
+    min-width: 84px !important;
+    max-width: 84px !important;
+    flex: 0 0 84px !important;
+  }
+
+  .app-content {
+    padding: 12px;
+  }
 }

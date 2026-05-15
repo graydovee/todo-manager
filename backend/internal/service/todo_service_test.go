@@ -482,6 +482,37 @@ func TestReopenTodo_NotCompleted(t *testing.T) {
 	}
 }
 
+func TestReopenTodo_WithCompletedDependentsConflict(t *testing.T) {
+	svc, _ := setupService(t)
+
+	dependency, _ := svc.CreateTodo(1, CreateTodoInput{Title: "Dependency", Category: "bug"})
+	dependent, _ := svc.CreateTodo(1, CreateTodoInput{
+		Title:        "Dependent",
+		Category:     "feature",
+		DependsOnIDs: []uint{dependency.ID},
+	})
+
+	if _, err := svc.CompleteTodo(1, dependent.ID, true); err != nil {
+		t.Fatalf("complete dependent graph: %v", err)
+	}
+
+	conflict, err := svc.ReopenTodo(1, dependency.ID, false)
+	if err != nil {
+		t.Fatalf("reopen dependency: %v", err)
+	}
+	if conflict == nil {
+		t.Fatal("expected conflict when reopening with completed dependents")
+	}
+	if len(conflict.CompletedDependents) != 1 || conflict.CompletedDependents[0].ID != dependent.ID {
+		t.Fatalf("unexpected completed dependents: %+v", conflict.CompletedDependents)
+	}
+
+	updatedDependency, _ := svc.GetTodo(1, dependency.ID)
+	if updatedDependency.Status != model.StatusCompleted {
+		t.Fatalf("expected dependency to remain completed before cascade reopen, got %s", updatedDependency.Status)
+	}
+}
+
 func TestCreateTodo_DefaultPriority(t *testing.T) {
 	svc, _ := setupService(t)
 

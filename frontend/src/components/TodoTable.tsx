@@ -7,16 +7,16 @@ import { useStartTodo, useCompleteTodo, useReopenTodo, useDeleteTodo } from '../
 import type { HttpErrorLike, RelationConflictItem } from '../types/errors';
 
 const PRIORITY_COLORS: Record<string, string> = {
-  p0: 'red',
-  p1: 'orange',
-  p2: 'gold',
-  p3: 'default',
+  p0: 'tag-priority-p0',
+  p1: 'tag-priority-p1',
+  p2: 'tag-priority-p2',
+  p3: 'tag-priority-p3',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  open: 'default',
-  in_progress: 'blue',
-  completed: 'green',
+  open: 'tag-status-open',
+  in_progress: 'tag-status-in_progress',
+  completed: 'tag-status-completed',
 };
 
 const PRIORITY_WEIGHT: Record<string, number> = {
@@ -130,7 +130,7 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
       width: 100,
       sorter: true,
       sortOrder: sortBy === 'code' ? (sortOrder === 'asc' ? 'ascend' : sortOrder === 'desc' ? 'descend' : null) : null,
-      render: (code: string) => <span style={{ fontFamily: 'monospace', fontWeight: 'bold', fontSize: 12 }}>{code}</span>,
+      render: (code: string) => <span className="todo-code-badge">{code}</span>,
     },
     {
       title: t('todo.titleLabel'),
@@ -147,7 +147,7 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
       width: 65,
       sorter: ({ priority: a }, { priority: b }) => PRIORITY_WEIGHT[a] - PRIORITY_WEIGHT[b],
       sortOrder: sortBy === 'priority' ? (sortOrder === 'asc' ? 'ascend' : sortOrder === 'desc' ? 'descend' : null) : null,
-      render: (p: string) => <Tag color={PRIORITY_COLORS[p]}>{p.toUpperCase()}</Tag>,
+      render: (p: string) => <Tag className={PRIORITY_COLORS[p]}>{p.toUpperCase()}</Tag>,
     },
     {
       title: t('todo.status'),
@@ -162,7 +162,7 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
           in_progress: t('todo.inProgress'),
           completed: t('todo.completed'),
         };
-        return <Tag color={STATUS_COLORS[status]}>{labels[status] || status}</Tag>;
+        return <Tag className={STATUS_COLORS[status]}>{labels[status] || status}</Tag>;
       },
     },
     {
@@ -185,12 +185,12 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
         <Space size={0}>
           {record.status === 'open' && (
             <Tooltip title={t('detail.startProgress')}>
-              <Button type="text" size="small" icon={<PlayCircleOutlined />} onClick={(e) => { e.stopPropagation(); handleStart(record.id); }} />
+              <Button className="btn-action-start" type="text" size="small" icon={<PlayCircleOutlined />} onClick={(e) => { e.stopPropagation(); handleStart(record.id); }} />
             </Tooltip>
           )}
           {(record.status === 'open' || record.status === 'in_progress') ? (
             <Tooltip title={t('detail.markComplete')}>
-              <Button type="text" size="small" icon={<CheckCircleOutlined style={{ color: 'green' }} />} onClick={(e) => { e.stopPropagation(); handleComplete(record); }} />
+              <Button className="btn-action-complete" type="text" size="small" icon={<CheckCircleOutlined />} onClick={(e) => { e.stopPropagation(); handleComplete(record); }} />
             </Tooltip>
           ) : (
             <Tooltip title={t('detail.reopen')}>
@@ -202,7 +202,7 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
           </Tooltip>
           <Popconfirm title={t('confirm.deleteTodo')} onConfirm={() => handleDelete(record.id)}>
             <Tooltip title={t('common.delete')}>
-              <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
+              <Button className="btn-action-delete" type="text" size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
             </Tooltip>
           </Popconfirm>
         </Space>
@@ -235,7 +235,12 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
           onSortChange(undefined, undefined);
         }
       }}
-      rowClassName={(record) => (record.id === selectedRowId ? 'ant-table-row-selected' : '')}
+      rowClassName={(record) => {
+        const classes: string[] = [];
+        if (record.id === selectedRowId) classes.push('ant-table-row-selected');
+        if (record.status === 'completed') classes.push('row-completed');
+        return classes.join(' ');
+      }}
       onRow={(record) => ({
         onClick: () => onSelect(record.id),
         onDoubleClick: () => onEdit(record.id),

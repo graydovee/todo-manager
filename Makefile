@@ -7,7 +7,7 @@ backend-dev:
 	cd backend && go run cmd/server/main.go -config ../config.yaml
 
 frontend-build:
-	cd frontend && npm ci && npm run build
+	cd frontend && npm install && npm run build
 	rm -rf backend/static/frontend_dist
 	cp -r frontend/dist backend/static/frontend_dist
 

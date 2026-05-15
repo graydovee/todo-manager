@@ -7,6 +7,7 @@ import { useAuth } from '../stores/authContext';
 import { useLang } from '../stores/langStore';
 import { getAuthMode } from '../api/auth';
 import type { AuthMode } from '../types';
+import './LoginPage.css';
 
 export function LoginPage() {
   const { login, user } = useAuth();
@@ -38,10 +39,10 @@ export function LoginPage() {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f0f2f5' }}>
-      <Card style={{ width: 400 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Typography.Title level={3} style={{ margin: 0 }}>
+    <div className="login-page">
+      <Card>
+        <div className="login-page__header">
+          <Typography.Title level={3}>
             {t('login.title')}
           </Typography.Title>
           <Button
