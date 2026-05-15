@@ -17,27 +17,40 @@
 }
 
 /* --- 统一输入控件样式 --- */
-.todo-filter-bar .filter-control,
-.todo-filter-bar .filter-control .ant-input,
-.todo-filter-bar .filter-control .ant-select-selector,
-.todo-filter-bar .filter-control .ant-input-search .ant-input,
-.todo-filter-bar .filter-control .ant-input-affix-wrapper {
+.todo-filter-bar .filter-control {
   height: 34px;
+}
+
+.todo-filter-bar .filter-control .ant-input {
+  height: 34px;
+  line-height: 34px;
   border-radius: var(--radius-sm);
   border-color: var(--color-border-light);
   transition: border-color var(--transition-normal), background-color var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.todo-filter-bar .filter-control .ant-input-affix-wrapper {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  border-color: var(--color-border-light);
+  transition: border-color var(--transition-normal), background-color var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.todo-filter-bar .filter-control .ant-input-affix-wrapper .ant-input {
+  height: auto;
+  line-height: 1.5;
 }
 
 .todo-filter-bar .filter-control .ant-select-selector {
   height: 34px !important;
   border-radius: var(--radius-sm) !important;
   border-color: var(--color-border-light) !important;
-}
-
-.todo-filter-bar .filter-control .ant-input-affix-wrapper {
-  height: 34px;
-  border-radius: var(--radius-sm);
-  border-color: var(--color-border-light);
+  flex-wrap: nowrap !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
 }
 
 /* --- 激活态控件样式（筛选条件非空时） --- */

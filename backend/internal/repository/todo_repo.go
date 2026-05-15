@@ -78,11 +78,21 @@ func (r *TodoRepo) List(tx *gorm.DB, userID uint, filters TodoFilters) ([]*model
 	}
 
 	if filters.Category != "" {
-		db = db.Where("todos.category = ?", filters.Category)
+		categories := strings.Split(filters.Category, ",")
+		if len(categories) == 1 {
+			db = db.Where("todos.category = ?", categories[0])
+		} else {
+			db = db.Where("todos.category IN ?", categories)
+		}
 	}
 
 	if filters.Priority != "" {
-		db = db.Where("todos.priority = ?", filters.Priority)
+		priorities := strings.Split(filters.Priority, ",")
+		if len(priorities) == 1 {
+			db = db.Where("todos.priority = ?", priorities[0])
+		} else {
+			db = db.Where("todos.priority IN ?", priorities)
+		}
 	}
 
 	if filters.Status != "" {

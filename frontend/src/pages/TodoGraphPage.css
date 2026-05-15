@@ -325,6 +325,17 @@
 }
 
 /* ============================================
+   Handles (invisible, for edge connections)
+   ============================================ */
+
+.todo-graph-handle {
+  width: 6px;
+  height: 6px;
+  background: transparent;
+  border: none;
+}
+
+/* ============================================
    Responsive
    ============================================ */
 

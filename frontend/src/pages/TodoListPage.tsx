@@ -13,7 +13,7 @@ import './TodoListPage.css';
 
 export function TodoListPage() {
   const { t } = useTranslation();
-  const [filters, setFilters] = useState<TodoFilters>({});
+  const [filters, setFilters] = useState<TodoFilters>({ sort_by: 'created_at', sort_order: 'desc', status: 'open,in_progress' });
   const [selectedTodoId, setSelectedTodoId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);

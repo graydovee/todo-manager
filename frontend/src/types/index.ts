@@ -96,8 +96,8 @@ export interface TodoFilters {
   q?: string;
   code?: string;
   tag?: string[];
-  category?: Category;
-  priority?: Priority;
+  category?: string;
+  priority?: string;
   status?: string;
   page?: number;
   page_size?: number;

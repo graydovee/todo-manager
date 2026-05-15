@@ -21,7 +21,7 @@ build: frontend-build
 docker-build:
 	docker build -t graydovee/todolist .
 
-run: build
+run:
 	cd backend && ./bin/todolist -config ../config.yaml
 
 clean:

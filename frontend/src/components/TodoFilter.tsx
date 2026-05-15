@@ -37,11 +37,13 @@ export function TodoFilter({ filters, onChange }: Props) {
 
       <div className={`filter-control ${filters.category ? 'filter-active' : ''}`}>
         <Select
+          mode="multiple"
+          maxTagCount="responsive"
           placeholder={t('todo.category')}
           allowClear
-          style={{ width: 120 }}
-          value={filters.category || undefined}
-          onChange={(value) => onChange({ category: value })}
+          style={{ width: 180 }}
+          value={filters.category ? filters.category.split(',') : []}
+          onChange={(values: string[]) => onChange({ category: values.length > 0 ? values.join(',') : undefined })}
           options={[
             { value: 'bug', label: t('todo.bug') },
             { value: 'feature', label: t('todo.feature') },
@@ -52,11 +54,13 @@ export function TodoFilter({ filters, onChange }: Props) {
 
       <div className={`filter-control ${filters.priority ? 'filter-active' : ''}`}>
         <Select
+          mode="multiple"
+          maxTagCount="responsive"
           placeholder={t('todo.priority')}
           allowClear
-          style={{ width: 120 }}
-          value={filters.priority || undefined}
-          onChange={(value) => onChange({ priority: value })}
+          style={{ width: 180 }}
+          value={filters.priority ? filters.priority.split(',') : []}
+          onChange={(values: string[]) => onChange({ priority: values.length > 0 ? values.join(',') : undefined })}
           options={[
             { value: 'p0', label: 'P0' },
             { value: 'p1', label: 'P1' },
@@ -68,11 +72,13 @@ export function TodoFilter({ filters, onChange }: Props) {
 
       <div className={`filter-control ${filters.status ? 'filter-active' : ''}`}>
         <Select
+          mode="multiple"
+          maxTagCount="responsive"
           placeholder={t('todo.status')}
           allowClear
-          style={{ width: 120 }}
-          value={filters.status || undefined}
-          onChange={(value) => onChange({ status: value || undefined })}
+          style={{ width: 200 }}
+          value={filters.status ? filters.status.split(',') : []}
+          onChange={(values: string[]) => onChange({ status: values.length > 0 ? values.join(',') : undefined })}
           options={[
             { value: 'open', label: t('todo.open') },
             { value: 'in_progress', label: t('todo.inProgress') },

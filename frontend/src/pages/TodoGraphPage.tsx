@@ -7,6 +7,7 @@ import {
   ReactFlow,
   Background,
   Controls,
+  Handle,
   MarkerType,
   MiniMap,
   Position,
@@ -62,8 +63,8 @@ function TodoGraphCardNode({ data }: NodeProps<GraphFlowNode>) {
         data.selected ? 'is-selected' : '',
         data.neighbor ? 'is-neighbor' : '',
       ].filter(Boolean).join(' ')}
-      onClick={() => data.onSelect(data.todo.id)}
     >
+      <Handle type="target" position={Position.Left} className="todo-graph-handle" />
       <div className="todo-graph-node__body">
         <div className="todo-graph-node__title">
           <span className="todo-graph-node__code">{data.todo.code}</span>
@@ -82,6 +83,7 @@ function TodoGraphCardNode({ data }: NodeProps<GraphFlowNode>) {
           </div>
         )}
       </div>
+      <Handle type="source" position={Position.Right} className="todo-graph-handle" />
     </div>
   );
 }
@@ -103,7 +105,7 @@ async function layoutComponent(
     id: component.id,
     layoutOptions: {
       'elk.algorithm': 'layered',
-      'elk.direction': 'DOWN',
+      'elk.direction': 'RIGHT',
       'elk.edgeRouting': 'SPLINES',
       'elk.layered.spacing.nodeNodeBetweenLayers': '90',
       'elk.spacing.nodeNode': '54',
@@ -134,8 +136,8 @@ async function layoutComponent(
       id: String(node.id),
       type: 'todoCard',
       position: pos,
-      sourcePosition: Position.Bottom,
-      targetPosition: Position.Top,
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
       data: {
         todo: node,
         selected: false,
@@ -159,6 +161,7 @@ function TodoGraphPageInner() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { data, isLoading, refetch } = useTodoGraph();
   const [selectedTodoId, setSelectedTodoId] = useState<number | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [prerequisiteForId, setPrerequisiteForId] = useState<number | undefined>(undefined);
@@ -231,6 +234,23 @@ function TodoGraphPageInner() {
   const [flowNodes, setFlowNodes] = useState<GraphFlowNode[]>([]);
   const [flowEdges, setFlowEdges] = useState<GraphFlowEdge[]>([]);
 
+  const styledEdges = useMemo<GraphFlowEdge[]>(() => {
+    return flowEdges.map((edge) => {
+      if (!selectedTodoId) return edge; // No selection — default style
+      const isConnected =
+        Number(edge.source) === selectedTodoId || Number(edge.target) === selectedTodoId;
+      return {
+        ...edge,
+        style: {
+          ...edge.style,
+          stroke: EDGE_COLOR,
+          strokeWidth: isConnected ? 2.5 : 2,
+          opacity: isConnected ? 0.9 : 0.2,
+        },
+      };
+    });
+  }, [flowEdges, selectedTodoId]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -240,7 +260,8 @@ function TodoGraphPageInner() {
       const laidOutEdges: GraphFlowEdge[] = [];
       let cursorX = 24;
       let cursorY = 24;
-      let tallestRow = 0;
+      let widestColumn = 0;
+      const MAX_CANVAS_HEIGHT = 2000;
 
       for (const component of visibleGraph.components) {
         const componentNodes = component.node_ids
@@ -251,10 +272,10 @@ function TodoGraphPageInner() {
 
         const { nodes, edges, width, height } = await layoutComponent(component, componentNodes, visibleGraph.edges);
 
-        if (cursorX > 24 && cursorX + width > 2600) {
-          cursorX = 24;
-          cursorY += tallestRow + COMPONENT_GAP_Y;
-          tallestRow = 0;
+        if (cursorY > 24 && cursorY + height > MAX_CANVAS_HEIGHT) {
+          cursorY = 24;
+          cursorX += widestColumn + COMPONENT_GAP_X;
+          widestColumn = 0;
         }
 
         const rootLabel = component.root_summaries.length > 1 ? t('graph.rootsLabel') : t('graph.rootLabel');
@@ -274,14 +295,17 @@ function TodoGraphPageInner() {
               neighbor: neighborIds.has(node.data.todo.id),
               statusLabel: statusLabelMap[node.data.todo.status],
               rootLabel,
-              onSelect: setSelectedTodoId,
+              onSelect: (todoId: number) => {
+                setSelectedTodoId(todoId);
+                setDrawerOpen(true);
+              },
             },
           });
         }
         laidOutEdges.push(...edges);
 
-        cursorX += width + COMPONENT_GAP_X;
-        tallestRow = Math.max(tallestRow, height);
+        cursorY += height + COMPONENT_GAP_Y;
+        widestColumn = Math.max(widestColumn, width);
       }
 
       if (!cancelled) {
@@ -321,6 +345,7 @@ function TodoGraphPageInner() {
   const resetFilters = () => {
     setSearchParams({});
     setSelectedTodoId(null);
+    setDrawerOpen(false);
   };
 
   const updateParams = (updates: Record<string, string | null>) => {
@@ -335,16 +360,19 @@ function TodoGraphPageInner() {
   const handleNavigateTodo = (todoId: number) => {
     if (todoId === 0) {
       setSelectedTodoId(null);
+      setDrawerOpen(false);
       return;
     }
 
     if (visibleNodeIds.has(todoId)) {
       setSelectedTodoId(todoId);
+      setDrawerOpen(true);
       return;
     }
 
     updateParams({ focus: String(todoId) });
     setSelectedTodoId(todoId);
+    setDrawerOpen(true);
   };
 
   const handleRefresh = async () => {
@@ -440,7 +468,7 @@ function TodoGraphPageInner() {
           <div className="todo-graph-canvas">
             <ReactFlow<GraphFlowNode, GraphFlowEdge>
               nodes={flowNodes}
-              edges={flowEdges}
+              edges={styledEdges}
               nodeTypes={nodeTypes}
               fitView
               fitViewOptions={{ padding: 0.16 }}
@@ -449,7 +477,11 @@ function TodoGraphPageInner() {
               nodesDraggable={false}
               nodesConnectable={false}
               elementsSelectable
-              onNodeClick={(_, node) => setSelectedTodoId(Number(node.id))}
+              onNodeClick={(_, node) => {
+                const todoId = Number(node.id);
+                setSelectedTodoId(todoId);
+                setDrawerOpen(true);
+              }}
               onInit={(instance) => {
                 flowRef.current = instance;
               }}
@@ -477,8 +509,11 @@ function TodoGraphPageInner() {
         title={t('graph.drawerTitle')}
         placement="right"
         width={520}
-        open={!!selectedTodoId}
-        onClose={() => setSelectedTodoId(null)}
+        open={drawerOpen && !!selectedTodoId}
+        onClose={() => {
+          setDrawerOpen(false);
+          setSelectedTodoId(null);
+        }}
         className="todo-graph-drawer"
         destroyOnClose={false}
       >
@@ -497,6 +532,7 @@ function TodoGraphPageInner() {
           }}
           onDelete={() => {
             setSelectedTodoId(null);
+            setDrawerOpen(false);
             void refetch();
           }}
         />
@@ -519,6 +555,7 @@ function TodoGraphPageInner() {
             await updateTodo(prerequisiteForId, { depends_on_ids: [...existingIds, newTodoId] });
             updateParams({ focus: String(prerequisiteForId) });
             setSelectedTodoId(prerequisiteForId);
+            setDrawerOpen(true);
             await refetch();
           }
         }}
