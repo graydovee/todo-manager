@@ -126,6 +126,9 @@ func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("TODOLIST_SESSION_SECRET"); v != "" {
 		cfg.Session.Secret = v
 	}
+	if v := os.Getenv("TODOLIST_OIDC_CLIENT_SECRET"); v != "" {
+		cfg.Auth.OIDC.ClientSecret = v
+	}
 	if v := os.Getenv("TODOLIST_LOG_FORMAT"); v != "" {
 		cfg.Log.Format = v
 	}

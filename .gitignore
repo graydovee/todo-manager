@@ -24,5 +24,8 @@ config.yaml
 # Build
 todolist
 
+!charts/todolist
+charts/todolist/charts/*.tgz
+
 CLAUDE.md
 .kiro

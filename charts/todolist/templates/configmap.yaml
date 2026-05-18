@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "todolist.configmapName" . }}
+  labels:
+    {{- include "todolist.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    server:
+      port: {{ .Values.server.port }}
+      cors_origins:
+        {{- range .Values.server.corsOrigins }}
+        - {{ . | quote }}
+        {{- end }}
+
+    db:
+      driver: {{ include "todolist.databaseDriver" . }}
+      dsn: {{ include "todolist.databaseDSN" . | quote }}
+
+    auth:
+      mode: {{ .Values.auth.mode }}
+      {{- if eq .Values.auth.mode "basic" }}
+      basic:
+        users:
+          {{- range .Values.auth.basic.users }}
+          - username: {{ .username | quote }}
+            password: {{ .password | quote }}
+            display_name: {{ .displayName | quote }}
+          {{- end }}
+      {{- end }}
+      {{- if eq .Values.auth.mode "oidc" }}
+      oidc:
+        issuer: {{ .Values.auth.oidc.issuer | quote }}
+        client_id: {{ .Values.auth.oidc.clientId | quote }}
+        client_secret: "placeholder"
+        redirect_url: {{ .Values.auth.oidc.redirectUrl | quote }}
+        scopes:
+          {{- range .Values.auth.oidc.scopes }}
+          - {{ . | quote }}
+          {{- end }}
+      {{- end }}
+
+    session:
+      secret: "placeholder"
+      max_age: {{ .Values.session.maxAge }}
+      cleanup_interval: {{ .Values.session.cleanupInterval }}
+
+    log:
+      format: {{ .Values.log.format }}
+      level: {{ .Values.log.level }}

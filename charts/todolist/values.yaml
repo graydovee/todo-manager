@@ -1,0 +1,220 @@
+# -- Number of replicas (only applicable for non-sqlite modes)
+replicaCount: 1
+
+image:
+  # -- Container image repository
+  repository: graydovee/todolist
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+  # -- Image tag (defaults to appVersion in Chart.yaml)
+  tag: "latest"
+
+# -- Image pull secrets for private registries
+imagePullSecrets: []
+
+# -- Override the release name
+nameOverride: ""
+# -- Override the full release name
+fullnameOverride: ""
+
+# =============================================================================
+# Application Configuration
+# =============================================================================
+
+# -- Server configuration
+server:
+  # -- Port the application listens on
+  port: 8080
+  # -- Allowed CORS origins
+  corsOrigins:
+    - "http://localhost:8080"
+
+# -- Database configuration
+database:
+  # -- Database mode: "sqlite", "bundled", or "external"
+  mode: sqlite
+
+  # -- SQLite mode configuration (only used when mode=sqlite)
+  sqlite:
+    # -- Path to the SQLite database file inside the container
+    path: "/data/todolist.db"
+    persistence:
+      # -- Enable persistent volume for SQLite data
+      enabled: false
+      # -- Storage class for the PVC (empty string uses default)
+      storageClass: ""
+      # -- Size of the persistent volume
+      size: 1Gi
+      # -- Access modes for the PVC
+      accessModes:
+        - ReadWriteOnce
+
+  # -- Bundled PostgreSQL configuration (deploys bitnami/postgresql subchart)
+  bundled:
+    # -- Enable bundled PostgreSQL deployment
+    enabled: false
+    # -- Database name to create
+    database: todolist
+    # -- Username for the database
+    username: todolist
+    # -- Password for the database user (stored in Secret)
+    password: "todolist-password"
+
+  # -- External database configuration (only used when mode=external)
+  external:
+    # -- Database type: "postgres" or "mysql"
+    type: postgres
+    # -- Database host
+    host: ""
+    # -- Database port
+    port: 5432
+    # -- Database username
+    username: ""
+    # -- Database password (stored in Secret)
+    password: ""
+    # -- Database name
+    database: ""
+
+# -- Authentication configuration
+auth:
+  # -- Auth mode: "basic" or "oidc"
+  mode: basic
+  # -- Basic auth users (only used when mode=basic)
+  basic:
+    users:
+      - username: admin
+        password: admin123
+        displayName: Admin
+  # -- OIDC configuration (only used when mode=oidc)
+  oidc:
+    issuer: ""
+    clientId: ""
+    # -- OIDC client secret (stored in Secret)
+    clientSecret: ""
+    redirectUrl: ""
+    scopes:
+      - openid
+      - profile
+      - email
+
+# -- Session configuration
+session:
+  # -- Session secret key (stored in Secret)
+  secret: "change-me-in-production"
+  # -- Session max age in seconds
+  maxAge: 86400
+  # -- Session cleanup interval in seconds
+  cleanupInterval: 3600
+
+# -- Logging configuration
+log:
+  # -- Log format: "text" or "json"
+  format: text
+  # -- Log level: "debug", "info", "warn", "error"
+  level: info
+
+# =============================================================================
+# Kubernetes Resources
+# =============================================================================
+
+serviceAccount:
+  # -- Create a service account
+  create: true
+  # -- Annotations for the service account
+  annotations: {}
+  # -- Name of the service account (auto-generated if empty)
+  name: ""
+
+# -- Pod annotations
+podAnnotations: {}
+
+# -- Pod security context
+podSecurityContext: {}
+  # fsGroup: 1000
+
+# -- Container security context
+securityContext: {}
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  # -- Service type
+  type: ClusterIP
+  # -- Service port
+  port: 80
+
+ingress:
+  # -- Enable ingress
+  enabled: false
+  # -- Ingress class name
+  className: ""
+  # -- Ingress annotations
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: todolist.local
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- TLS configuration
+  tls: []
+  #  - secretName: todolist-tls
+  #    hosts:
+  #      - todolist.local
+
+# -- Resource requests and limits
+resources: {}
+  # limits:
+  #   cpu: 200m
+  #   memory: 256Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+# -- Liveness probe configuration
+livenessProbe:
+  # -- Enable liveness probe
+  enabled: true
+  # -- Probe spec (fully customizable)
+  spec:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 30
+
+# -- Readiness probe configuration
+readinessProbe:
+  # -- Enable readiness probe
+  enabled: true
+  # -- Probe spec (fully customizable)
+  spec:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+# -- Node selector
+nodeSelector: {}
+
+# -- Tolerations
+tolerations: []
+
+# -- Affinity rules
+affinity: {}
+
+# =============================================================================
+# Bundled PostgreSQL subchart values
+# See: https://github.com/bitnami/charts/tree/main/bitnami/postgresql
+# =============================================================================
+postgresql:
+  auth:
+    username: todolist
+    password: "todolist-password"
+    database: todolist
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi

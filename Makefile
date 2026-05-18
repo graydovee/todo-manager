@@ -1,4 +1,4 @@
-.PHONY: frontend-dev backend-dev frontend-build test build run docker-build clean
+.PHONY: frontend-dev backend-dev frontend-build test build run docker-build release clean
 
 frontend-dev:
 	cd frontend && npm run dev -- --port 5173
@@ -24,7 +24,16 @@ GIT_VERSION := $(if $(GIT_TAG),$(GIT_TAG),$(shell git describe --tags --abbrev=7
 CONTAINER_ENGINE := $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null)
 
 docker-build:
-	$(CONTAINER_ENGINE) build -t $(IMAGE_NAME):$(GIT_VERSION) -t $(IMAGE_NAME):latest .
+	$(CONTAINER_ENGINE) build --platform linux/amd64 -t $(IMAGE_NAME):$(GIT_VERSION) -t $(IMAGE_NAME):latest .
+
+PLATFORMS := linux/amd64,linux/arm64
+
+release:
+	$(CONTAINER_ENGINE) manifest rm $(IMAGE_NAME):$(GIT_VERSION) 2>/dev/null || true
+	$(CONTAINER_ENGINE) manifest rm $(IMAGE_NAME):latest 2>/dev/null || true
+	$(CONTAINER_ENGINE) build --platform $(PLATFORMS) --manifest $(IMAGE_NAME):$(GIT_VERSION) .
+	$(CONTAINER_ENGINE) manifest push $(IMAGE_NAME):$(GIT_VERSION) docker://docker.io/$(IMAGE_NAME):$(GIT_VERSION)
+	$(CONTAINER_ENGINE) manifest push $(IMAGE_NAME):$(GIT_VERSION) docker://docker.io/$(IMAGE_NAME):latest
 
 run:
 	cd backend && ./bin/todolist -config ../config.yaml
