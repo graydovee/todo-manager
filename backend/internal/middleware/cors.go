@@ -5,9 +5,12 @@ import (
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 )
 
-func CORS() echo.MiddlewareFunc {
+func CORS(allowOrigins []string) echo.MiddlewareFunc {
+	if len(allowOrigins) == 0 {
+		allowOrigins = []string{"*"}
+	}
 	return echoMiddleware.CORSWithConfig(echoMiddleware.CORSConfig{
-		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowOrigins:     allowOrigins,
 		AllowMethods:     []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: true,

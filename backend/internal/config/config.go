@@ -17,7 +17,8 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port int `yaml:"port"`
+	Port        int      `yaml:"port"`
+	CORSOrigins []string `yaml:"cors_origins"`
 }
 
 type DBConfig struct {
@@ -26,9 +27,9 @@ type DBConfig struct {
 }
 
 type AuthConfig struct {
-	Mode  string        `yaml:"mode"`
-	Basic BasicConfig   `yaml:"basic"`
-	OIDC  OIDCConfig    `yaml:"oidc"`
+	Mode  string      `yaml:"mode"`
+	Basic BasicConfig `yaml:"basic"`
+	OIDC  OIDCConfig  `yaml:"oidc"`
 }
 
 type BasicConfig struct {

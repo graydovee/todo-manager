@@ -1,8 +1,10 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -26,7 +28,7 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 
 	e.Use(echoMiddleware.RequestID())
 	e.Use(echoMiddleware.Recover())
-	e.Use(middleware.CORS())
+	e.Use(middleware.CORS(cfg.Server.CORSOrigins))
 	e.Use(middleware.RequestLogger())
 
 	e.Use(middleware.CSRF("/api/v1/auth/login", "/api/v1/auth/callback"))
@@ -56,7 +58,16 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 		basicAuthProvider = auth.NewBasicAuthProvider(&cfg.Auth.Basic)
 	}
 
-	authService := service.NewAuthService(cfg, basicAuthProvider, nil, userRepo, sessionStore)
+	var oidcAuthProvider *auth.OIDCAuthProvider
+	if cfg.Auth.Mode == "oidc" {
+		var err error
+		oidcAuthProvider, err = auth.NewOIDCAuthProvider(context.Background(), &cfg.Auth.OIDC)
+		if err != nil {
+			slog.Error("failed to initialize OIDC provider", "error", err)
+		}
+	}
+
+	authService := service.NewAuthService(cfg, basicAuthProvider, oidcAuthProvider, userRepo, sessionStore)
 	todoService := service.NewTodoService(db, todoRepo, tagRepo, relationRepo, counterRepo)
 	commentService := service.NewCommentService(db, commentRepo, todoRepo)
 

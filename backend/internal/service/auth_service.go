@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/graydovee/todolist/internal/auth"
@@ -12,10 +13,10 @@ import (
 )
 
 type AuthService struct {
-	cfg         *config.Config
-	basicAuth   *auth.BasicAuthProvider
-	oidcAuth    *auth.OIDCAuthProvider
-	userRepo    *repository.UserRepo
+	cfg          *config.Config
+	basicAuth    *auth.BasicAuthProvider
+	oidcAuth     *auth.OIDCAuthProvider
+	userRepo     *repository.UserRepo
 	sessionStore *session.DBStore
 }
 
@@ -76,12 +77,18 @@ func (s *AuthService) HandleOIDCCallback(ctx context.Context, w http.ResponseWri
 	// Retrieve state cookie
 	cookie, err := r.Cookie("oidc_state_" + state)
 	if err != nil {
-		return nil, auth.ErrInvalidCredentials
+		// Log all cookies for debugging
+		cookies := r.Cookies()
+		cookieNames := make([]string, len(cookies))
+		for i, c := range cookies {
+			cookieNames[i] = c.Name
+		}
+		return nil, fmt.Errorf("state cookie not found (looking for oidc_state_%s, available cookies: %v): %w", state, cookieNames, auth.ErrInvalidCredentials)
 	}
 
 	parts := splitStateCookie(cookie.Value)
 	if len(parts) != 2 {
-		return nil, auth.ErrInvalidCredentials
+		return nil, fmt.Errorf("invalid state cookie format: %w", auth.ErrInvalidCredentials)
 	}
 
 	oidcState := &auth.OIDCState{
@@ -101,16 +108,16 @@ func (s *AuthService) HandleOIDCCallback(ctx context.Context, w http.ResponseWri
 
 	userInfo, err := s.oidcAuth.HandleCallback(ctx, code, oidcState)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("oidc handle callback: %w", err)
 	}
 
 	user, err := s.userRepo.UpsertByAuthProvider(userInfo)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("upsert user: %w", err)
 	}
 
 	if err := s.sessionStore.CreateSession(w, user.ID, nil); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create session: %w", err)
 	}
 
 	return user, nil

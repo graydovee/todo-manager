@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 
@@ -13,10 +14,10 @@ import (
 )
 
 type OIDCAuthProvider struct {
-	provider   *oidc.Provider
-	verifier   *oidc.IDTokenVerifier
+	provider     *oidc.Provider
+	verifier     *oidc.IDTokenVerifier
 	oauth2Config *oauth2.Config
-	config     *config.OIDCConfig
+	config       *config.OIDCConfig
 }
 
 type OIDCState struct {
@@ -63,7 +64,7 @@ func (p *OIDCAuthProvider) GenerateState() (*OIDCState, error) {
 	if err != nil {
 		return nil, err
 	}
-	codeVerifier, err := generateRandomString(64)
+	codeVerifier, err := generateRandomString(32)
 	if err != nil {
 		return nil, err
 	}
@@ -136,5 +137,6 @@ func generateRandomString(length int) (string, error) {
 }
 
 func codeVerifierToChallenge(verifier string) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(verifier))
+	h := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(h[:])
 }

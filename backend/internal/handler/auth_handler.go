@@ -82,6 +82,7 @@ func (h *AuthHandler) CallbackOIDC(c echo.Context) error {
 
 	_, err := h.authService.HandleOIDCCallback(c.Request().Context(), c.Response(), c.Request(), code, state)
 	if err != nil {
+		c.Logger().Errorf("OIDC callback failed: %v", err)
 		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "OIDC callback failed"})
 	}
 
