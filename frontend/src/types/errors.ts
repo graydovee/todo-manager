@@ -1,7 +1,10 @@
+import type { Category } from './index';
+
 export interface RelationConflictItem {
   id: number;
   code: string;
   title: string;
+  category: Category;
 }
 
 export interface TodoConflictResponse {

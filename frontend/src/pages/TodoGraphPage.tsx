@@ -25,6 +25,7 @@ import { useTodoGraph } from '../hooks/useTodos';
 import { TodoDetailPanel } from '../components/TodoDetailPanel';
 import { TodoForm } from '../components/TodoForm';
 import { getTodo, updateTodo } from '../api/todos';
+import { formatDisplayCode } from '../utils/displayCode';
 import type { TodoGraphComponent, TodoGraphNode, TodoSummary } from '../types';
 
 const { Title, Paragraph, Text } = Typography;
@@ -67,7 +68,7 @@ function TodoGraphCardNode({ data }: NodeProps<GraphFlowNode>) {
       <Handle type="target" position={Position.Left} className="todo-graph-handle" />
       <div className="todo-graph-node__body">
         <div className="todo-graph-node__title">
-          <span className="todo-graph-node__code">{data.todo.code}</span>
+          <span className="todo-graph-node__code">{formatDisplayCode(data.todo.category, data.todo.code)}</span>
           {data.todo.title}
         </div>
         <div className="todo-graph-node__tags">
@@ -331,14 +332,14 @@ function TodoGraphPageInner() {
   const lockedPrerequisite = useMemo<TodoSummary | undefined>(() => {
     if (!prerequisiteForId || !data) return undefined;
     const matched = data.nodes.find((node) => node.id === prerequisiteForId);
-    return matched ? { id: matched.id, code: matched.code, title: matched.title, status: matched.status } : undefined;
+    return matched ? { id: matched.id, code: matched.code, title: matched.title, category: matched.category, status: matched.status } : undefined;
   }, [data, prerequisiteForId]);
 
   const todoOptions = useMemo(() => {
     if (!data) return [];
     return data.nodes.map((node) => ({
       value: node.id,
-      label: `${node.code} - ${node.title}`,
+      label: `${formatDisplayCode(node.category, node.code)} - ${node.title}`,
     }));
   }, [data]);
 

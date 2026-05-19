@@ -17,10 +17,11 @@ type ConflictResponse struct {
 }
 
 type TodoSummaryDTO struct {
-	ID     uint   `json:"id"`
-	Code   string `json:"code"`
-	Title  string `json:"title"`
-	Status string `json:"status"`
+	ID       uint   `json:"id"`
+	Code     string `json:"code"`
+	Title    string `json:"title"`
+	Category string `json:"category"`
+	Status   string `json:"status"`
 }
 
 type TodoResponse struct {

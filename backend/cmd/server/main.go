@@ -11,6 +11,8 @@ import (
 	"github.com/graydovee/todolist/internal/app"
 	"github.com/graydovee/todolist/internal/config"
 	"github.com/graydovee/todolist/internal/database"
+	"github.com/graydovee/todolist/internal/repository"
+	"github.com/graydovee/todolist/internal/service"
 	"gorm.io/gorm/logger"
 )
 
@@ -36,6 +38,13 @@ func main() {
 
 	if err := database.RunMigrations(db, cfg.DB.Driver); err != nil {
 		slog.Error("failed to run migrations", "error", err)
+		os.Exit(1)
+	}
+
+	// Run data migration (old-format codes → sequential numeric codes)
+	migrationSvc := service.NewMigrationService(db, repository.NewTodoRepo(db), repository.NewCodeCounterRepo(db))
+	if err := migrationSvc.Run(); err != nil {
+		slog.Error("failed to run data migration", "error", err)
 		os.Exit(1)
 	}
 

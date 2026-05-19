@@ -34,6 +34,7 @@ const zh = {
     description: '描述',
     category: '分类',
     categoryRequired: '请选择分类',
+    categoryPlaceholder: '请选择分类',
     bug: 'Bug - 缺陷',
     feature: 'Feature - 功能',
     task: 'Task - 任务',

@@ -54,6 +54,7 @@ type CreateTodoInput struct {
 type UpdateTodoInput struct {
 	Title         *string     `json:"title"`
 	Description   *string     `json:"description"`
+	Category      *string     `json:"category"`
 	Priority      *string     `json:"priority"`
 	Tags          *[]string   `json:"tags"`
 	DueAt         **time.Time `json:"due_at"`
@@ -67,10 +68,11 @@ type ConflictInfo struct {
 }
 
 type TodoSummary struct {
-	ID     uint   `json:"id"`
-	Code   string `json:"code"`
-	Title  string `json:"title"`
-	Status string `json:"status"`
+	ID       uint   `json:"id"`
+	Code     string `json:"code"`
+	Title    string `json:"title"`
+	Category string `json:"category"`
+	Status   string `json:"status"`
 }
 
 type TodoGraphNode struct {
@@ -123,7 +125,7 @@ func (s *TodoService) CreateTodo(userID uint, input CreateTodoInput) (*model.Tod
 	todo := &model.Todo{}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		code, err := s.counterRepo.GetNextCode(tx, userID, category)
+		code, err := s.counterRepo.GetNextCode(tx, userID)
 		if err != nil {
 			return err
 		}
@@ -170,6 +172,13 @@ func (s *TodoService) UpdateTodo(userID, todoID uint, input UpdateTodoInput) (*m
 	}
 	if input.Description != nil {
 		todo.Description = *input.Description
+	}
+	if input.Category != nil {
+		cat := strings.ToLower(*input.Category)
+		if !validCategories[cat] {
+			return nil, fmt.Errorf("invalid category: %s (must be bug, feature, or task)", *input.Category)
+		}
+		todo.Category = cat
 	}
 	if input.Priority != nil {
 		p := strings.ToLower(*input.Priority)
@@ -479,10 +488,11 @@ func (s *TodoService) GetTodoGraph(userID uint) (*TodoGraphSnapshot, error) {
 		for _, rootID := range rootIDs {
 			root := todoByID[rootID]
 			rootSummaries = append(rootSummaries, TodoSummary{
-				ID:     root.ID,
-				Code:   root.Code,
-				Title:  root.Title,
-				Status: root.Status,
+				ID:       root.ID,
+				Code:     root.Code,
+				Title:    root.Title,
+				Category: root.Category,
+				Status:   root.Status,
 			})
 		}
 
@@ -743,7 +753,7 @@ func normalizeTags(tags []string) []string {
 func toSummaries(todos []*model.Todo) []TodoSummary {
 	summaries := make([]TodoSummary, len(todos))
 	for i, t := range todos {
-		summaries[i] = TodoSummary{ID: t.ID, Code: t.Code, Title: t.Title, Status: t.Status}
+		summaries[i] = TodoSummary{ID: t.ID, Code: t.Code, Title: t.Title, Category: t.Category, Status: t.Status}
 	}
 	return summaries
 }

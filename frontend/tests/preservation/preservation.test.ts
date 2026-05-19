@@ -66,14 +66,14 @@ describe('Preservation: Existing Functionality Unchanged', () => {
 
   /**
    * Property: For all valid TodoSummary objects, SummaryLink renders a clickable link
-   * with `item.code - item.title` text and calls onNavigate on click.
+   * with formatted display code and title text, and calls onNavigate on click.
    *
    * **Validates: Requirements 3.2**
    *
    * Observation: SummaryLink component renders:
    *   <a onClick={() => onNavigate(item.id)} style={{ cursor: 'pointer' }}>
    *     <LinkOutlined style={{ marginRight: 4 }} />
-   *     {item.code} - {item.title}
+   *     {formatDisplayCode(item.category, item.code)} - {item.title}
    *   </a>
    */
   it('SummaryLink renders clickable link with code-title text and calls onNavigate', () => {
@@ -103,8 +103,8 @@ describe('Preservation: Existing Functionality Unchanged', () => {
           expect(summaryLinkBody).toContain('onClick');
           expect(summaryLinkBody).toContain('onNavigate(item.id)');
 
-          // Verify it renders item.code - item.title pattern
-          expect(summaryLinkBody).toContain('{item.code}');
+          // Verify it renders formatted display code using formatDisplayCode utility
+          expect(summaryLinkBody).toContain('formatDisplayCode(item.category, item.code)');
           expect(summaryLinkBody).toContain('{item.title}');
           expect(summaryLinkBody).toContain(' - ');
 

@@ -35,7 +35,7 @@ export function TodoListPage() {
   const lockedPrerequisite = useMemo<TodoSummary | undefined>(() => {
     if (!prerequisiteForId || !data) return undefined;
     const t = data.items.find((item) => item.id === prerequisiteForId);
-    return t ? { id: t.id, code: t.code, title: t.title, status: t.status } : undefined;
+    return t ? { id: t.id, code: t.code, title: t.title, category: t.category, status: t.status } : undefined;
   }, [prerequisiteForId, data]);
 
   const handleFilterChange = useCallback((newFilters: Partial<TodoFilters>) => {

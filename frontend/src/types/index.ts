@@ -50,6 +50,7 @@ export interface TodoSummary {
   id: number;
   code: string;
   title: string;
+  category: Category;
   status: Status;
 }
 
@@ -120,6 +121,7 @@ export interface CreateTodoInput {
 export interface UpdateTodoInput {
   title?: string;
   description?: string;
+  category?: Category;
   priority?: Priority;
   tags?: string[];
   due_at?: string | null;

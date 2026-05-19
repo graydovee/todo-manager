@@ -2,7 +2,7 @@ package repository
 
 import (
 	"fmt"
-	"strings"
+	"strconv"
 
 	"github.com/graydovee/todolist/internal/model"
 	"gorm.io/gorm"
@@ -16,19 +16,18 @@ func NewCodeCounterRepo(db *gorm.DB) *CodeCounterRepo {
 	return &CodeCounterRepo{db: db}
 }
 
-func (r *CodeCounterRepo) GetNextCode(tx *gorm.DB, userID uint, category string) (string, error) {
+func (r *CodeCounterRepo) GetNextCode(tx *gorm.DB, userID uint) (string, error) {
 	db := tx
 	if db == nil {
 		db = r.db
 	}
 
 	var counter model.CodeCounter
-	result := db.Where("user_id = ? AND category = ?", userID, category).First(&counter)
+	result := db.Where("user_id = ?", userID).First(&counter)
 
 	if result.Error == gorm.ErrRecordNotFound {
 		counter = model.CodeCounter{
 			UserID:   userID,
-			Category: category,
 			LastCode: 1,
 		}
 		if err := db.Create(&counter).Error; err != nil {
@@ -43,5 +42,5 @@ func (r *CodeCounterRepo) GetNextCode(tx *gorm.DB, userID uint, category string)
 		counter.LastCode++
 	}
 
-	return fmt.Sprintf("%s-%d", strings.ToUpper(category), counter.LastCode), nil
+	return strconv.Itoa(counter.LastCode), nil
 }

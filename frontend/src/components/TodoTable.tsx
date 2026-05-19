@@ -2,6 +2,7 @@ import { Table, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
 import type { Todo, PaginatedResponse } from '../types';
+import { formatDisplayCode } from '../utils/displayCode';
 
 const PRIORITY_COLORS: Record<string, string> = {
   p0: 'tag-priority-p0',
@@ -55,7 +56,7 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
       sortOrder: sortBy === 'title' ? (sortOrder === 'asc' ? 'ascend' : sortOrder === 'desc' ? 'descend' : null) : null,
       render: (_: unknown, record: Todo) => (
         <span>
-          <span className="todo-code-badge" style={{ color: CATEGORY_COLORS[record.category] || 'inherit' }}>{record.code}</span>
+          <span className="todo-code-badge" style={{ color: CATEGORY_COLORS[record.category] || 'inherit' }}>{formatDisplayCode(record.category, record.code)}</span>
           {record.title}
         </span>
       ),

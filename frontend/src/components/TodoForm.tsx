@@ -3,6 +3,7 @@ import { Drawer, Form, Input, Select, DatePicker, Button, Space, Alert } from 'a
 import { useTranslation } from 'react-i18next';
 import { useCreateTodo, useUpdateTodo, useTodo } from '../hooks/useTodos';
 import { listTodos } from '../api/todos';
+import { formatDisplayCode } from '../utils/displayCode';
 import type { Todo, Category, TodoSummary } from '../types';
 import type { Dayjs } from 'dayjs';
 
@@ -19,6 +20,7 @@ interface TodoOption {
   id: number;
   code: string;
   title: string;
+  category: Category;
 }
 
 interface TodoFormValues {
@@ -41,7 +43,7 @@ function useTodoSearch() {
     timerRef.current = setTimeout(async () => {
       try {
         const res = await listTodos({ q: q || undefined, page_size: 20, status: 'open,in_progress' });
-        setResults(res.items.map((t: Todo) => ({ id: t.id, code: t.code, title: t.title })));
+        setResults(res.items.map((t: Todo) => ({ id: t.id, code: t.code, title: t.title, category: t.category })));
         if (!q) initialLoaded.current = true;
       } catch {
         setResults([]);
@@ -71,7 +73,7 @@ export function TodoForm({ open, todoId, onClose, defaultCategory, lockedPrerequ
   const isEdit = !!todoId;
   const hasLockedPrerequisite = !!lockedPrerequisite;
   const depsOptions = useMemo<TodoOption[]>(
-    () => todo?.depends_on?.map((dep) => ({ id: dep.id, code: dep.code, title: dep.title })) || [],
+    () => todo?.depends_on?.map((dep) => ({ id: dep.id, code: dep.code, title: dep.title, category: dep.category })) || [],
     [todo],
   );
 
@@ -112,7 +114,7 @@ export function TodoForm({ open, todoId, onClose, defaultCategory, lockedPrerequ
     onClose();
   };
 
-  const toOption = (t: TodoOption) => ({ value: t.id, label: `${t.code} - ${t.title}` });
+  const toOption = (t: TodoOption) => ({ value: t.id, label: `${formatDisplayCode(t.category, t.code)} - ${t.title}` });
 
   return (
     <Drawer
@@ -128,7 +130,7 @@ export function TodoForm({ open, todoId, onClose, defaultCategory, lockedPrerequ
             type="info"
             showIcon={false}
             style={{ marginBottom: 16 }}
-            message={`${t('detail.addPrerequisiteFor')}: ${lockedPrerequisite.code} - ${lockedPrerequisite.title}`}
+            message={`${t('detail.addPrerequisiteFor')}: ${formatDisplayCode(lockedPrerequisite.category, lockedPrerequisite.code)} - ${lockedPrerequisite.title}`}
           />
         )}
 
@@ -141,7 +143,7 @@ export function TodoForm({ open, todoId, onClose, defaultCategory, lockedPrerequ
         </Form.Item>
 
         <Form.Item name="category" label={t('todo.category')} rules={[{ required: true, message: t('todo.categoryRequired') }]}>
-          <Select disabled={isEdit} options={[
+          <Select placeholder={t('todo.categoryPlaceholder')} options={[
             { value: 'bug', label: t('todo.bug') },
             { value: 'feature', label: t('todo.feature') },
             { value: 'task', label: t('todo.task') },

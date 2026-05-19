@@ -12,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useCompleteTodo, useDeleteTodo, useReopenTodo, useSetTodoStatus, useStartTodo } from '../hooks/useTodos';
 import { TodoComments } from './TodoComments';
+import { formatDisplayCode } from '../utils/displayCode';
 import type { Status, TodoDetail, TodoSummary } from '../types';
 import type { HttpErrorLike, RelationConflictItem } from '../types/errors';
 import './TodoDetailPanel.css';
@@ -75,7 +76,7 @@ export function TodoDetailContent({
               <p>{t('confirm.hasIncompleteDeps')}</p>
               <ul>
                 {pending.map((item) => (
-                  <li key={item.id}>{item.code} - {item.title}</li>
+                  <li key={item.id}>{formatDisplayCode(item.category, item.code)} - {item.title}</li>
                 ))}
               </ul>
               <p>{t('confirm.completeAllToo')}</p>
@@ -105,7 +106,7 @@ export function TodoDetailContent({
               <p>{t('confirm.reopenAffects')}</p>
               <ul>
                 {completed.map((item) => (
-                  <li key={item.id}>{item.code} - {item.title}</li>
+                  <li key={item.id}>{formatDisplayCode(item.category, item.code)} - {item.title}</li>
                 ))}
               </ul>
               <p>{t('confirm.reopenAllToo')}</p>
@@ -144,7 +145,7 @@ export function TodoDetailContent({
       </Tag>
       <a onClick={() => onNavigate(item.id)} style={{ cursor: 'pointer' }}>
         <LinkOutlined style={{ marginRight: 4 }} />
-        {item.code} - {item.title}
+        {formatDisplayCode(item.category, item.code)} - {item.title}
       </a>
     </Space>
   );
@@ -158,7 +159,7 @@ export function TodoDetailContent({
         }}
       >
         <Space wrap>
-          <span className={`detail-panel-code detail-panel-code-${todo.category}`}>{todo.code}</span>
+          <span className={`detail-panel-code detail-panel-code-${todo.category}`}>{formatDisplayCode(todo.category, todo.code)}</span>
           <span className="detail-panel-title">{todo.title}</span>
           <Tag className={`detail-panel-tag-status-${todo.status}`}>{t(STATUS_LABELS[todo.status])}</Tag>
           <Tag className={`detail-panel-tag-category-${todo.category}`}>{todo.category.toUpperCase()}</Tag>

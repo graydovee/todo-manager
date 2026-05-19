@@ -27,7 +27,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, code TEXT NOT NULL, title TEXT NOT NULL, description TEXT DEFAULT '', category TEXT NOT NULL CHECK(category IN ('bug','feature','task')), priority TEXT NOT NULL DEFAULT 'p2' CHECK(priority IN ('p0','p1','p2','p3')), status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','completed')), due_at DATETIME, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, code))`,
 		`CREATE TABLE IF NOT EXISTS todo_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, tag TEXT NOT NULL, UNIQUE(todo_id, tag))`,
 		`CREATE TABLE IF NOT EXISTS todo_relations (id INTEGER PRIMARY KEY AUTOINCREMENT, source_id INTEGER NOT NULL, target_id INTEGER NOT NULL, relation_type TEXT NOT NULL CHECK(relation_type IN ('depends_on','duplicate_of')), UNIQUE(source_id, target_id, relation_type))`,
-		`CREATE TABLE IF NOT EXISTS code_counters (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, category TEXT NOT NULL, last_code INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id, category))`,
+		`CREATE TABLE IF NOT EXISTS code_counters (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, last_code INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id))`,
 		`CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, user_id INTEGER NOT NULL, data BLOB, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, user_id INTEGER NOT NULL, content TEXT NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
 	}
@@ -66,8 +66,8 @@ func TestCreateTodo_Bug(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create todo: %v", err)
 	}
-	if todo.Code != "BUG-1" {
-		t.Errorf("expected BUG-1, got %s", todo.Code)
+	if todo.Code != "1" {
+		t.Errorf("expected 1, got %s", todo.Code)
 	}
 	if todo.Category != "bug" {
 		t.Errorf("expected bug, got %s", todo.Category)
@@ -91,16 +91,16 @@ func TestCreateTodo_FeatureAndTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create feature: %v", err)
 	}
-	if f.Code != "FEATURE-1" {
-		t.Errorf("expected FEATURE-1, got %s", f.Code)
+	if f.Code != "1" {
+		t.Errorf("expected 1, got %s", f.Code)
 	}
 
 	task, err := svc.CreateTodo(1, CreateTodoInput{Title: "Task item", Category: "task"})
 	if err != nil {
 		t.Fatalf("create task: %v", err)
 	}
-	if task.Code != "TASK-1" {
-		t.Errorf("expected TASK-1, got %s", task.Code)
+	if task.Code != "2" {
+		t.Errorf("expected 2, got %s", task.Code)
 	}
 }
 
@@ -115,8 +115,8 @@ func TestCreateTodo_CodeIncrements(t *testing.T) {
 	}
 
 	last, _ := svc.CreateTodo(1, CreateTodoInput{Title: "Last", Category: "bug"})
-	if last.Code != "BUG-6" {
-		t.Errorf("expected BUG-6, got %s", last.Code)
+	if last.Code != "6" {
+		t.Errorf("expected 6, got %s", last.Code)
 	}
 }
 
@@ -211,8 +211,8 @@ func TestCompleteTodo_WithDependencies(t *testing.T) {
 	if len(conflict.PendingDependencies) != 1 {
 		t.Fatalf("expected 1 pending dep, got %d", len(conflict.PendingDependencies))
 	}
-	if conflict.PendingDependencies[0].Code != "BUG-1" {
-		t.Errorf("expected BUG-1, got %s", conflict.PendingDependencies[0].Code)
+	if conflict.PendingDependencies[0].Code != "1" {
+		t.Errorf("expected 1, got %s", conflict.PendingDependencies[0].Code)
 	}
 
 	// With cascade should succeed

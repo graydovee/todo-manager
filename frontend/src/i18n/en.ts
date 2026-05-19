@@ -34,6 +34,7 @@ const en = {
     description: 'Description',
     category: 'Category',
     categoryRequired: 'Category is required',
+    categoryPlaceholder: 'Select category',
     bug: 'Bug',
     feature: 'Feature',
     task: 'Task',
