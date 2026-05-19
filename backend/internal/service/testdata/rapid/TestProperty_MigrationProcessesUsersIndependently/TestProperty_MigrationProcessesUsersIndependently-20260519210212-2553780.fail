@@ -1,0 +1,27 @@
+# 2026/05/19 21:02:12.563300 [TestProperty_MigrationProcessesUsersIndependently] [rapid] draw numUsers: 2
+# 2026/05/19 21:02:12.563314 [TestProperty_MigrationProcessesUsersIndependently] [rapid] draw user1_numTodos: 1
+# 2026/05/19 21:02:12.563318 [TestProperty_MigrationProcessesUsersIndependently] [rapid] draw u1_code_0_prefixLen: 1
+# 2026/05/19 21:02:12.563321 [TestProperty_MigrationProcessesUsersIndependently] [rapid] draw u1_code_0_char_0: 65
+# 2026/05/19 21:02:12.563322 [TestProperty_MigrationProcessesUsersIndependently] [rapid] draw u1_code_0_num: 1
+# 2026/05/19 21:02:12.563324 [TestProperty_MigrationProcessesUsersIndependently] [rapid] draw u1_offset_0: 0
+# 2026/05/19 21:02:12.564045 [TestProperty_MigrationProcessesUsersIndependently] insert todo for user 1: SQL logic error: table todos has no column named pinned (1)
+# 
+v0.4.8#18104463530915360891
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

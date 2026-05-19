@@ -126,7 +126,7 @@ func (r *TodoRepo) List(tx *gorm.DB, userID uint, filters TodoFilters) ([]*model
 	if strings.EqualFold(filters.SortOrder, "asc") {
 		sortOrder = "ASC"
 	}
-	db = db.Order(fmt.Sprintf("%s %s", sortBy, sortOrder))
+	db = db.Order(fmt.Sprintf("todos.pinned DESC, %s %s", sortBy, sortOrder))
 
 	page := filters.Page
 	if page < 1 {

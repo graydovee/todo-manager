@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -17,15 +18,17 @@ type TodoHandler struct {
 	todoService    *service.TodoService
 	commentService *service.CommentService
 	todoRepo       *repository.TodoRepo
+	tagRepo        *repository.TagRepo
 	relationRepo   *repository.RelationRepo
 	db             *gorm.DB
 }
 
-func NewTodoHandler(todoService *service.TodoService, commentService *service.CommentService, todoRepo *repository.TodoRepo, relationRepo *repository.RelationRepo, db *gorm.DB) *TodoHandler {
+func NewTodoHandler(todoService *service.TodoService, commentService *service.CommentService, todoRepo *repository.TodoRepo, tagRepo *repository.TagRepo, relationRepo *repository.RelationRepo, db *gorm.DB) *TodoHandler {
 	return &TodoHandler{
 		todoService:    todoService,
 		commentService: commentService,
 		todoRepo:       todoRepo,
+		tagRepo:        tagRepo,
 		relationRepo:   relationRepo,
 		db:             db,
 	}
@@ -73,6 +76,28 @@ func (h *TodoHandler) List(c echo.Context) error {
 		Page:     filters.Page,
 		PageSize: filters.PageSize,
 	})
+}
+
+func (h *TodoHandler) Tags(c echo.Context) error {
+	user := middleware.GetUser(c)
+	if user == nil {
+		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
+	}
+
+	tags, err := h.tagRepo.FindDistinctByUser(nil, user.ID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+	}
+
+	if tags == nil {
+		tags = []string{}
+	}
+
+	sort.Slice(tags, func(i, j int) bool {
+		return strings.ToLower(tags[i]) < strings.ToLower(tags[j])
+	})
+
+	return c.JSON(http.StatusOK, tags)
 }
 
 func (h *TodoHandler) Get(c echo.Context) error {
@@ -373,6 +398,64 @@ func (h *TodoHandler) DeleteComment(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *TodoHandler) Pin(c echo.Context) error {
+	user := middleware.GetUser(c)
+	if user == nil {
+		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid id"})
+	}
+
+	var req PinRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request"})
+	}
+
+	todo, err := h.todoRepo.FindByIDWithDetails(nil, uint(id), user.ID)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, ErrorResponse{Error: "todo not found"})
+	}
+
+	todo.Pinned = req.Pinned
+	if err := h.todoRepo.Update(nil, todo); err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, todoToResponse(todo))
+}
+
+func (h *TodoHandler) Highlight(c echo.Context) error {
+	user := middleware.GetUser(c)
+	if user == nil {
+		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid id"})
+	}
+
+	var req HighlightRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request"})
+	}
+
+	todo, err := h.todoRepo.FindByIDWithDetails(nil, uint(id), user.ID)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, ErrorResponse{Error: "todo not found"})
+	}
+
+	todo.Highlighted = req.Highlighted
+	if err := h.todoRepo.Update(nil, todo); err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, todoToResponse(todo))
 }
 
 func (h *TodoHandler) buildDetailResponse(todo *model.Todo, userID uint) TodoDetailResponse {

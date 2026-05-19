@@ -1,6 +1,7 @@
-import { Input, Select, Button } from 'antd';
-import { ClearOutlined } from '@ant-design/icons';
+import { Input, Select, Button, Space, Typography } from 'antd';
+import { ClearOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useTags } from '../hooks/useTodos';
 import type { TodoFilters } from '../types';
 import './TodoFilter.css';
 
@@ -11,6 +12,7 @@ interface Props {
 
 export function TodoFilter({ filters, onChange }: Props) {
   const { t } = useTranslation();
+  const { data: tags, isError: tagsError, refetch: refetchTags } = useTags();
 
   return (
     <div className="todo-filter-bar">
@@ -33,6 +35,28 @@ export function TodoFilter({ filters, onChange }: Props) {
           value={filters.code || ''}
           onChange={(e) => onChange({ code: e.target.value || undefined })}
         />
+      </div>
+
+      <div className={`filter-control ${filters.tag && filters.tag.length > 0 ? 'filter-active' : ''}`}>
+        {tagsError ? (
+          <Space>
+            <Typography.Text type="danger">{t('filter.tagLoadError')}</Typography.Text>
+            <Button size="small" icon={<ReloadOutlined />} onClick={() => refetchTags()}>
+              {t('filter.tagRetry')}
+            </Button>
+          </Space>
+        ) : (
+          <Select
+            mode="multiple"
+            maxTagCount="responsive"
+            placeholder={t('filter.tagPlaceholder')}
+            allowClear
+            style={{ width: 200 }}
+            value={filters.tag || []}
+            onChange={(values: string[]) => onChange({ tag: values.length > 0 ? values : undefined })}
+            options={(tags || []).map((tag) => ({ value: tag, label: tag }))}
+          />
+        )}
       </div>
 
       <div className={`filter-control ${filters.category ? 'filter-active' : ''}`}>
@@ -90,7 +114,7 @@ export function TodoFilter({ filters, onChange }: Props) {
       <Button
         className="filter-clear-btn"
         icon={<ClearOutlined />}
-        onClick={() => onChange({ q: undefined, code: undefined, category: undefined, priority: undefined, status: undefined, sort_by: undefined, sort_order: undefined })}
+        onClick={() => onChange({ q: undefined, code: undefined, tag: undefined, category: undefined, priority: undefined, status: undefined, sort_by: undefined, sort_order: undefined })}
       >
         {t('common.clear')}
       </Button>

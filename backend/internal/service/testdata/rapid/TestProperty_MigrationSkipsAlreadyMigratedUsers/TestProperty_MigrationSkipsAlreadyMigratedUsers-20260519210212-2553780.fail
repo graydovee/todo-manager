@@ -1,0 +1,7 @@
+# 2026/05/19 21:02:12.638376 [TestProperty_MigrationSkipsAlreadyMigratedUsers] [rapid] draw numTodos: 1
+# 2026/05/19 21:02:12.639145 [TestProperty_MigrationSkipsAlreadyMigratedUsers] insert todo 0: SQL logic error: table todos has no column named pinned (1)
+# 
+v0.4.8#15458861060215204436
+0x0
+0x0
+0x0

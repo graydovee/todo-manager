@@ -59,6 +59,16 @@
   opacity: 0.65;
 }
 
+/* --- Pinned Row --- */
+.todo-list-page__table .ant-table-row.row-pinned > td {
+  border-left: 3px solid var(--color-primary, #1677ff);
+}
+
+/* --- Highlighted Row --- */
+.todo-list-page__table .ant-table-row.row-highlighted > td {
+  background-color: #fffbe6 !important;
+}
+
 .todo-list-page__detail {
   flex: 1;
   overflow: auto;

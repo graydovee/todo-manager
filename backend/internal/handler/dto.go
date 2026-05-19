@@ -34,6 +34,8 @@ type TodoResponse struct {
 	Status      string     `json:"status"`
 	DueAt       *time.Time `json:"due_at"`
 	Tags        []string   `json:"tags"`
+	Pinned      bool       `json:"pinned"`
+	Highlighted bool       `json:"highlighted"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
@@ -102,6 +104,14 @@ type ReopenRequest struct {
 	CascadeDependents bool `json:"cascade_dependents"`
 }
 
+type PinRequest struct {
+	Pinned bool `json:"pinned"`
+}
+
+type HighlightRequest struct {
+	Highlighted bool `json:"highlighted"`
+}
+
 func todoToResponse(todo *model.Todo) TodoResponse {
 	var tags []string
 	for _, t := range todo.Tags {
@@ -120,6 +130,8 @@ func todoToResponse(todo *model.Todo) TodoResponse {
 		Status:      todo.Status,
 		DueAt:       todo.DueAt,
 		Tags:        tags,
+		Pinned:      todo.Pinned,
+		Highlighted: todo.Highlighted,
 		CreatedAt:   todo.CreatedAt,
 		UpdatedAt:   todo.UpdatedAt,
 	}

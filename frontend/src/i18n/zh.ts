@@ -66,6 +66,10 @@ const zh = {
     dueDate: '截止日期',
     desc: '降序',
     asc: '升序',
+    tagPlaceholder: '按标签筛选',
+    tagLoadError: '标签加载失败',
+    tagRetry: '重试',
+    tagEmpty: '没有匹配所选标签的待办事项',
   },
   graph: {
     title: '待办关系视图',
@@ -108,6 +112,10 @@ const zh = {
     deleteComment: '删除',
     createdAt: '创建时间',
     updatedAt: '更新时间',
+    pin: '置顶',
+    unpin: '取消置顶',
+    highlight: '高亮',
+    unhighlight: '取消高亮',
   },
   confirm: {
     deleteTodo: '确定删除此待办？',

@@ -23,6 +23,8 @@ export interface Todo {
   status: Status;
   due_at: string | null;
   tags: string[];
+  pinned: boolean;
+  highlighted: boolean;
   created_at: string;
   updated_at: string;
 }

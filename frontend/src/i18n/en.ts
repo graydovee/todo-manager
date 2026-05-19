@@ -66,6 +66,10 @@ const en = {
     dueDate: 'Due Date',
     desc: 'DESC',
     asc: 'ASC',
+    tagPlaceholder: 'Filter by tags',
+    tagLoadError: 'Failed to load tags',
+    tagRetry: 'Retry',
+    tagEmpty: 'No items match the selected tags',
   },
   graph: {
     title: 'Todo Relationship View',
@@ -108,6 +112,10 @@ const en = {
     deleteComment: 'Delete',
     createdAt: 'Created',
     updatedAt: 'Updated',
+    pin: 'Pin',
+    unpin: 'Unpin',
+    highlight: 'Highlight',
+    unhighlight: 'Remove highlight',
   },
   confirm: {
     deleteTodo: 'Delete this todo?',

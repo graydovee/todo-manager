@@ -1,0 +1,10 @@
+# 2026/05/19 21:02:13.496109 [TestProperty_SequentialCodeGeneration] [rapid] draw numTodos: 1
+# 2026/05/19 21:02:13.496122 [TestProperty_SequentialCodeGeneration] [rapid] draw category_0: "bug"
+# 2026/05/19 21:02:13.498270 [TestProperty_SequentialCodeGeneration] failed to create todo 1: SQL logic error: table todos has no column named pinned (1)
+# 
+v0.4.8#17121542101498509903
+0x0
+0x0
+0x0
+0x0
+0x0

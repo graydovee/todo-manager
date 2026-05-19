@@ -742,7 +742,14 @@ func normalizeTags(tags []string) []string {
 	var result []string
 	for _, tag := range tags {
 		t := strings.TrimSpace(strings.ToLower(tag))
-		if t != "" && !seen[t] {
+		if t == "" {
+			continue
+		}
+		// Truncate to 100 characters
+		if len([]rune(t)) > 100 {
+			t = string([]rune(t)[:100])
+		}
+		if !seen[t] {
 			seen[t] = true
 			result = append(result, t)
 		}

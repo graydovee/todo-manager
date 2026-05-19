@@ -117,6 +117,8 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
         const classes: string[] = [];
         if (record.id === selectedRowId) classes.push('ant-table-row-selected');
         if (record.status === 'completed') classes.push('row-completed');
+        if (record.pinned) classes.push('row-pinned');
+        if (record.highlighted) classes.push('row-highlighted');
         return classes.join(' ');
       }}
       onRow={(record) => ({

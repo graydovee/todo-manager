@@ -72,7 +72,7 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 	commentService := service.NewCommentService(db, commentRepo, todoRepo)
 
 	authHandler := handler.NewAuthHandler(authService)
-	todoHandler := handler.NewTodoHandler(todoService, commentService, todoRepo, relationRepo, db)
+	todoHandler := handler.NewTodoHandler(todoService, commentService, todoRepo, tagRepo, relationRepo, db)
 
 	api := e.Group("/api/v1")
 
@@ -89,12 +89,15 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 	todos := api.Group("/todos", authMW)
 	todos.GET("", todoHandler.List)
 	todos.GET("/graph", todoHandler.Graph)
+	todos.GET("/tags", todoHandler.Tags)
 	todos.GET("/:id", todoHandler.Get)
 	todos.POST("", todoHandler.Create)
 	todos.PATCH("/:id", todoHandler.Update)
 	todos.DELETE("/:id", todoHandler.Delete)
 	todos.POST("/:id/start", todoHandler.Start)
 	todos.PATCH("/:id/status", todoHandler.SetStatus)
+	todos.PATCH("/:id/pin", todoHandler.Pin)
+	todos.PATCH("/:id/highlight", todoHandler.Highlight)
 	todos.POST("/:id/complete", todoHandler.Complete)
 	todos.POST("/:id/reopen", todoHandler.Reopen)
 	todos.GET("/:id/comments", todoHandler.ListComments)

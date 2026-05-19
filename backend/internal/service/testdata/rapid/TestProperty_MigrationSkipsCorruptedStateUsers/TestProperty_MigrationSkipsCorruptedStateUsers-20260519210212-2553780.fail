@@ -1,0 +1,23 @@
+# 2026/05/19 21:02:12.836688 [TestProperty_MigrationSkipsCorruptedStateUsers] [rapid] draw numOldFormat: 1
+# 2026/05/19 21:02:12.836707 [TestProperty_MigrationSkipsCorruptedStateUsers] [rapid] draw numNumeric: 1
+# 2026/05/19 21:02:12.836712 [TestProperty_MigrationSkipsCorruptedStateUsers] [rapid] draw old_0_prefixLen: 1
+# 2026/05/19 21:02:12.836715 [TestProperty_MigrationSkipsCorruptedStateUsers] [rapid] draw old_0_char_0: 65
+# 2026/05/19 21:02:12.836717 [TestProperty_MigrationSkipsCorruptedStateUsers] [rapid] draw old_0_num: 1
+# 2026/05/19 21:02:12.837805 [TestProperty_MigrationSkipsCorruptedStateUsers] insert old-format todo 0: SQL logic error: table todos has no column named pinned (1)
+# 
+v0.4.8#14498427413338285873
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

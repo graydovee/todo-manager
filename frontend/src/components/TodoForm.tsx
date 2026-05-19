@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { Drawer, Form, Input, Select, DatePicker, Button, Space, Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useCreateTodo, useUpdateTodo, useTodo } from '../hooks/useTodos';
+import { useCreateTodo, useUpdateTodo, useTodo, useTags } from '../hooks/useTodos';
 import { listTodos } from '../api/todos';
 import { formatDisplayCode } from '../utils/displayCode';
 import type { Todo, Category, TodoSummary } from '../types';
@@ -69,6 +69,8 @@ export function TodoForm({ open, todoId, onClose, defaultCategory, lockedPrerequ
   const updateMutation = useUpdateTodo();
   const { data: todo } = useTodo(todoId || 0);
   const depsSearch = useTodoSearch();
+
+  const { data: allTags } = useTags();
 
   const isEdit = !!todoId;
   const hasLockedPrerequisite = !!lockedPrerequisite;
@@ -160,7 +162,17 @@ export function TodoForm({ open, todoId, onClose, defaultCategory, lockedPrerequ
         </Form.Item>
 
         <Form.Item name="tags" label={t('todo.tags')}>
-          <Select mode="tags" placeholder={t('todo.addTags')} tokenSeparators={[',']} />
+          <Select
+            mode="tags"
+            placeholder={t('todo.addTags')}
+            tokenSeparators={[',']}
+            options={(allTags || [])
+              .filter((tag) => !(form.getFieldValue('tags') || []).includes(tag))
+              .map((tag) => ({ value: tag, label: tag }))}
+            filterOption={(input, option) =>
+              (option?.value as string)?.toLowerCase().startsWith(input.toLowerCase())
+            }
+          />
         </Form.Item>
 
         <Form.Item name="due_at" label={t('todo.dueDate')}>

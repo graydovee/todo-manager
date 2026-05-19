@@ -85,3 +85,18 @@ export async function createComment(todoId: number, content: string): Promise<Co
 export async function deleteComment(todoId: number, commentId: number): Promise<void> {
   await client.delete(`/todos/${todoId}/comments/${commentId}`);
 }
+
+export async function fetchTags(): Promise<string[]> {
+  const res = await client.get('/todos/tags');
+  return res.data;
+}
+
+export async function pinTodo(id: number, pinned: boolean): Promise<Todo> {
+  const res = await client.patch(`/todos/${id}/pin`, { pinned });
+  return res.data;
+}
+
+export async function highlightTodo(id: number, highlighted: boolean): Promise<Todo> {
+  const res = await client.patch(`/todos/${id}/highlight`, { highlighted });
+  return res.data;
+}

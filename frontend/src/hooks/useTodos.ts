@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listTodos, getTodo, getTodoGraph, createTodo, updateTodo, deleteTodo, startTodo, setTodoStatus, completeTodo, reopenTodo, listComments, createComment, deleteComment } from '../api/todos';
+import { listTodos, getTodo, getTodoGraph, createTodo, updateTodo, deleteTodo, startTodo, setTodoStatus, completeTodo, reopenTodo, listComments, createComment, deleteComment, fetchTags, pinTodo, highlightTodo } from '../api/todos';
 import type { TodoFilters, CreateTodoInput, UpdateTodoInput, SetStatusInput } from '../types';
 
 export function useTodos(filters: TodoFilters) {
@@ -105,5 +105,28 @@ export function useDeleteComment() {
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['comments', variables.todoId] });
     },
+  });
+}
+
+export function useTags() {
+  return useQuery({
+    queryKey: ['tags'],
+    queryFn: () => fetchTags(),
+  });
+}
+
+export function usePinTodo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, pinned }: { id: number; pinned: boolean }) => pinTodo(id, pinned),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['todos'] }),
+  });
+}
+
+export function useHighlightTodo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, highlighted }: { id: number; highlighted: boolean }) => highlightTodo(id, highlighted),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['todos'] }),
   });
 }

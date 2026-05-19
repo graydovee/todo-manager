@@ -1,0 +1,23 @@
+# 2026/05/19 21:02:12.404936 [TestProperty_MigrationAssignsSequentialCodesInCreationOrder] [rapid] draw numTodos: 1
+# 2026/05/19 21:02:12.404968 [TestProperty_MigrationAssignsSequentialCodesInCreationOrder] [rapid] draw code_0_prefixLen: 1
+# 2026/05/19 21:02:12.404972 [TestProperty_MigrationAssignsSequentialCodesInCreationOrder] [rapid] draw code_0_char_0: 65
+# 2026/05/19 21:02:12.404975 [TestProperty_MigrationAssignsSequentialCodesInCreationOrder] [rapid] draw code_0_num: 1
+# 2026/05/19 21:02:12.404979 [TestProperty_MigrationAssignsSequentialCodesInCreationOrder] [rapid] draw offset_0: 0
+# 2026/05/19 21:02:12.405532 [TestProperty_MigrationAssignsSequentialCodesInCreationOrder] insert todo 0: SQL logic error: table todos has no column named pinned (1)
+# 
+v0.4.8#18270168391061877591
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

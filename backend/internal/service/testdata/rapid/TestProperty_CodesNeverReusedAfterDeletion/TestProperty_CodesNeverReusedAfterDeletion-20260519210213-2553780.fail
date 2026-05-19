@@ -1,0 +1,11 @@
+# 2026/05/19 21:02:13.537199 [TestProperty_CodesNeverReusedAfterDeletion] [rapid] draw numOps: 3
+# 2026/05/19 21:02:13.537209 [TestProperty_CodesNeverReusedAfterDeletion] [rapid] draw cat_0: 0
+# 2026/05/19 21:02:13.538678 [TestProperty_CodesNeverReusedAfterDeletion] create todo at op 0: SQL logic error: table todos has no column named pinned (1)
+# 
+v0.4.8#9718725027209497661
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

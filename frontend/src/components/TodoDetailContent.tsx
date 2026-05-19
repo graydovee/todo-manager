@@ -8,9 +8,13 @@ import {
   PlusOutlined,
   DownOutlined,
   LinkOutlined,
+  PushpinOutlined,
+  PushpinFilled,
+  HighlightOutlined,
+  HighlightFilled,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useCompleteTodo, useDeleteTodo, useReopenTodo, useSetTodoStatus, useStartTodo } from '../hooks/useTodos';
+import { useCompleteTodo, useDeleteTodo, useHighlightTodo, usePinTodo, useReopenTodo, useSetTodoStatus, useStartTodo } from '../hooks/useTodos';
 import { TodoComments } from './TodoComments';
 import { formatDisplayCode } from '../utils/displayCode';
 import type { Status, TodoDetail, TodoSummary } from '../types';
@@ -50,6 +54,8 @@ export function TodoDetailContent({
   const completeMutation = useCompleteTodo();
   const reopenMutation = useReopenTodo();
   const deleteMutation = useDeleteTodo();
+  const pinMutation = usePinTodo();
+  const highlightMutation = useHighlightTodo();
 
   const getConflictItems = (error: unknown, key: 'pending_dependencies' | 'completed_dependents'): RelationConflictItem[] => {
     const httpError = error as HttpErrorLike;
@@ -132,6 +138,22 @@ export function TodoDetailContent({
     onNavigate(0);
   };
 
+  const handleTogglePin = async () => {
+    try {
+      await pinMutation.mutateAsync({ id: todo.id, pinned: !todo.pinned });
+    } catch {
+      message.error(t('detail.pin'));
+    }
+  };
+
+  const handleToggleHighlight = async () => {
+    try {
+      await highlightMutation.mutateAsync({ id: todo.id, highlighted: !todo.highlighted });
+    } catch {
+      message.error(t('detail.highlight'));
+    }
+  };
+
   const stageMenuItems = [
     { key: 'open', label: t('todo.open') },
     { key: 'in_progress', label: t('todo.inProgress') },
@@ -207,6 +229,22 @@ export function TodoDetailContent({
         </Dropdown>
         <Button icon={<PlusOutlined />} onClick={() => onAddPrerequisite(todo.id)}>
           {t('detail.addPrerequisite')}
+        </Button>
+        <Button
+          icon={todo.pinned ? <PushpinFilled /> : <PushpinOutlined />}
+          onClick={handleTogglePin}
+          loading={pinMutation.isPending}
+          title={todo.pinned ? t('detail.unpin') : t('detail.pin')}
+        >
+          {todo.pinned ? t('detail.unpin') : t('detail.pin')}
+        </Button>
+        <Button
+          icon={todo.highlighted ? <HighlightFilled /> : <HighlightOutlined />}
+          onClick={handleToggleHighlight}
+          loading={highlightMutation.isPending}
+          title={todo.highlighted ? t('detail.unhighlight') : t('detail.highlight')}
+        >
+          {todo.highlighted ? t('detail.unhighlight') : t('detail.highlight')}
         </Button>
       </Space>
 
