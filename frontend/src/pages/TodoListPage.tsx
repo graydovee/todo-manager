@@ -6,8 +6,8 @@ import { TodoTable } from '../components/TodoTable';
 import { TodoFilter } from '../components/TodoFilter';
 import { TodoDetailPanel } from '../components/TodoDetailPanel';
 import { TodoForm } from '../components/TodoForm';
-import { useTodos } from '../hooks/useTodos';
-import { getTodo, updateTodo } from '../api/todos';
+import { useTodos, useUpdateTodo } from '../hooks/useTodos';
+import { getTodo } from '../api/todos';
 import type { TodoFilters, Category, TodoSummary } from '../types';
 import './TodoListPage.css';
 
@@ -35,7 +35,7 @@ export function TodoListPage() {
   const lockedPrerequisite = useMemo<TodoSummary | undefined>(() => {
     if (!prerequisiteForId || !data) return undefined;
     const t = data.items.find((item) => item.id === prerequisiteForId);
-    return t ? { id: t.id, code: t.code, title: t.title } : undefined;
+    return t ? { id: t.id, code: t.code, title: t.title, status: t.status } : undefined;
   }, [prerequisiteForId, data]);
 
   const handleFilterChange = useCallback((newFilters: Partial<TodoFilters>) => {
@@ -87,14 +87,17 @@ export function TodoListPage() {
     setFormOpen(true);
   };
 
+  const updateTodoMutation = useUpdateTodo();
+
   const handlePrerequisiteCreated = useCallback(async (newTodoId: number) => {
     if (prerequisiteForId) {
-      const currentTodo = await getTodo(prerequisiteForId);
-      const existingIds = currentTodo.depends_on.map((d) => d.id);
-      await updateTodo(prerequisiteForId, { depends_on_ids: [...existingIds, newTodoId] });
+      await updateTodoMutation.mutateAsync({
+        id: prerequisiteForId,
+        input: { depends_on_ids: [...(await getTodo(prerequisiteForId)).depends_on.map((d) => d.id), newTodoId] }
+      });
       setPrerequisiteForId(undefined);
     }
-  }, [prerequisiteForId]);
+  }, [prerequisiteForId, updateTodoMutation]);
 
   return (
     <div className="todo-list-page">

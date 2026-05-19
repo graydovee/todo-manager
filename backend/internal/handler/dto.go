@@ -11,15 +11,16 @@ type ErrorResponse struct {
 }
 
 type ConflictResponse struct {
-	Error     string          `json:"error"`
+	Error     string           `json:"error"`
 	Pending   []TodoSummaryDTO `json:"pending_dependencies,omitempty"`
 	Completed []TodoSummaryDTO `json:"completed_dependents,omitempty"`
 }
 
 type TodoSummaryDTO struct {
-	ID    uint   `json:"id"`
-	Code  string `json:"code"`
-	Title string `json:"title"`
+	ID     uint   `json:"id"`
+	Code   string `json:"code"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
 }
 
 type TodoResponse struct {

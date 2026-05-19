@@ -50,6 +50,7 @@ export interface TodoSummary {
   id: number;
   code: string;
   title: string;
+  status: Status;
 }
 
 export interface TodoGraphNode {

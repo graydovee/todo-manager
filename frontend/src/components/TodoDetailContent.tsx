@@ -138,10 +138,15 @@ export function TodoDetailContent({
   ].filter((item) => item.key !== todo.status);
 
   const SummaryLink = ({ item }: { item: TodoSummary }) => (
-    <a onClick={() => onNavigate(item.id)} style={{ cursor: 'pointer' }}>
-      <LinkOutlined style={{ marginRight: 4 }} />
-      {item.code} - {item.title}
-    </a>
+    <Space size={4}>
+      <Tag className={`detail-panel-tag-status-${item.status}`}>
+        {t(STATUS_LABELS[item.status])}
+      </Tag>
+      <a onClick={() => onNavigate(item.id)} style={{ cursor: 'pointer' }}>
+        <LinkOutlined style={{ marginRight: 4 }} />
+        {item.code} - {item.title}
+      </a>
+    </Space>
   );
 
   return (

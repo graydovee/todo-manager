@@ -385,12 +385,12 @@ func (h *TodoHandler) buildDetailResponse(todo *model.Todo, userID uint) TodoDet
 		var relatedTodo model.Todo
 		switch rel.RelationType {
 		case model.RelationDependsOn:
-			if h.db.Select("id, code, title").Where("id = ? AND user_id = ?", rel.TargetID, userID).First(&relatedTodo).Error == nil {
-				dependsOn = append(dependsOn, TodoSummaryDTO{ID: relatedTodo.ID, Code: relatedTodo.Code, Title: relatedTodo.Title})
+			if h.db.Select("id, code, title, status").Where("id = ? AND user_id = ?", rel.TargetID, userID).First(&relatedTodo).Error == nil {
+				dependsOn = append(dependsOn, TodoSummaryDTO{ID: relatedTodo.ID, Code: relatedTodo.Code, Title: relatedTodo.Title, Status: relatedTodo.Status})
 			}
 		case model.RelationDuplicateOf:
-			if h.db.Select("id, code, title").Where("id = ? AND user_id = ?", rel.TargetID, userID).First(&relatedTodo).Error == nil {
-				duplicateOf = &TodoSummaryDTO{ID: relatedTodo.ID, Code: relatedTodo.Code, Title: relatedTodo.Title}
+			if h.db.Select("id, code, title, status").Where("id = ? AND user_id = ?", rel.TargetID, userID).First(&relatedTodo).Error == nil {
+				duplicateOf = &TodoSummaryDTO{ID: relatedTodo.ID, Code: relatedTodo.Code, Title: relatedTodo.Title, Status: relatedTodo.Status}
 			}
 		}
 	}
@@ -399,14 +399,14 @@ func (h *TodoHandler) buildDetailResponse(todo *model.Todo, userID uint) TodoDet
 	h.db.Where("target_id = ?", todo.ID).Find(&reverseRels)
 	for _, rel := range reverseRels {
 		var relatedTodo model.Todo
-		if h.db.Select("id, code, title").Where("id = ? AND user_id = ?", rel.SourceID, userID).First(&relatedTodo).Error != nil {
+		if h.db.Select("id, code, title, status").Where("id = ? AND user_id = ?", rel.SourceID, userID).First(&relatedTodo).Error != nil {
 			continue
 		}
 		switch rel.RelationType {
 		case model.RelationDependsOn:
-			dependedBy = append(dependedBy, TodoSummaryDTO{ID: relatedTodo.ID, Code: relatedTodo.Code, Title: relatedTodo.Title})
+			dependedBy = append(dependedBy, TodoSummaryDTO{ID: relatedTodo.ID, Code: relatedTodo.Code, Title: relatedTodo.Title, Status: relatedTodo.Status})
 		case model.RelationDuplicateOf:
-			duplicates = append(duplicates, TodoSummaryDTO{ID: relatedTodo.ID, Code: relatedTodo.Code, Title: relatedTodo.Title})
+			duplicates = append(duplicates, TodoSummaryDTO{ID: relatedTodo.ID, Code: relatedTodo.Code, Title: relatedTodo.Title, Status: relatedTodo.Status})
 		}
 	}
 
@@ -421,7 +421,7 @@ func (h *TodoHandler) buildDetailResponse(todo *model.Todo, userID uint) TodoDet
 func toDTOs(summaries []service.TodoSummary) []TodoSummaryDTO {
 	result := make([]TodoSummaryDTO, len(summaries))
 	for i, s := range summaries {
-		result[i] = TodoSummaryDTO{ID: s.ID, Code: s.Code, Title: s.Title}
+		result[i] = TodoSummaryDTO{ID: s.ID, Code: s.Code, Title: s.Title, Status: s.Status}
 	}
 	return result
 }

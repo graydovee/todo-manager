@@ -67,9 +67,10 @@ type ConflictInfo struct {
 }
 
 type TodoSummary struct {
-	ID    uint   `json:"id"`
-	Code  string `json:"code"`
-	Title string `json:"title"`
+	ID     uint   `json:"id"`
+	Code   string `json:"code"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
 }
 
 type TodoGraphNode struct {
@@ -478,9 +479,10 @@ func (s *TodoService) GetTodoGraph(userID uint) (*TodoGraphSnapshot, error) {
 		for _, rootID := range rootIDs {
 			root := todoByID[rootID]
 			rootSummaries = append(rootSummaries, TodoSummary{
-				ID:    root.ID,
-				Code:  root.Code,
-				Title: root.Title,
+				ID:     root.ID,
+				Code:   root.Code,
+				Title:  root.Title,
+				Status: root.Status,
 			})
 		}
 
@@ -741,7 +743,7 @@ func normalizeTags(tags []string) []string {
 func toSummaries(todos []*model.Todo) []TodoSummary {
 	summaries := make([]TodoSummary, len(todos))
 	for i, t := range todos {
-		summaries[i] = TodoSummary{ID: t.ID, Code: t.Code, Title: t.Title}
+		summaries[i] = TodoSummary{ID: t.ID, Code: t.Code, Title: t.Title, Status: t.Status}
 	}
 	return summaries
 }

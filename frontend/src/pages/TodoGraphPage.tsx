@@ -331,7 +331,7 @@ function TodoGraphPageInner() {
   const lockedPrerequisite = useMemo<TodoSummary | undefined>(() => {
     if (!prerequisiteForId || !data) return undefined;
     const matched = data.nodes.find((node) => node.id === prerequisiteForId);
-    return matched ? { id: matched.id, code: matched.code, title: matched.title } : undefined;
+    return matched ? { id: matched.id, code: matched.code, title: matched.title, status: matched.status } : undefined;
   }, [data, prerequisiteForId]);
 
   const todoOptions = useMemo(() => {
