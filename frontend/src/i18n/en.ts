@@ -175,6 +175,7 @@ const en = {
     streamingIndicator: 'Generating...',
   },
   summaryDetail: {
+    drawerTitle: 'Summary Details',
     selectSummary: 'Select a summary from the left to view details',
     emptyContent: 'No analysis content available',
   },

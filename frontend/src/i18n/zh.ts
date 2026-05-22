@@ -175,6 +175,7 @@ const zh = {
     streamingIndicator: '正在生成中...',
   },
   summaryDetail: {
+    drawerTitle: '总结详情',
     selectSummary: '选择左侧总结查看详情',
     emptyContent: '暂无分析内容',
   },

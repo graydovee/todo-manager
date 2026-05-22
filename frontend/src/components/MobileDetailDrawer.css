@@ -1,0 +1,10 @@
+/* Unified styles for the mobile detail drawer base class.
+ *
+ * The selector targets antd's internal `.ant-drawer-body` produced inside
+ * the `.mobile-detail-drawer` root. Call sites that need different padding
+ * (e.g. TodoListPage's `todo-list-mobile-drawer` override) can append an
+ * extra className whose selector takes precedence due to source order.
+ */
+.mobile-detail-drawer .ant-drawer-body {
+  padding: var(--space-4);
+}

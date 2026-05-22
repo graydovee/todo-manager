@@ -63,6 +63,12 @@ export function AISummaryPage() {
     }
   };
 
+  // Sync status changes from SummaryDetailPanel SSE callbacks back into the entries list
+  const handleStatusChange = useCallback((status: 'completed' | 'error') => {
+    if (selectedId === null) return;
+    setEntries((prev) => prev.map((e) => (e.id === selectedId ? { ...e, status } : e)));
+  }, [selectedId]);
+
   const handleDelete = (entry: SummaryEntry) => {
     Modal.confirm({
       title: t('aiSummary.deleteTitle'),
@@ -171,7 +177,7 @@ export function AISummaryPage() {
         </div>
         {!isMobile && (
           <div className="ai-summary-page__right">
-            <SummaryDetailPanel summaryId={selectedId} />
+            <SummaryDetailPanel summaryId={selectedId} onStatusChange={handleStatusChange} />
           </div>
         )}
       </div>
@@ -181,6 +187,7 @@ export function AISummaryPage() {
           open={detailDrawerOpen}
           onClose={() => setDetailDrawerOpen(false)}
           summaryId={selectedId}
+          onStatusChange={handleStatusChange}
         />
       )}
 

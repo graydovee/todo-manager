@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { Button, Drawer } from 'antd';
+import { Button } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { TodoTable } from '../components/TodoTable';
 import { TodoFilter } from '../components/TodoFilter';
 import { TodoDetailPanel } from '../components/TodoDetailPanel';
 import { TodoForm } from '../components/TodoForm';
+import { MobileDetailDrawer } from '../components/MobileDetailDrawer';
 import { useTodos, useUpdateTodo } from '../hooks/useTodos';
 import { getTodo } from '../api/todos';
 import type { TodoFilters, Category, TodoSummary } from '../types';
@@ -140,14 +141,12 @@ export function TodoListPage() {
       </div>
 
       {isMobile && (
-        <Drawer
-          title={t('todo.detail')}
-          placement="right"
-          width="85%"
+        <MobileDetailDrawer
           open={mobileDetailOpen}
           onClose={() => setMobileDetailOpen(false)}
-          className="todo-list-mobile-drawer"
+          title={t('todo.detail')}
           destroyOnClose={false}
+          className="todo-list-mobile-drawer"
         >
           <TodoDetailPanel
             todoId={selectedTodoId}
@@ -155,7 +154,7 @@ export function TodoListPage() {
             onNavigate={handleNavigate}
             onAddPrerequisite={handleAddPrerequisite}
           />
-        </Drawer>
+        </MobileDetailDrawer>
       )}
 
       <TodoForm

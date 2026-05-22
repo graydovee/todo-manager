@@ -221,8 +221,3 @@
     width: 100%;
   }
 }
-
-/* Mobile detail drawer */
-.ai-summary-mobile-drawer .ant-drawer-body {
-  padding: var(--space-4);
-}

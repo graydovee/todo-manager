@@ -9,10 +9,18 @@ import './SummaryDetailPanel.css';
 
 interface Props {
   summaryId: number | null;
+  onStatusChange?: (status: 'completed' | 'error') => void;
 }
 
-export function SummaryDetailPanel({ summaryId }: Props) {
+export function SummaryDetailPanel({ summaryId, onStatusChange }: Props) {
   const { t } = useTranslation();
+
+  // Keep latest onStatusChange in a ref to avoid stale-closure issues inside
+  // SSE event handlers, while keeping connectSSE's dependency list stable.
+  const onStatusChangeRef = useRef(onStatusChange);
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
 
   const [summary, setSummary] = useState<SummaryEntry | null>(null);
   const [loading, setLoading] = useState(false);
@@ -77,6 +85,8 @@ export function SummaryDetailPanel({ summaryId }: Props) {
       setStreaming(false);
       es.close();
       eventSourceRef.current = null;
+      // Notify parent that this stream finished successfully.
+      onStatusChangeRef.current?.('completed');
     });
 
     // "error" custom event from server
@@ -86,6 +96,8 @@ export function SummaryDetailPanel({ summaryId }: Props) {
       setStreaming(false);
       es.close();
       eventSourceRef.current = null;
+      // Notify parent that this stream ended with a server-reported error.
+      onStatusChangeRef.current?.('error');
     }) as EventListener);
 
     // Native EventSource error (connection lost)
@@ -206,6 +218,7 @@ export function SummaryDetailPanel({ summaryId }: Props) {
           className="summary-detail-panel__content"
           ref={contentRef}
           onScroll={handleScroll}
+          data-testid="summary-content"
         >
           <ReactMarkdown>{content}</ReactMarkdown>
           <div className="summary-detail-panel__connection-error">
@@ -246,6 +259,7 @@ export function SummaryDetailPanel({ summaryId }: Props) {
         className="summary-detail-panel__content"
         ref={contentRef}
         onScroll={handleScroll}
+        data-testid="summary-content"
       >
         {content && (
           <>
