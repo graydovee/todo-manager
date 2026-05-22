@@ -108,6 +108,16 @@ type PinRequest struct {
 	Pinned bool `json:"pinned"`
 }
 
+// TodoByDateRangeItem is a lightweight response for the by-date-range endpoint.
+type TodoByDateRangeItem struct {
+	ID       uint   `json:"id"`
+	Code     string `json:"code"`
+	Title    string `json:"title"`
+	Status   string `json:"status"`
+	Category string `json:"category"`
+	Priority string `json:"priority"`
+}
+
 type HighlightRequest struct {
 	Highlighted bool `json:"highlighted"`
 }

@@ -11,6 +11,15 @@ import type {
   TodoGraphResponse,
 } from '../types';
 
+export interface TodoByDateRangeItem {
+  id: number;
+  code: string;
+  title: string;
+  status: string;
+  category: string;
+  priority: string;
+}
+
 export async function listTodos(filters: TodoFilters = {}): Promise<PaginatedResponse<Todo>> {
   const params: Record<string, string> = {};
   if (filters.q) params.q = filters.q;
@@ -98,5 +107,15 @@ export async function pinTodo(id: number, pinned: boolean): Promise<Todo> {
 
 export async function highlightTodo(id: number, highlighted: boolean): Promise<Todo> {
   const res = await client.patch(`/todos/${id}/highlight`, { highlighted });
+  return res.data;
+}
+
+export async function fetchTodosByDateRange(
+  startDate: string,
+  endDate: string
+): Promise<TodoByDateRangeItem[]> {
+  const res = await client.get('/todos/by-date-range', {
+    params: { start_date: startDate, end_date: endDate },
+  });
   return res.data;
 }

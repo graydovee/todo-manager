@@ -36,9 +36,24 @@ func (s *CommentService) Create(userID, todoID uint, content string) (*model.Com
 		CreatedAt: time.Now(),
 	}
 
-	if err := s.commentRepo.Create(nil, comment); err != nil {
+	// Use a transaction to ensure atomicity of comment creation and todo updated_at refresh
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.commentRepo.Create(tx, comment); err != nil {
+			return err
+		}
+
+		// Refresh the parent todo's updated_at timestamp to reflect activity
+		todo, err := s.todoRepo.FindByID(tx, todoID, userID)
+		if err != nil {
+			return err
+		}
+		todo.UpdatedAt = time.Now()
+		return s.todoRepo.Update(tx, todo)
+	})
+	if err != nil {
 		return nil, err
 	}
+
 	return comment, nil
 }
 

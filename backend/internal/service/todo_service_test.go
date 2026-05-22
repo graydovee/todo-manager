@@ -30,6 +30,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE IF NOT EXISTS code_counters (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, last_code INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id))`,
 		`CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, user_id INTEGER NOT NULL, data BLOB, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, user_id INTEGER NOT NULL, content TEXT NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE IF NOT EXISTS todo_status_history (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, old_status TEXT NOT NULL, new_status TEXT NOT NULL, changed_at DATETIME NOT NULL)`,
 	}
 	for _, ddl := range tables {
 		if _, err := sqlDB.Exec(ddl); err != nil {
@@ -49,6 +50,7 @@ func setupService(t *testing.T) (*TodoService, *gorm.DB) {
 		repository.NewTagRepo(db),
 		repository.NewRelationRepo(db),
 		repository.NewCodeCounterRepo(db),
+		repository.NewStatusHistoryRepo(db),
 	)
 	return svc, db
 }

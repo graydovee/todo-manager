@@ -27,6 +27,16 @@ func (r *SummaryRepo) FindByID(tx *gorm.DB, id, userID uint) (*model.Summary, er
 	return &summary, nil
 }
 
+// FindByIDOnly retrieves a summary by ID without user ownership check.
+func (r *SummaryRepo) FindByIDOnly(tx *gorm.DB, id uint) (*model.Summary, error) {
+	db := r.getDB(tx)
+	var summary model.Summary
+	if err := db.Where("id = ?", id).First(&summary).Error; err != nil {
+		return nil, err
+	}
+	return &summary, nil
+}
+
 func (r *SummaryRepo) ListByUser(tx *gorm.DB, userID uint, limit int) ([]*model.Summary, error) {
 	db := r.getDB(tx)
 	if limit <= 0 {

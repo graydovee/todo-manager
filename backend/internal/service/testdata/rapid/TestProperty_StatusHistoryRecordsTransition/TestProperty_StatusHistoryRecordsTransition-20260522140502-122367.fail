@@ -1,0 +1,9 @@
+# 2026/05/22 14:05:02.825616 [TestProperty_StatusHistoryRecordsTransition] [rapid] draw category: "bug"
+# 2026/05/22 14:05:02.825967 [TestProperty_StatusHistoryRecordsTransition] [rapid] draw transition: service.transition{from:"open", to:"completed"}
+# 2026/05/22 14:05:02.827340 [TestProperty_StatusHistoryRecordsTransition] failed to perform transition open->completed: SQL logic error: no such table: todo_relations (1)
+# 
+v0.4.8#13414691757923046578
+0x0
+0x0
+0x0
+0x1

@@ -1,0 +1,27 @@
+# 2026/05/22 15:38:38.077502 [TestSummaryCreationPersistsAllFields] [rapid] draw start_year: 2020
+# 2026/05/22 15:38:38.077508 [TestSummaryCreationPersistsAllFields] [rapid] draw start_month: 1
+# 2026/05/22 15:38:38.077509 [TestSummaryCreationPersistsAllFields] [rapid] draw start_day: 1
+# 2026/05/22 15:38:38.077513 [TestSummaryCreationPersistsAllFields] [rapid] draw end_year: 2020
+# 2026/05/22 15:38:38.077513 [TestSummaryCreationPersistsAllFields] [rapid] draw end_month: 1
+# 2026/05/22 15:38:38.077514 [TestSummaryCreationPersistsAllFields] [rapid] draw end_day: 1
+# 2026/05/22 15:38:38.077597 [TestSummaryCreationPersistsAllFields] Create failed: SQL logic error: table summaries has no column named todo_ids (1)
+# 
+v0.4.8#2797752166157588054
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

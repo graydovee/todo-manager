@@ -12,6 +12,41 @@ import (
 	"pgregory.net/rapid"
 )
 
+// Feature: ai-summary-streaming, Property 5: Error message sanitization
+// **Validates: Requirements 7.5**
+//
+// Property: For any error message that contains the configured API key string,
+// the sanitized error returned by sanitizeError SHALL NOT contain the API key.
+func TestProperty_ErrorMessageSanitization(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		// Generate a random non-empty API key (min 5 chars to avoid false positives
+		// where a very short key like "A" is a substring of the "[REDACTED]" marker)
+		apiKey := rapid.StringMatching(`[a-zA-Z0-9\-_]{5,64}`).Draw(rt, "apiKey")
+
+		// Generate random prefix and suffix text around the API key
+		prefix := rapid.String().Draw(rt, "prefix")
+		suffix := rapid.String().Draw(rt, "suffix")
+
+		// Build an error message that contains the API key
+		errMsg := prefix + apiKey + suffix
+		originalErr := fmt.Errorf("%s", errMsg)
+
+		// Create an LLMClient with the generated API key
+		client := &LLMClient{
+			apiKey: apiKey,
+		}
+
+		// Sanitize the error
+		sanitized := client.sanitizeError(originalErr)
+
+		// The sanitized error must not contain the API key
+		if strings.Contains(sanitized.Error(), apiKey) {
+			rt.Fatalf("sanitized error still contains API key!\n  apiKey:    %q\n  original: %q\n  sanitized: %q",
+				apiKey, originalErr.Error(), sanitized.Error())
+		}
+	})
+}
+
 // Feature: ai-summary, Property 4: Error messages never expose the API key
 // **Validates: Requirements 7.5**
 //

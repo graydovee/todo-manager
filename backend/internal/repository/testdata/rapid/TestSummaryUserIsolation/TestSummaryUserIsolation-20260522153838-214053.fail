@@ -1,0 +1,31 @@
+# 2026/05/22 15:38:38.131502 [TestSummaryUserIsolation] [rapid] draw numA: 1
+# 2026/05/22 15:38:38.131508 [TestSummaryUserIsolation] [rapid] draw a_start_0_year: 2020
+# 2026/05/22 15:38:38.131509 [TestSummaryUserIsolation] [rapid] draw a_start_0_month: 1
+# 2026/05/22 15:38:38.131511 [TestSummaryUserIsolation] [rapid] draw a_start_0_day: 1
+# 2026/05/22 15:38:38.131512 [TestSummaryUserIsolation] [rapid] draw a_end_0_year: 2020
+# 2026/05/22 15:38:38.131513 [TestSummaryUserIsolation] [rapid] draw a_end_0_month: 1
+# 2026/05/22 15:38:38.131513 [TestSummaryUserIsolation] [rapid] draw a_end_0_day: 1
+# 2026/05/22 15:38:38.131569 [TestSummaryUserIsolation] Create for user A failed: SQL logic error: table summaries has no column named todo_ids (1)
+# 
+v0.4.8#2594126716721328751
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

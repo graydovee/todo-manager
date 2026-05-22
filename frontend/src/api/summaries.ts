@@ -6,6 +6,7 @@ export interface SummaryEntry {
   end_date: string;
   status: 'analyzing' | 'completed' | 'error';
   result_content?: string;
+  todo_ids?: number[];
   created_at: string;
   updated_at: string;
 }
@@ -13,6 +14,23 @@ export interface SummaryEntry {
 export async function createSummary(startDate: string, endDate: string): Promise<SummaryEntry> {
   const res = await client.post('/summaries', { start_date: startDate, end_date: endDate });
   return res.data;
+}
+
+export async function createSummaryWithTodos(
+  startDate: string,
+  endDate: string,
+  todoIds: number[]
+): Promise<SummaryEntry> {
+  const res = await client.post('/summaries', {
+    start_date: startDate,
+    end_date: endDate,
+    todo_ids: todoIds,
+  });
+  return res.data;
+}
+
+export function getStreamUrl(id: number): string {
+  return `/api/v1/summaries/${id}/stream`;
 }
 
 export async function listSummaries(): Promise<SummaryEntry[]> {

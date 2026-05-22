@@ -17,11 +17,12 @@ var (
 )
 
 type TodoService struct {
-	db           *gorm.DB
-	todoRepo     *repository.TodoRepo
-	tagRepo      *repository.TagRepo
-	relationRepo *repository.RelationRepo
-	counterRepo  *repository.CodeCounterRepo
+	db                *gorm.DB
+	todoRepo          *repository.TodoRepo
+	tagRepo           *repository.TagRepo
+	relationRepo      *repository.RelationRepo
+	counterRepo       *repository.CodeCounterRepo
+	statusHistoryRepo *repository.StatusHistoryRepo
 }
 
 func NewTodoService(
@@ -30,13 +31,15 @@ func NewTodoService(
 	tagRepo *repository.TagRepo,
 	relationRepo *repository.RelationRepo,
 	counterRepo *repository.CodeCounterRepo,
+	statusHistoryRepo *repository.StatusHistoryRepo,
 ) *TodoService {
 	return &TodoService{
-		db:           db,
-		todoRepo:     todoRepo,
-		tagRepo:      tagRepo,
-		relationRepo: relationRepo,
-		counterRepo:  counterRepo,
+		db:                db,
+		todoRepo:          todoRepo,
+		tagRepo:           tagRepo,
+		relationRepo:      relationRepo,
+		counterRepo:       counterRepo,
+		statusHistoryRepo: statusHistoryRepo,
 	}
 }
 
@@ -142,6 +145,17 @@ func (s *TodoService) CreateTodo(userID uint, input CreateTodoInput) (*model.Tod
 		todo.UpdatedAt = now
 
 		if err := s.todoRepo.Create(tx, todo); err != nil {
+			return err
+		}
+
+		// Record initial status history entry
+		historyRecord := &model.TodoStatusHistory{
+			TodoID:    todo.ID,
+			OldStatus: "",
+			NewStatus: model.StatusOpen,
+			ChangedAt: time.Now(),
+		}
+		if err := s.statusHistoryRepo.Create(tx, historyRecord); err != nil {
 			return err
 		}
 
@@ -260,6 +274,10 @@ func (s *TodoService) DeleteTodo(userID, todoID uint) error {
 		if err := s.relationRepo.DeleteBySourceOrTarget(tx, todoID); err != nil {
 			return err
 		}
+		// Delete status history records before deleting the todo
+		if err := s.statusHistoryRepo.DeleteByTodoID(tx, todoID); err != nil {
+			return err
+		}
 		return s.todoRepo.Delete(tx, todoID, userID)
 	})
 }
@@ -272,9 +290,22 @@ func (s *TodoService) StartTodo(userID, todoID uint) error {
 	if todo.Status != model.StatusOpen {
 		return fmt.Errorf("only open todos can be started")
 	}
+	oldStatus := todo.Status
 	todo.Status = model.StatusInProgress
 	todo.UpdatedAt = time.Now()
-	return s.todoRepo.Update(nil, todo)
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.todoRepo.Update(tx, todo); err != nil {
+			return err
+		}
+		// Record open→in_progress transition
+		return s.statusHistoryRepo.Create(tx, &model.TodoStatusHistory{
+			TodoID:    todo.ID,
+			OldStatus: oldStatus,
+			NewStatus: model.StatusInProgress,
+			ChangedAt: time.Now(),
+		})
+	})
 }
 
 func (s *TodoService) SetStatus(userID, todoID uint, newStatus string) error {
@@ -288,9 +319,22 @@ func (s *TodoService) SetStatus(userID, todoID uint, newStatus string) error {
 	if todo.Status == newStatus {
 		return nil
 	}
+	oldStatus := todo.Status
 	todo.Status = newStatus
 	todo.UpdatedAt = time.Now()
-	return s.todoRepo.Update(nil, todo)
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.todoRepo.Update(tx, todo); err != nil {
+			return err
+		}
+		// Record status transition history
+		return s.statusHistoryRepo.Create(tx, &model.TodoStatusHistory{
+			TodoID:    todo.ID,
+			OldStatus: oldStatus,
+			NewStatus: newStatus,
+			ChangedAt: time.Now(),
+		})
+	})
 }
 
 func (s *TodoService) CompleteTodo(userID, todoID uint, cascadeDependencies bool) (*ConflictInfo, error) {
@@ -321,9 +365,20 @@ func (s *TodoService) CompleteTodo(userID, todoID uint, cascadeDependencies bool
 			}
 		}
 
+		oldStatus := todo.Status
 		todo.Status = model.StatusCompleted
 		todo.UpdatedAt = time.Now()
 		if err := s.todoRepo.Update(tx, todo); err != nil {
+			return err
+		}
+
+		// Record →completed transition
+		if err := s.statusHistoryRepo.Create(tx, &model.TodoStatusHistory{
+			TodoID:    todo.ID,
+			OldStatus: oldStatus,
+			NewStatus: model.StatusCompleted,
+			ChangedAt: time.Now(),
+		}); err != nil {
 			return err
 		}
 
@@ -363,9 +418,20 @@ func (s *TodoService) ReopenTodo(userID, todoID uint, cascadeDependents bool) (*
 			}
 		}
 
+		oldStatus := todo.Status
 		todo.Status = model.StatusOpen
 		todo.UpdatedAt = time.Now()
 		if err := s.todoRepo.Update(tx, todo); err != nil {
+			return err
+		}
+
+		// Record completed→open transition
+		if err := s.statusHistoryRepo.Create(tx, &model.TodoStatusHistory{
+			TodoID:    todo.ID,
+			OldStatus: oldStatus,
+			NewStatus: model.StatusOpen,
+			ChangedAt: time.Now(),
+		}); err != nil {
 			return err
 		}
 
@@ -659,9 +725,20 @@ func (s *TodoService) cascadeComplete(tx *gorm.DB, todoID, userID uint) error {
 		}
 	}
 
+	oldStatus := todo.Status
 	todo.Status = model.StatusCompleted
 	todo.UpdatedAt = time.Now()
 	if err := s.todoRepo.Update(tx, todo); err != nil {
+		return err
+	}
+
+	// Record status transition for cascaded completion
+	if err := s.statusHistoryRepo.Create(tx, &model.TodoStatusHistory{
+		TodoID:    todo.ID,
+		OldStatus: oldStatus,
+		NewStatus: model.StatusCompleted,
+		ChangedAt: time.Now(),
+	}); err != nil {
 		return err
 	}
 
@@ -684,9 +761,20 @@ func (s *TodoService) cascadeReopen(tx *gorm.DB, todoID, userID uint) error {
 		}
 	}
 
+	oldStatus := todo.Status
 	todo.Status = model.StatusOpen
 	todo.UpdatedAt = time.Now()
 	if err := s.todoRepo.Update(tx, todo); err != nil {
+		return err
+	}
+
+	// Record status transition for cascaded reopen
+	if err := s.statusHistoryRepo.Create(tx, &model.TodoStatusHistory{
+		TodoID:    todo.ID,
+		OldStatus: oldStatus,
+		NewStatus: model.StatusOpen,
+		ChangedAt: time.Now(),
+	}); err != nil {
 		return err
 	}
 

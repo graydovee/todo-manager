@@ -6,8 +6,10 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/graydovee/todolist/internal/model"
 	"github.com/graydovee/todolist/internal/repository"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -20,9 +22,10 @@ var propertyTestDBCounter atomic.Int64
 // (code_counters without category column, single counter per user).
 func setupPropertyTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	// Each call gets a unique in-memory database by using a unique file name
+	// Each call gets a unique in-memory database by using a unique file name.
+	// cache=shared ensures multiple connections see the same in-memory state.
 	id := propertyTestDBCounter.Add(1)
-	dsn := fmt.Sprintf("file:propdb_%d?mode=memory", id)
+	dsn := fmt.Sprintf("file:propdb_%d?mode=memory&cache=shared", id)
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
@@ -39,6 +42,7 @@ func setupPropertyTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE IF NOT EXISTS code_counters (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, last_code INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id))`,
 		`CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, user_id INTEGER NOT NULL, data BLOB, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, user_id INTEGER NOT NULL, content TEXT NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE IF NOT EXISTS todo_status_history (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, old_status TEXT NOT NULL, new_status TEXT NOT NULL, changed_at DATETIME NOT NULL)`,
 	}
 	for _, ddl := range tables {
 		if _, err := sqlDB.Exec(ddl); err != nil {
@@ -58,6 +62,7 @@ func setupPropertyService(t *testing.T) *TodoService {
 		repository.NewTagRepo(db),
 		repository.NewRelationRepo(db),
 		repository.NewCodeCounterRepo(db),
+		repository.NewStatusHistoryRepo(db),
 	)
 }
 
@@ -332,4 +337,252 @@ func referenceNormalize(tags []string) []string {
 		}
 	}
 	return result
+}
+
+// Feature: ai-summary-enhancement, Property 1: Activity refreshes updated_at
+// **Validates: Requirements 1.1, 1.2, 1.3**
+//
+// Property: For any todo and any activity (status change, comment addition, or
+// field update), the todo's updated_at timestamp SHALL be greater than or equal
+// to the timestamp before the activity occurred.
+func TestProperty_ActivityRefreshesUpdatedAt(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		db := setupPropertyTestDB(t)
+		todoRepo := repository.NewTodoRepo(db)
+		tagRepo := repository.NewTagRepo(db)
+		relationRepo := repository.NewRelationRepo(db)
+		counterRepo := repository.NewCodeCounterRepo(db)
+		statusHistoryRepo := repository.NewStatusHistoryRepo(db)
+		commentRepo := repository.NewCommentRepo(db)
+
+		todoSvc := NewTodoService(db, todoRepo, tagRepo, relationRepo, counterRepo, statusHistoryRepo)
+		commentSvc := NewCommentService(db, commentRepo, todoRepo)
+
+		userID := uint(1)
+		categories := []string{"bug", "feature", "task"}
+		cat := rapid.SampledFrom(categories).Draw(rt, "category")
+
+		// Create a todo
+		todo, err := todoSvc.CreateTodo(userID, CreateTodoInput{
+			Title:    "Test Todo",
+			Category: cat,
+		})
+		if err != nil {
+			rt.Fatalf("failed to create todo: %v", err)
+		}
+
+		// Choose a random activity type: 0=status change, 1=comment addition, 2=field update
+		activityType := rapid.IntRange(0, 2).Draw(rt, "activityType")
+
+		// Record the updated_at before the activity
+		beforeTodo, err := todoRepo.FindByID(nil, todo.ID, userID)
+		if err != nil {
+			rt.Fatalf("failed to find todo: %v", err)
+		}
+		updatedAtBefore := beforeTodo.UpdatedAt
+
+		// Small sleep to ensure time difference is measurable
+		time.Sleep(time.Millisecond)
+
+		switch activityType {
+		case 0:
+			// Status change: open -> in_progress
+			err = todoSvc.StartTodo(userID, todo.ID)
+			if err != nil {
+				rt.Fatalf("failed to start todo: %v", err)
+			}
+		case 1:
+			// Comment addition
+			content := rapid.StringMatching(`[a-zA-Z0-9 ]{1,50}`).Draw(rt, "commentContent")
+			_, err = commentSvc.Create(userID, todo.ID, content)
+			if err != nil {
+				rt.Fatalf("failed to create comment: %v", err)
+			}
+		case 2:
+			// Field update (title change)
+			newTitle := rapid.StringMatching(`[a-zA-Z0-9 ]{1,50}`).Draw(rt, "newTitle")
+			_, err = todoSvc.UpdateTodo(userID, todo.ID, UpdateTodoInput{
+				Title: &newTitle,
+			})
+			if err != nil {
+				rt.Fatalf("failed to update todo: %v", err)
+			}
+		}
+
+		// Verify updated_at is refreshed
+		afterTodo, err := todoRepo.FindByID(nil, todo.ID, userID)
+		if err != nil {
+			rt.Fatalf("failed to find todo after activity: %v", err)
+		}
+
+		if afterTodo.UpdatedAt.Before(updatedAtBefore) {
+			rt.Fatalf("updated_at was not refreshed: before=%v, after=%v, activityType=%d",
+				updatedAtBefore, afterTodo.UpdatedAt, activityType)
+		}
+	})
+}
+
+// Feature: ai-summary-enhancement, Property 3: Status history records transition on status change
+// **Validates: Requirements 2.1**
+//
+// Property: For any todo and any valid status transition, a TodoStatusHistory
+// record SHALL be created with the correct todo_id, old_status equal to the
+// previous status, new_status equal to the new status, and changed_at equal to
+// the time of the change.
+func TestProperty_StatusHistoryRecordsTransition(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		db := setupPropertyTestDB(t)
+		todoRepo := repository.NewTodoRepo(db)
+		tagRepo := repository.NewTagRepo(db)
+		relationRepo := repository.NewRelationRepo(db)
+		counterRepo := repository.NewCodeCounterRepo(db)
+		statusHistoryRepo := repository.NewStatusHistoryRepo(db)
+
+		todoSvc := NewTodoService(db, todoRepo, tagRepo, relationRepo, counterRepo, statusHistoryRepo)
+
+		userID := uint(1)
+		categories := []string{"bug", "feature", "task"}
+		cat := rapid.SampledFrom(categories).Draw(rt, "category")
+
+		// Create a todo (starts as "open")
+		todo, err := todoSvc.CreateTodo(userID, CreateTodoInput{
+			Title:    "Test Todo",
+			Category: cat,
+		})
+		if err != nil {
+			rt.Fatalf("failed to create todo: %v", err)
+		}
+
+		// Choose a random valid transition from the current status
+		// Valid transitions: open->in_progress, open->completed, in_progress->completed,
+		// in_progress->open (via SetStatus), completed->open (via Reopen)
+		type transition struct {
+			from string
+			to   string
+		}
+		validTransitions := []transition{
+			{model.StatusOpen, model.StatusInProgress},
+			{model.StatusOpen, model.StatusCompleted},
+			{model.StatusInProgress, model.StatusCompleted},
+			{model.StatusInProgress, model.StatusOpen},
+		}
+
+		chosenTransition := rapid.SampledFrom(validTransitions).Draw(rt, "transition")
+
+		// First, get the todo to the "from" state if needed
+		if chosenTransition.from == model.StatusInProgress {
+			// Need to start the todo first
+			err = todoSvc.StartTodo(userID, todo.ID)
+			if err != nil {
+				rt.Fatalf("failed to start todo: %v", err)
+			}
+		}
+
+		// Record time before the transition
+		timeBefore := time.Now()
+		time.Sleep(time.Millisecond)
+
+		// Perform the transition
+		switch {
+		case chosenTransition.from == model.StatusOpen && chosenTransition.to == model.StatusInProgress:
+			err = todoSvc.StartTodo(userID, todo.ID)
+		case chosenTransition.from == model.StatusOpen && chosenTransition.to == model.StatusCompleted:
+			_, err = todoSvc.CompleteTodo(userID, todo.ID, false)
+		case chosenTransition.from == model.StatusInProgress && chosenTransition.to == model.StatusCompleted:
+			_, err = todoSvc.CompleteTodo(userID, todo.ID, false)
+		case chosenTransition.from == model.StatusInProgress && chosenTransition.to == model.StatusOpen:
+			err = todoSvc.SetStatus(userID, todo.ID, model.StatusOpen)
+		}
+		if err != nil {
+			rt.Fatalf("failed to perform transition %s->%s: %v", chosenTransition.from, chosenTransition.to, err)
+		}
+
+		timeAfter := time.Now()
+
+		// Verify the status history record was created
+		records, err := statusHistoryRepo.FindByTodoID(nil, todo.ID)
+		if err != nil {
+			rt.Fatalf("failed to find status history: %v", err)
+		}
+
+		// Find the record matching our transition (last record should be it)
+		var found bool
+		for _, rec := range records {
+			if rec.OldStatus == chosenTransition.from && rec.NewStatus == chosenTransition.to {
+				// Verify todo_id
+				if rec.TodoID != todo.ID {
+					rt.Fatalf("history record has wrong todo_id: got %d, want %d", rec.TodoID, todo.ID)
+				}
+				// Verify changed_at is within the expected time window
+				if rec.ChangedAt.Before(timeBefore) || rec.ChangedAt.After(timeAfter) {
+					rt.Fatalf("history record changed_at %v is outside expected range [%v, %v]",
+						rec.ChangedAt, timeBefore, timeAfter)
+				}
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			rt.Fatalf("no status history record found for transition %s->%s (todo_id=%d, total records=%d)",
+				chosenTransition.from, chosenTransition.to, todo.ID, len(records))
+		}
+	})
+}
+
+// Feature: ai-summary-enhancement, Property 4: Status history records initial status on creation
+// **Validates: Requirements 2.3**
+//
+// Property: For any newly created todo, a TodoStatusHistory record SHALL exist
+// with old_status as empty string and new_status equal to the todo's initial
+// status value.
+func TestProperty_StatusHistoryRecordsInitialStatus(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		db := setupPropertyTestDB(t)
+		todoRepo := repository.NewTodoRepo(db)
+		tagRepo := repository.NewTagRepo(db)
+		relationRepo := repository.NewRelationRepo(db)
+		counterRepo := repository.NewCodeCounterRepo(db)
+		statusHistoryRepo := repository.NewStatusHistoryRepo(db)
+
+		todoSvc := NewTodoService(db, todoRepo, tagRepo, relationRepo, counterRepo, statusHistoryRepo)
+
+		userID := uint(1)
+		categories := []string{"bug", "feature", "task"}
+		cat := rapid.SampledFrom(categories).Draw(rt, "category")
+		title := rapid.StringMatching(`[a-zA-Z0-9 ]{1,50}`).Draw(rt, "title")
+
+		// Create a todo
+		todo, err := todoSvc.CreateTodo(userID, CreateTodoInput{
+			Title:    title,
+			Category: cat,
+		})
+		if err != nil {
+			rt.Fatalf("failed to create todo: %v", err)
+		}
+
+		// Verify a status history record exists with old_status="" and new_status=initial status
+		records, err := statusHistoryRepo.FindByTodoID(nil, todo.ID)
+		if err != nil {
+			rt.Fatalf("failed to find status history: %v", err)
+		}
+
+		if len(records) == 0 {
+			rt.Fatalf("no status history records found for newly created todo (id=%d)", todo.ID)
+		}
+
+		// The first record should be the initial status entry
+		initialRecord := records[0]
+		if initialRecord.OldStatus != "" {
+			rt.Fatalf("initial status history record has non-empty old_status: %q", initialRecord.OldStatus)
+		}
+		if initialRecord.NewStatus != model.StatusOpen {
+			rt.Fatalf("initial status history record has wrong new_status: got %q, want %q",
+				initialRecord.NewStatus, model.StatusOpen)
+		}
+		if initialRecord.TodoID != todo.ID {
+			rt.Fatalf("initial status history record has wrong todo_id: got %d, want %d",
+				initialRecord.TodoID, todo.ID)
+		}
+	})
 }

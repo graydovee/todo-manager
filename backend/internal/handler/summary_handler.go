@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -26,6 +27,7 @@ func NewSummaryHandler(summaryService *service.SummaryService) *SummaryHandler {
 type CreateSummaryRequest struct {
 	StartDate string `json:"start_date"`
 	EndDate   string `json:"end_date"`
+	TodoIDs   []uint `json:"todo_ids,omitempty"`
 }
 
 func (h *SummaryHandler) Create(c echo.Context) error {
@@ -53,7 +55,7 @@ func (h *SummaryHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "start_date and end_date are required in ISO 8601 format"})
 	}
 
-	summary, err := h.summaryService.CreateSummary(user.ID, startDate, endDate)
+	summary, err := h.summaryService.CreateSummaryWithTodos(user.ID, startDate, endDate, req.TodoIDs)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 	}
@@ -126,4 +128,98 @@ func (h *SummaryHandler) Delete(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// Stream handles GET /api/v1/summaries/:id/stream
+// Sets SSE headers and forwards chunks from SummaryService to the client.
+func (h *SummaryHandler) Stream(c echo.Context) error {
+	user := middleware.GetUser(c)
+	if user == nil {
+		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid id"})
+	}
+
+	// First check if summary exists at all (for 404 vs 403 distinction)
+	summary, err := h.summaryService.GetSummaryByID(uint(id))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return c.JSON(http.StatusNotFound, ErrorResponse{Error: "summary not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "internal server error"})
+	}
+
+	// Check ownership
+	if summary.UserID != user.ID {
+		return c.JSON(http.StatusForbidden, ErrorResponse{Error: "forbidden"})
+	}
+
+	// Set SSE headers
+	resp := c.Response()
+	resp.Header().Set("Content-Type", "text/event-stream")
+	resp.Header().Set("Cache-Control", "no-cache")
+	resp.Header().Set("Connection", "keep-alive")
+	resp.WriteHeader(http.StatusOK)
+
+	flusher, ok := resp.Writer.(http.Flusher)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "streaming not supported"})
+	}
+
+	switch summary.Status {
+	case model.SummaryStatusCompleted:
+		// Send stored result_content as a single data event + done event
+		fmt.Fprintf(resp, "data: %s\n\n", summary.ResultContent)
+		flusher.Flush()
+		fmt.Fprintf(resp, "event: done\ndata: \n\n")
+		flusher.Flush()
+		return nil
+
+	case model.SummaryStatusError:
+		// Send error event with stored error message
+		fmt.Fprintf(resp, "event: error\ndata: %s\n\n", summary.ResultContent)
+		flusher.Flush()
+		return nil
+
+	case model.SummaryStatusAnalyzing:
+		// Call StreamAnalysis and forward chunks as SSE data events
+		ctx := c.Request().Context()
+		ch, err := h.summaryService.StreamAnalysis(ctx, uint(id), user.ID)
+		if err != nil {
+			// Send error event since we already wrote SSE headers
+			fmt.Fprintf(resp, "event: error\ndata: %s\n\n", err.Error())
+			flusher.Flush()
+			return nil
+		}
+
+		for chunk := range ch {
+			if chunk.Done {
+				fmt.Fprintf(resp, "event: done\ndata: \n\n")
+				flusher.Flush()
+				return nil
+			}
+			if chunk.Err != nil {
+				fmt.Fprintf(resp, "event: error\ndata: %s\n\n", chunk.Err.Error())
+				flusher.Flush()
+				return nil
+			}
+			// Forward content chunk as SSE data event
+			fmt.Fprintf(resp, "data: %s\n\n", chunk.Content)
+			flusher.Flush()
+		}
+
+		// Channel closed without Done signal — send done event
+		fmt.Fprintf(resp, "event: done\ndata: \n\n")
+		flusher.Flush()
+		return nil
+
+	default:
+		// Unknown status — send error
+		fmt.Fprintf(resp, "event: error\ndata: unknown summary status\n\n")
+		flusher.Flush()
+		return nil
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/graydovee/todolist/internal/middleware"
 	"github.com/graydovee/todolist/internal/model"
@@ -456,6 +457,56 @@ func (h *TodoHandler) Highlight(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, todoToResponse(todo))
+}
+
+func (h *TodoHandler) ListByDateRange(c echo.Context) error {
+	user := middleware.GetUser(c)
+	if user == nil {
+		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
+	}
+
+	startStr := c.QueryParam("start_date")
+	endStr := c.QueryParam("end_date")
+
+	if startStr == "" || endStr == "" {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "start_date and end_date are required"})
+	}
+
+	startDate, err := time.Parse("2006-01-02", startStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid start_date format, expected YYYY-MM-DD"})
+	}
+
+	endDate, err := time.Parse("2006-01-02", endStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid end_date format, expected YYYY-MM-DD"})
+	}
+
+	if endDate.Before(startDate) {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "end_date must not be earlier than start_date"})
+	}
+
+	// Use end of day for end_date to include the entire day
+	endDateTime := endDate.Add(24*time.Hour - time.Nanosecond)
+
+	todos, err := h.todoRepo.FindByUserAndUpdatedAtRange(nil, user.ID, startDate, endDateTime)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+	}
+
+	items := make([]TodoByDateRangeItem, len(todos))
+	for i, todo := range todos {
+		items[i] = TodoByDateRangeItem{
+			ID:       todo.ID,
+			Code:     todo.Code,
+			Title:    todo.Title,
+			Status:   todo.Status,
+			Category: todo.Category,
+			Priority: todo.Priority,
+		}
+	}
+
+	return c.JSON(http.StatusOK, items)
 }
 
 func (h *TodoHandler) buildDetailResponse(todo *model.Todo, userID uint) TodoDetailResponse {

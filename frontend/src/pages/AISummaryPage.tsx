@@ -1,42 +1,21 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Button, DatePicker, Drawer, Empty, Modal, Spin, Tag, message } from 'antd';
-import { DeleteOutlined, CloseOutlined, LoadingOutlined } from '@ant-design/icons';
+import { useState, useEffect, useCallback } from 'react';
+import { Button, Empty, Modal, Spin, Tag, message } from 'antd';
+import { DeleteOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import ReactMarkdown from 'react-markdown';
-import { createSummary, deleteSummary, getSummary, listSummaries } from '../api/summaries';
+import { useNavigate } from 'react-router-dom';
+import { createSummaryWithTodos, deleteSummary, listSummaries } from '../api/summaries';
 import type { SummaryEntry } from '../api/summaries';
-import type { Dayjs } from 'dayjs';
+import { AnalysisDrawer } from '../components/AnalysisDrawer';
 import dayjs from 'dayjs';
 import './AISummaryPage.css';
 
-const { RangePicker } = DatePicker;
-
-const POLL_INTERVAL = 2000;
-const POLL_TIMEOUT = 60000;
-
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
-  useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth <= 768);
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, []);
-  return isMobile;
-}
-
 export function AISummaryPage() {
   const { t } = useTranslation();
-  const isMobile = useIsMobile();
+  const navigate = useNavigate();
 
   const [entries, setEntries] = useState<SummaryEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
-  const [selectedEntry, setSelectedEntry] = useState<SummaryEntry | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollingStartRef = useRef<number>(0);
 
   // Fetch history list on mount
   const fetchEntries = useCallback(async () => {
@@ -54,78 +33,17 @@ export function AISummaryPage() {
     void fetchEntries();
   }, [fetchEntries]);
 
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-      }
-    };
-  }, []);
-
-  const stopPolling = useCallback(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  }, []);
-
-  const startPolling = useCallback((id: number) => {
-    stopPolling();
-    pollingStartRef.current = Date.now();
-
-    pollingRef.current = setInterval(async () => {
-      const elapsed = Date.now() - pollingStartRef.current;
-      if (elapsed >= POLL_TIMEOUT) {
-        stopPolling();
-        setAnalyzing(false);
-        // Update the entry to error status locally
-        setEntries((prev) =>
-          prev.map((e) =>
-            e.id === id ? { ...e, status: 'error' as const } : e
-          )
-        );
-        return;
-      }
-
-      try {
-        const updated = await getSummary(id);
-        if (updated.status !== 'analyzing') {
-          stopPolling();
-          setAnalyzing(false);
-          setEntries((prev) =>
-            prev.map((e) => (e.id === id ? updated : e))
-          );
-        }
-      } catch {
-        // Polling error - continue trying
-      }
-    }, POLL_INTERVAL);
-  }, [stopPolling]);
-
-  const handleAnalyze = async () => {
-    if (!dateRange) return;
-
-    const startDate = dateRange[0].format('YYYY-MM-DD');
-    const endDate = dateRange[1].format('YYYY-MM-DD');
-
-    setAnalyzing(true);
+  const handleStartAnalysis = async (startDate: string, endDate: string, todoIds: number[]) => {
     try {
-      const entry = await createSummary(startDate, endDate);
-      setEntries((prev) => [entry, ...prev]);
-      startPolling(entry.id);
+      const entry = await createSummaryWithTodos(startDate, endDate, todoIds);
+      navigate(`/ai-summary/${entry.id}`);
     } catch {
-      setAnalyzing(false);
       message.error(t('aiSummary.statusError'));
     }
   };
 
   const handleEntryClick = (entry: SummaryEntry) => {
-    if (entry.status !== 'completed') return;
-    setSelectedEntry(entry);
-    if (isMobile) {
-      setDrawerOpen(true);
-    }
+    navigate(`/ai-summary/${entry.id}`);
   };
 
   const handleDelete = (entry: SummaryEntry) => {
@@ -137,35 +55,12 @@ export function AISummaryPage() {
         try {
           await deleteSummary(entry.id);
           setEntries((prev) => prev.filter((e) => e.id !== entry.id));
-          // Close detail if the deleted entry was selected
-          if (selectedEntry?.id === entry.id) {
-            setSelectedEntry(null);
-            setDrawerOpen(false);
-          }
         } catch {
           message.error(t('aiSummary.statusError'));
         }
       },
     });
   };
-
-  const handleCloseDetail = () => {
-    setSelectedEntry(null);
-    setDrawerOpen(false);
-  };
-
-  const disableFutureDates = (current: Dayjs) => {
-    return current && current.isAfter(dayjs().endOf('day'));
-  };
-
-  const rangePresets: { label: string; value: [Dayjs, Dayjs] }[] = [
-    { label: t('aiSummary.presetToday'), value: [dayjs(), dayjs()] },
-    { label: t('aiSummary.presetLast3Days'), value: [dayjs().subtract(2, 'day'), dayjs()] },
-    { label: t('aiSummary.presetLast7Days'), value: [dayjs().subtract(6, 'day'), dayjs()] },
-    { label: t('aiSummary.presetLast30Days'), value: [dayjs().subtract(29, 'day'), dayjs()] },
-    { label: t('aiSummary.presetThisMonth'), value: [dayjs().startOf('month'), dayjs()] },
-    { label: t('aiSummary.presetLastMonth'), value: [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] },
-  ];
 
   const renderStatusTag = (status: SummaryEntry['status']) => {
     switch (status) {
@@ -202,20 +97,12 @@ export function AISummaryPage() {
     return (
       <div className="ai-summary-page__list">
         {entries.map((entry) => {
-          const isClickable = entry.status === 'completed';
-          const isSelected = selectedEntry?.id === entry.id;
           const showDelete = entry.status === 'completed' || entry.status === 'error';
 
           return (
             <div
               key={entry.id}
-              className={[
-                'ai-summary-page__list-item',
-                isClickable ? 'ai-summary-page__list-item--clickable' : '',
-                isSelected ? 'ai-summary-page__list-item--selected' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
+              className="ai-summary-page__list-item ai-summary-page__list-item--clickable"
               onClick={() => handleEntryClick(entry)}
             >
               <div className="ai-summary-page__list-item-info">
@@ -248,87 +135,24 @@ export function AISummaryPage() {
     );
   };
 
-  const renderDetailContent = () => {
-    if (!selectedEntry) {
-      return (
-        <div className="ai-summary-page__empty">
-          <Empty description={t('aiSummary.selectRange')} />
-        </div>
-      );
-    }
-
-    return (
-      <>
-        <div className="ai-summary-page__detail-header">
-          <h3>
-            {selectedEntry.start_date} ~ {selectedEntry.end_date}
-          </h3>
-          <Button
-            type="text"
-            icon={<CloseOutlined />}
-            onClick={handleCloseDetail}
-          />
-        </div>
-        <div className="ai-summary-page__detail-content">
-          <ReactMarkdown>{selectedEntry.result_content || ''}</ReactMarkdown>
-        </div>
-      </>
-    );
-  };
-
   return (
     <div className="ai-summary-page">
       <div className="ai-summary-page__header">
         <h2>{t('aiSummary.title')}</h2>
+        <Button type="primary" onClick={() => setDrawerOpen(true)}>
+          {t('aiSummary.newAnalysis')}
+        </Button>
       </div>
 
       <div className="ai-summary-page__body">
-        <div className="ai-summary-page__left">
-          <div className="ai-summary-page__controls">
-            <RangePicker
-              value={dateRange}
-              onChange={(dates) => setDateRange(dates as [Dayjs, Dayjs] | null)}
-              disabledDate={disableFutureDates}
-              placeholder={[t('aiSummary.startDate'), t('aiSummary.endDate')]}
-              presets={rangePresets}
-            />
-            <Button
-              type="primary"
-              onClick={handleAnalyze}
-              disabled={!dateRange || analyzing}
-              loading={analyzing}
-            >
-              {t('aiSummary.analyzeButton')}
-            </Button>
-          </div>
-
-          {renderHistoryList()}
-        </div>
-
-        {!isMobile && (
-          <div className="ai-summary-page__right">
-            {renderDetailContent()}
-          </div>
-        )}
+        {renderHistoryList()}
       </div>
 
-      {isMobile && (
-        <Drawer
-          title={selectedEntry ? `${selectedEntry.start_date} ~ ${selectedEntry.end_date}` : ''}
-          placement="right"
-          width="85%"
-          open={drawerOpen && !!selectedEntry}
-          onClose={handleCloseDetail}
-          className="ai-summary-mobile-drawer"
-          destroyOnClose={false}
-        >
-          {selectedEntry && (
-            <div className="ai-summary-page__detail-content">
-              <ReactMarkdown>{selectedEntry.result_content || ''}</ReactMarkdown>
-            </div>
-          )}
-        </Drawer>
-      )}
+      <AnalysisDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onStartAnalysis={handleStartAnalysis}
+      />
     </div>
   );
 }

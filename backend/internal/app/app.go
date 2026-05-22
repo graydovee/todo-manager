@@ -50,6 +50,7 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 	relationRepo := repository.NewRelationRepo(db)
 	counterRepo := repository.NewCodeCounterRepo(db)
 	commentRepo := repository.NewCommentRepo(db)
+	statusHistoryRepo := repository.NewStatusHistoryRepo(db)
 
 	sessionStore := session.NewDBStore(db, cfg.Session.Secret, cfg.Session.MaxAge, cfg.Session.CleanupInterval)
 
@@ -72,9 +73,9 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 	llmClient := service.NewLLMClient(&cfg.LLM)
 
 	authService := service.NewAuthService(cfg, basicAuthProvider, oidcAuthProvider, userRepo, sessionStore)
-	todoService := service.NewTodoService(db, todoRepo, tagRepo, relationRepo, counterRepo)
+	todoService := service.NewTodoService(db, todoRepo, tagRepo, relationRepo, counterRepo, statusHistoryRepo)
 	commentService := service.NewCommentService(db, commentRepo, todoRepo)
-	summaryService := service.NewSummaryService(db, summaryRepo, todoRepo, llmClient, &cfg.LLM)
+	summaryService := service.NewSummaryService(db, summaryRepo, todoRepo, commentRepo, relationRepo, statusHistoryRepo, llmClient, &cfg.LLM)
 
 	authHandler := handler.NewAuthHandler(authService)
 	todoHandler := handler.NewTodoHandler(todoService, commentService, todoRepo, tagRepo, relationRepo, db)
@@ -96,6 +97,7 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 	todos.GET("", todoHandler.List)
 	todos.GET("/graph", todoHandler.Graph)
 	todos.GET("/tags", todoHandler.Tags)
+	todos.GET("/by-date-range", todoHandler.ListByDateRange)
 	todos.GET("/:id", todoHandler.Get)
 	todos.POST("", todoHandler.Create)
 	todos.PATCH("/:id", todoHandler.Update)
@@ -113,6 +115,7 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 	summaries := api.Group("/summaries", authMW)
 	summaries.POST("", summaryHandler.Create)
 	summaries.GET("", summaryHandler.List)
+	summaries.GET("/:id/stream", summaryHandler.Stream)
 	summaries.GET("/:id", summaryHandler.Get)
 	summaries.DELETE("/:id", summaryHandler.Delete)
 

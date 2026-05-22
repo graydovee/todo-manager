@@ -1,0 +1,31 @@
+# 2026/05/22 15:38:38.155070 [TestSummaryDeletePermanentlyRemoves] [rapid] draw numEntries: 1
+# 2026/05/22 15:38:38.155077 [TestSummaryDeletePermanentlyRemoves] [rapid] draw start_0_year: 2020
+# 2026/05/22 15:38:38.155078 [TestSummaryDeletePermanentlyRemoves] [rapid] draw start_0_month: 1
+# 2026/05/22 15:38:38.155079 [TestSummaryDeletePermanentlyRemoves] [rapid] draw start_0_day: 1
+# 2026/05/22 15:38:38.155080 [TestSummaryDeletePermanentlyRemoves] [rapid] draw end_0_year: 2020
+# 2026/05/22 15:38:38.155081 [TestSummaryDeletePermanentlyRemoves] [rapid] draw end_0_month: 1
+# 2026/05/22 15:38:38.155082 [TestSummaryDeletePermanentlyRemoves] [rapid] draw end_0_day: 1
+# 2026/05/22 15:38:38.155132 [TestSummaryDeletePermanentlyRemoves] Create summary 0 failed: SQL logic error: table summaries has no column named todo_ids (1)
+# 
+v0.4.8#16765047568631567743
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

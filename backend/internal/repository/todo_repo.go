@@ -3,6 +3,7 @@ package repository
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/graydovee/todolist/internal/model"
 	"gorm.io/gorm"
@@ -158,6 +159,34 @@ func (r *TodoRepo) ListAllWithTags(tx *gorm.DB, userID uint) ([]*model.Todo, err
 		return nil, err
 	}
 
+	return todos, nil
+}
+
+// FindByUserAndUpdatedAtRange returns todos belonging to the given user whose
+// updated_at falls within [start, end], with tags preloaded.
+func (r *TodoRepo) FindByUserAndUpdatedAtRange(tx *gorm.DB, userID uint, start, end time.Time) ([]*model.Todo, error) {
+	db := r.getDB(tx)
+	var todos []*model.Todo
+	if err := db.Where("user_id = ? AND updated_at >= ? AND updated_at <= ?", userID, start, end).
+		Preload("Tags").
+		Find(&todos).Error; err != nil {
+		return nil, err
+	}
+	return todos, nil
+}
+
+// FindByIDsAndUser returns todos matching the given IDs that belong to the specified user.
+func (r *TodoRepo) FindByIDsAndUser(tx *gorm.DB, ids []uint, userID uint) ([]*model.Todo, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	db := r.getDB(tx)
+	var todos []*model.Todo
+	if err := db.Where("id IN ? AND user_id = ?", ids, userID).
+		Preload("Tags").
+		Find(&todos).Error; err != nil {
+		return nil, err
+	}
 	return todos, nil
 }
 
