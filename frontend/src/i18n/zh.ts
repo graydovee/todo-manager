@@ -165,6 +165,18 @@ const zh = {
       presetLast30Days: '最近 30 天',
       presetLast90Days: '最近 90 天',
     },
+    languageLabel: '输出语言',
+    languageAuto: '自动/Auto',
+    languageChinese: '中文',
+    languageEnglish: 'English',
+    detailPlaceholder: '请选择一个总结查看详情',
+    detailEmpty: '暂无内容',
+    detailError: '总结生成失败',
+    streamingIndicator: '正在生成中...',
+  },
+  summaryDetail: {
+    selectSummary: '选择左侧总结查看详情',
+    emptyContent: '暂无分析内容',
   },
   analysis: {
     startButton: '分析总结',

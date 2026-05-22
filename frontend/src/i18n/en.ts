@@ -165,6 +165,18 @@ const en = {
       presetLast30Days: 'Last 30 Days',
       presetLast90Days: 'Last 90 Days',
     },
+    languageLabel: 'Output Language',
+    languageAuto: 'Auto',
+    languageChinese: '中文',
+    languageEnglish: 'English',
+    detailPlaceholder: 'Select a summary to view details',
+    detailEmpty: 'No content available',
+    detailError: 'Summary generation failed',
+    streamingIndicator: 'Generating...',
+  },
+  summaryDetail: {
+    selectSummary: 'Select a summary from the left to view details',
+    emptyContent: 'No analysis content available',
   },
   analysis: {
     startButton: 'Analyze Summary',

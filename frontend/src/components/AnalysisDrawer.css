@@ -9,6 +9,17 @@
   flex-shrink: 0;
 }
 
+.analysis-drawer__language-selector {
+  flex-shrink: 0;
+}
+
+.analysis-drawer__language-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.88);
+}
+
 .analysis-drawer__todo-list {
   flex: 1;
   overflow-y: auto;

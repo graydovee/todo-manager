@@ -112,7 +112,8 @@ func (s *SummaryService) CreateSummary(userID uint, startDate, endDate time.Time
 // CreateSummaryWithTodos validates inputs, creates a summary record with status "analyzing".
 // If todoIDs is non-empty, it validates that all IDs belong to the user and stores them as JSON.
 // If todoIDs is empty/nil, it falls back to existing date-range query behavior.
-func (s *SummaryService) CreateSummaryWithTodos(userID uint, startDate, endDate time.Time, todoIDs []uint) (*model.Summary, error) {
+// The language parameter is persisted so that StreamAnalysis can skip auto-detection when set.
+func (s *SummaryService) CreateSummaryWithTodos(userID uint, startDate, endDate time.Time, todoIDs []uint, language string) (*model.Summary, error) {
 	// Validate: end date must not be earlier than start date
 	if endDate.Before(startDate) {
 		return nil, fmt.Errorf("end_date must not be earlier than start_date")
@@ -168,6 +169,7 @@ func (s *SummaryService) CreateSummaryWithTodos(userID uint, startDate, endDate 
 		EndDate:   endDate,
 		Status:    model.SummaryStatusAnalyzing,
 		TodoIDs:   todoIDsJSON,
+		Language:  language,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -695,16 +697,24 @@ func (s *SummaryService) StreamAnalysis(ctx context.Context, summaryID, userID u
 		return nil, fmt.Errorf("failed to load enriched data: %w", err)
 	}
 
-	// 4. Detect language (with its own timeout)
+	// 4. Determine language: use persisted value if specified, otherwise auto-detect
 	timeout := time.Duration(s.llmCfg.Timeout) * time.Second
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
 
-	langCtx, langCancel := context.WithTimeout(ctx, timeout)
-	language := s.detectLanguage(langCtx, todos)
-	langCancel()
-	slog.Info("stream analysis detected language", "summary_id", summaryID, "language", language)
+	var language string
+	if summary.Language != "" {
+		// Language was specified by user at creation time; skip auto-detection
+		language = summary.Language
+		slog.Info("stream analysis using specified language", "summary_id", summaryID, "language", language)
+	} else {
+		// Auto-detect language from todo content via LLM
+		langCtx, langCancel := context.WithTimeout(ctx, timeout)
+		language = s.detectLanguage(langCtx, todos)
+		langCancel()
+		slog.Info("stream analysis detected language", "summary_id", summaryID, "language", language)
+	}
 
 	// 5. Build enriched prompt
 	prompt := s.buildEnrichedPrompt(todos, enrichedData, language, summary.StartDate, summary.EndDate)

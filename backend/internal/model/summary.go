@@ -10,6 +10,7 @@ type Summary struct {
 	Status        string    `gorm:"not null;size:20;default:analyzing" json:"status"`
 	ResultContent string    `gorm:"type:text" json:"result_content,omitempty"`
 	TodoIDs       string    `gorm:"type:text" json:"todo_ids,omitempty"`
+	Language      string    `json:"language" gorm:"size:20"` // "Chinese", "English", or ""
 	CreatedAt     time.Time `gorm:"not null" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"not null" json:"updated_at"`
 }

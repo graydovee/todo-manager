@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Drawer, DatePicker, Button, Checkbox, List, Spin, Empty, Tag } from 'antd';
+import { Drawer, DatePicker, Button, Checkbox, List, Spin, Empty, Tag, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
@@ -12,16 +12,36 @@ const { RangePicker } = DatePicker;
 interface AnalysisDrawerProps {
   open: boolean;
   onClose: () => void;
-  onStartAnalysis: (startDate: string, endDate: string, todoIds: number[]) => void;
+  onStartAnalysis: (startDate: string, endDate: string, todoIds: number[], language: string) => void;
+}
+
+// Map frontend language value to backend language value
+function mapLanguageToBackend(lang: string): string {
+  switch (lang) {
+    case 'zh':
+      return 'Chinese';
+    case 'en':
+      return 'English';
+    default:
+      return '';
+  }
+}
+
+// Derive initial language from current i18n locale
+function getDefaultLanguage(locale: string): string {
+  if (locale === 'zh') return 'zh';
+  if (locale === 'en') return 'en';
+  return '';
 }
 
 export function AnalysisDrawer({ open, onClose, onStartAnalysis }: AnalysisDrawerProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [todos, setTodos] = useState<TodoByDateRangeItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
+  const [language, setLanguage] = useState<string>(() => getDefaultLanguage(i18n.language));
 
   // Fetch todos when date range changes
   const fetchTodos = useCallback(async (start: string, end: string) => {
@@ -56,8 +76,9 @@ export function AnalysisDrawer({ open, onClose, onStartAnalysis }: AnalysisDrawe
       setDateRange(null);
       setTodos([]);
       setSelectedIds([]);
+      setLanguage(getDefaultLanguage(i18n.language));
     }
-  }, [open]);
+  }, [open, i18n.language]);
 
   const handleDateRangeChange = (dates: [Dayjs, Dayjs] | null) => {
     setDateRange(dates);
@@ -83,7 +104,7 @@ export function AnalysisDrawer({ open, onClose, onStartAnalysis }: AnalysisDrawe
     if (!dateRange || selectedIds.length === 0) return;
     const startDate = dateRange[0].format('YYYY-MM-DD');
     const endDate = dateRange[1].format('YYYY-MM-DD');
-    onStartAnalysis(startDate, endDate, selectedIds);
+    onStartAnalysis(startDate, endDate, selectedIds, mapLanguageToBackend(language));
     onClose();
   };
 
@@ -196,6 +217,21 @@ export function AnalysisDrawer({ open, onClose, onStartAnalysis }: AnalysisDrawe
             placeholder={[t('aiSummary.startDate'), t('aiSummary.endDate')]}
             presets={rangePresets}
             style={{ width: '100%' }}
+          />
+        </div>
+        <div className="analysis-drawer__language-selector">
+          <label className="analysis-drawer__language-label">
+            {t('aiSummary.languageLabel')}
+          </label>
+          <Select
+            value={language}
+            onChange={(value: string) => setLanguage(value)}
+            style={{ width: '100%' }}
+            options={[
+              { value: '', label: t('aiSummary.languageAuto') },
+              { value: 'zh', label: t('aiSummary.languageChinese') },
+              { value: 'en', label: t('aiSummary.languageEnglish') },
+            ]}
           />
         </div>
         {renderTodoList()}

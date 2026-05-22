@@ -3,8 +3,10 @@ package handler
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/graydovee/todolist/internal/middleware"
@@ -28,6 +30,7 @@ type CreateSummaryRequest struct {
 	StartDate string `json:"start_date"`
 	EndDate   string `json:"end_date"`
 	TodoIDs   []uint `json:"todo_ids,omitempty"`
+	Language  string `json:"language,omitempty"` // "Chinese", "English", or ""
 }
 
 func (h *SummaryHandler) Create(c echo.Context) error {
@@ -45,6 +48,11 @@ func (h *SummaryHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "start_date and end_date are required in ISO 8601 format"})
 	}
 
+	// Validate language field
+	if req.Language != "" && req.Language != "Chinese" && req.Language != "English" {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid language value, must be one of: Chinese, English"})
+	}
+
 	startDate, err := time.Parse("2006-01-02", req.StartDate)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "start_date and end_date are required in ISO 8601 format"})
@@ -55,7 +63,7 @@ func (h *SummaryHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "start_date and end_date are required in ISO 8601 format"})
 	}
 
-	summary, err := h.summaryService.CreateSummaryWithTodos(user.ID, startDate, endDate, req.TodoIDs)
+	summary, err := h.summaryService.CreateSummaryWithTodos(user.ID, startDate, endDate, req.TodoIDs, req.Language)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 	}
@@ -130,6 +138,17 @@ func (h *SummaryHandler) Delete(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// writeSSEData writes content as a properly formatted SSE data event.
+// Multi-line content is split into multiple "data:" fields within a single event.
+// Per SSE spec, the client joins multiple data fields with "\n".
+func writeSSEData(w io.Writer, content string) {
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		fmt.Fprintf(w, "data: %s\n", line)
+	}
+	fmt.Fprintf(w, "\n") // empty line terminates the event
+}
+
 // Stream handles GET /api/v1/summaries/:id/stream
 // Sets SSE headers and forwards chunks from SummaryService to the client.
 func (h *SummaryHandler) Stream(c echo.Context) error {
@@ -172,7 +191,7 @@ func (h *SummaryHandler) Stream(c echo.Context) error {
 	switch summary.Status {
 	case model.SummaryStatusCompleted:
 		// Send stored result_content as a single data event + done event
-		fmt.Fprintf(resp, "data: %s\n\n", summary.ResultContent)
+		writeSSEData(resp, summary.ResultContent)
 		flusher.Flush()
 		fmt.Fprintf(resp, "event: done\ndata: \n\n")
 		flusher.Flush()
@@ -207,7 +226,7 @@ func (h *SummaryHandler) Stream(c echo.Context) error {
 				return nil
 			}
 			// Forward content chunk as SSE data event
-			fmt.Fprintf(resp, "data: %s\n\n", chunk.Content)
+			writeSSEData(resp, chunk.Content)
 			flusher.Flush()
 		}
 

@@ -57,7 +57,7 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 		`CREATE TABLE IF NOT EXISTS todo_relations (id INTEGER PRIMARY KEY AUTOINCREMENT, source_id INTEGER NOT NULL, target_id INTEGER NOT NULL, relation_type TEXT NOT NULL CHECK(relation_type IN ('depends_on','duplicate_of')), UNIQUE(source_id, target_id, relation_type))`,
 		`CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, user_id INTEGER NOT NULL, content TEXT NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE IF NOT EXISTS todo_status_history (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, old_status TEXT NOT NULL, new_status TEXT NOT NULL, changed_at DATETIME NOT NULL)`,
-		`CREATE TABLE IF NOT EXISTS summaries (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, start_date DATE NOT NULL, end_date DATE NOT NULL, status TEXT NOT NULL DEFAULT 'analyzing', result_content TEXT, todo_ids TEXT, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id))`,
+		`CREATE TABLE IF NOT EXISTS summaries (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, start_date DATE NOT NULL, end_date DATE NOT NULL, status TEXT NOT NULL DEFAULT 'analyzing', result_content TEXT, todo_ids TEXT, language VARCHAR(20) DEFAULT '', created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id))`,
 		`CREATE INDEX IF NOT EXISTS idx_summaries_user_id ON summaries(user_id)`,
 	}
 	for _, ddl := range tables {
@@ -422,7 +422,7 @@ func TestProperty_TodoIDValidationAndErrorReporting(t *testing.T) {
 		endDate := today.AddDate(0, 0, -1)
 
 		// Call CreateSummaryWithTodos
-		result, err := svc.CreateSummaryWithTodos(userID, startDate, endDate, submittedIDs)
+		result, err := svc.CreateSummaryWithTodos(userID, startDate, endDate, submittedIDs, "")
 
 		if includeInvalid {
 			// Should return an error
@@ -711,7 +711,7 @@ func TestProperty_TodoIDsPersistence(t *testing.T) {
 		endDate := today.AddDate(0, 0, -1)
 
 		// Call CreateSummaryWithTodos
-		summary, err := svc.CreateSummaryWithTodos(userID, startDate, endDate, selectedIDs)
+		summary, err := svc.CreateSummaryWithTodos(userID, startDate, endDate, selectedIDs, "")
 		if err != nil {
 			rt.Fatalf("CreateSummaryWithTodos failed: %v", err)
 		}
@@ -878,7 +878,7 @@ func TestProperty_SpecifiedTodosAnalysisScope(t *testing.T) {
 		}
 
 		// Call CreateSummaryWithTodos with the selected IDs and the date range
-		summary, err := svc.CreateSummaryWithTodos(userID, startDate, endDate, selectedIDs)
+		summary, err := svc.CreateSummaryWithTodos(userID, startDate, endDate, selectedIDs, "")
 		if err != nil {
 			rt.Fatalf("CreateSummaryWithTodos failed: %v", err)
 		}

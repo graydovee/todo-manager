@@ -19,12 +19,14 @@ export async function createSummary(startDate: string, endDate: string): Promise
 export async function createSummaryWithTodos(
   startDate: string,
   endDate: string,
-  todoIds: number[]
+  todoIds: number[],
+  language?: string
 ): Promise<SummaryEntry> {
   const res = await client.post('/summaries', {
     start_date: startDate,
     end_date: endDate,
     todo_ids: todoIds,
+    language: language || '',
   });
   return res.data;
 }

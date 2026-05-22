@@ -12,7 +12,6 @@ import { LoginPage } from './pages/LoginPage';
 import { TodoListPage } from './pages/TodoListPage';
 import { TodoGraphPage } from './pages/TodoGraphPage';
 import { AISummaryPage } from './pages/AISummaryPage';
-import { AISummaryResultPage } from './pages/AISummaryResultPage';
 import i18n from './i18n';
 
 const queryClient = new QueryClient({
@@ -96,7 +95,6 @@ function App() {
                   <Route path="todos" element={<TodoListPage />} />
                   <Route path="todos/graph" element={<TodoGraphPage />} />
                   <Route path="ai-summary" element={<AISummaryPage />} />
-                  <Route path="ai-summary/:id" element={<AISummaryResultPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

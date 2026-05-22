@@ -2,20 +2,33 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button, Empty, Modal, Spin, Tag, message } from 'antd';
 import { DeleteOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { createSummaryWithTodos, deleteSummary, listSummaries } from '../api/summaries';
 import type { SummaryEntry } from '../api/summaries';
 import { AnalysisDrawer } from '../components/AnalysisDrawer';
+import { SummaryDetailPanel } from '../components/SummaryDetailPanel';
+import { SummaryDetailDrawer } from '../components/SummaryDetailDrawer';
 import dayjs from 'dayjs';
 import './AISummaryPage.css';
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
+
 export function AISummaryPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const [entries, setEntries] = useState<SummaryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
 
   // Fetch history list on mount
   const fetchEntries = useCallback(async () => {
@@ -33,17 +46,21 @@ export function AISummaryPage() {
     void fetchEntries();
   }, [fetchEntries]);
 
-  const handleStartAnalysis = async (startDate: string, endDate: string, todoIds: number[]) => {
+  const handleStartAnalysis = async (startDate: string, endDate: string, todoIds: number[], language: string) => {
     try {
-      const entry = await createSummaryWithTodos(startDate, endDate, todoIds);
-      navigate(`/ai-summary/${entry.id}`);
+      const entry = await createSummaryWithTodos(startDate, endDate, todoIds, language);
+      setEntries((prev) => [entry, ...prev]);
+      setSelectedId(entry.id);
     } catch {
       message.error(t('aiSummary.statusError'));
     }
   };
 
   const handleEntryClick = (entry: SummaryEntry) => {
-    navigate(`/ai-summary/${entry.id}`);
+    setSelectedId(entry.id);
+    if (isMobile) {
+      setDetailDrawerOpen(true);
+    }
   };
 
   const handleDelete = (entry: SummaryEntry) => {
@@ -55,6 +72,9 @@ export function AISummaryPage() {
         try {
           await deleteSummary(entry.id);
           setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+          if (selectedId === entry.id) {
+            setSelectedId(null);
+          }
         } catch {
           message.error(t('aiSummary.statusError'));
         }
@@ -98,11 +118,12 @@ export function AISummaryPage() {
       <div className="ai-summary-page__list">
         {entries.map((entry) => {
           const showDelete = entry.status === 'completed' || entry.status === 'error';
+          const isSelected = entry.id === selectedId;
 
           return (
             <div
               key={entry.id}
-              className="ai-summary-page__list-item ai-summary-page__list-item--clickable"
+              className={`ai-summary-page__list-item ai-summary-page__list-item--clickable${isSelected ? ' ai-summary-page__list-item--selected' : ''}`}
               onClick={() => handleEntryClick(entry)}
             >
               <div className="ai-summary-page__list-item-info">
@@ -145,8 +166,23 @@ export function AISummaryPage() {
       </div>
 
       <div className="ai-summary-page__body">
-        {renderHistoryList()}
+        <div className="ai-summary-page__left">
+          {renderHistoryList()}
+        </div>
+        {!isMobile && (
+          <div className="ai-summary-page__right">
+            <SummaryDetailPanel summaryId={selectedId} />
+          </div>
+        )}
       </div>
+
+      {isMobile && (
+        <SummaryDetailDrawer
+          open={detailDrawerOpen}
+          onClose={() => setDetailDrawerOpen(false)}
+          summaryId={selectedId}
+        />
+      )}
 
       <AnalysisDrawer
         open={drawerOpen}

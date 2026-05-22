@@ -1,20 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Spin } from 'antd';
-import { ArrowLeftOutlined, ReloadOutlined, LoadingOutlined } from '@ant-design/icons';
+import { Spin, Button } from 'antd';
+import { ReloadOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import { getSummary, getStreamUrl } from '../api/summaries';
 import type { SummaryEntry } from '../api/summaries';
-import './AISummaryResultPage.css';
+import './SummaryDetailPanel.css';
 
-export function AISummaryResultPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+interface Props {
+  summaryId: number | null;
+}
+
+export function SummaryDetailPanel({ summaryId }: Props) {
   const { t } = useTranslation();
 
   const [summary, setSummary] = useState<SummaryEntry | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [content, setContent] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +36,6 @@ export function AISummaryResultPage() {
   const handleScroll = useCallback(() => {
     if (!contentRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = contentRef.current;
-    // If user is near the bottom (within 50px), consider it auto-scroll territory
     const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
     userScrolledRef.current = !isAtBottom;
   }, []);
@@ -45,7 +45,7 @@ export function AISummaryResultPage() {
     scrollToBottom();
   }, [content, scrollToBottom]);
 
-  // Cleanup EventSource on unmount
+  // Cleanup EventSource on unmount or when summaryId changes
   useEffect(() => {
     return () => {
       if (eventSourceRef.current) {
@@ -53,26 +53,21 @@ export function AISummaryResultPage() {
         eventSourceRef.current = null;
       }
     };
-  }, []);
+  }, [summaryId]);
 
   // Establish SSE connection
-  const connectSSE = useCallback(() => {
-    if (!id) return;
-
-    const numericId = Number(id);
-    if (isNaN(numericId)) return;
-
+  const connectSSE = useCallback((id: number) => {
     setStreaming(true);
     setError(null);
     setConnectionError(false);
     setContent('');
     userScrolledRef.current = false;
 
-    const url = getStreamUrl(numericId);
+    const url = getStreamUrl(id);
     const es = new EventSource(url, { withCredentials: true });
     eventSourceRef.current = es;
 
-    // Default message event: append chunk data to content
+    // Default message event: event.data already joins multi-line data: fields with \n per SSE spec
     es.onmessage = (event) => {
       setContent((prev) => prev + event.data);
     };
@@ -95,44 +90,52 @@ export function AISummaryResultPage() {
 
     // Native EventSource error (connection lost)
     es.onerror = () => {
-      // Only handle if we haven't already received a custom error event
       if (es.readyState === EventSource.CLOSED) {
-        // Connection was closed by server (normal after done/error event)
         return;
       }
-      // Unexpected disconnect
       setConnectionError(true);
       setStreaming(false);
       es.close();
       eventSourceRef.current = null;
     };
-  }, [id, t]);
+  }, [t]);
 
-  // Fetch summary on mount to determine status
+  // Fetch summary and determine display mode
   useEffect(() => {
-    if (!id) return;
-
-    const numericId = Number(id);
-    if (isNaN(numericId)) {
+    if (summaryId === null) {
+      setSummary(null);
+      setContent('');
+      setError(null);
+      setStreaming(false);
+      setConnectionError(false);
       setLoading(false);
-      setError(t('analysis.result.error'));
       return;
     }
 
+    // Close any existing EventSource
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    setLoading(true);
+    setContent('');
+    setError(null);
+    setStreaming(false);
+    setConnectionError(false);
+    userScrolledRef.current = false;
+
     const fetchAndConnect = async () => {
       try {
-        const data = await getSummary(numericId);
+        const data = await getSummary(summaryId);
         setSummary(data);
 
         if (data.status === 'completed') {
-          // Display stored content directly
           setContent(data.result_content || '');
         } else if (data.status === 'error') {
-          // Display error
           setError(data.result_content || t('analysis.result.error'));
         } else if (data.status === 'analyzing') {
-          // Establish SSE connection
-          connectSSE();
+          connectSSE(summaryId);
         }
       } catch {
         setError(t('analysis.result.error'));
@@ -142,64 +145,74 @@ export function AISummaryResultPage() {
     };
 
     void fetchAndConnect();
-  }, [id, t, connectSSE]);
+  }, [summaryId, t, connectSSE]);
 
   const handleRetry = () => {
+    if (summaryId === null) return;
     setConnectionError(false);
-    connectSSE();
+    connectSSE(summaryId);
   };
 
-  const handleBack = () => {
-    navigate('/ai-summary');
-  };
-
-  // Loading state
-  if (loading) {
+  // No summary selected - placeholder
+  if (summaryId === null) {
     return (
-      <div className="ai-result-page">
-        <div className="ai-result-page__loading">
-          <Spin size="large" tip={t('analysis.result.loading')} />
+      <div className="summary-detail-panel">
+        <div className="summary-detail-panel__placeholder">
+          {t('summaryDetail.selectSummary')}
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="ai-result-page">
-      <div className="ai-result-page__header">
-        <Button
-          type="text"
-          icon={<ArrowLeftOutlined />}
-          onClick={handleBack}
-        />
-        <h2>
-          {t('analysis.result.title')}
-          {summary && ` — ${summary.start_date} ~ ${summary.end_date}`}
-        </h2>
+  // Loading state
+  if (loading) {
+    return (
+      <div className="summary-detail-panel">
+        <div className="summary-detail-panel__loading">
+          <Spin size="large" />
+        </div>
       </div>
+    );
+  }
 
-      <div
-        className="ai-result-page__content"
-        ref={contentRef}
-        onScroll={handleScroll}
-      >
-        {/* Error state */}
-        {error && !content && (
-          <div className="ai-result-page__error">
-            <div className="ai-result-page__error-title">
-              {t('analysis.result.error')}
-            </div>
-            <div className="ai-result-page__error-desc">{error}</div>
+  // Error state (no content at all)
+  if (error && !content) {
+    return (
+      <div className="summary-detail-panel">
+        <div className="summary-detail-panel__error">
+          <div className="summary-detail-panel__error-title">
+            {t('analysis.result.error')}
           </div>
-        )}
+          <div className="summary-detail-panel__error-desc">{error}</div>
+          {connectionError && (
+            <Button
+              type="primary"
+              icon={<ReloadOutlined />}
+              onClick={handleRetry}
+            >
+              {t('analysis.result.retryButton')}
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
-        {/* Connection error with retry */}
-        {connectionError && (
-          <div className="ai-result-page__error">
-            <div className="ai-result-page__error-title">
+  // Connection error with partial content
+  if (connectionError && content) {
+    return (
+      <div className="summary-detail-panel">
+        <div
+          className="summary-detail-panel__content"
+          ref={contentRef}
+          onScroll={handleScroll}
+        >
+          <ReactMarkdown>{content}</ReactMarkdown>
+          <div className="summary-detail-panel__connection-error">
+            <div className="summary-detail-panel__error-title">
               {t('analysis.result.connectionError')}
             </div>
-            <div className="ai-result-page__error-desc">
+            <div className="summary-detail-panel__error-desc">
               {t('analysis.result.connectionErrorDesc')}
             </div>
             <Button
@@ -210,19 +223,40 @@ export function AISummaryResultPage() {
               {t('analysis.result.retryButton')}
             </Button>
           </div>
-        )}
+        </div>
+      </div>
+    );
+  }
 
-        {/* Markdown content */}
+  // Completed with empty content
+  if (summary?.status === 'completed' && !content) {
+    return (
+      <div className="summary-detail-panel">
+        <div className="summary-detail-panel__placeholder">
+          {t('summaryDetail.emptyContent')}
+        </div>
+      </div>
+    );
+  }
+
+  // Main content display (streaming or completed)
+  return (
+    <div className="summary-detail-panel">
+      <div
+        className="summary-detail-panel__content"
+        ref={contentRef}
+        onScroll={handleScroll}
+      >
         {content && (
           <>
             <ReactMarkdown>{content}</ReactMarkdown>
-            {streaming && <span className="ai-result-page__cursor" />}
+            {streaming && <span className="summary-detail-panel__cursor" />}
           </>
         )}
 
-        {/* Streaming indicator */}
+        {/* Streaming indicator when no content yet */}
         {streaming && !content && (
-          <div className="ai-result-page__streaming-hint">
+          <div className="summary-detail-panel__streaming-hint">
             <LoadingOutlined />
             <span>{t('analysis.result.streaming')}</span>
           </div>

@@ -1,13 +1,17 @@
 package handler
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/graydovee/todolist/internal/middleware"
+	"github.com/graydovee/todolist/internal/model"
 	"github.com/graydovee/todolist/internal/service"
+	"github.com/labstack/echo/v4"
 	"pgregory.net/rapid"
 )
 
@@ -316,4 +320,177 @@ func TestSSEResponseWriter(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode)
 	}
+}
+
+// Feature: ai-summary-ux-fix, Property 1: SSE multi-line formatting round-trip
+// **Validates: Requirements 1.1, 1.3, 1.4**
+//
+// Property: For any string content (including content with single newlines,
+// consecutive newlines, empty lines, unicode characters, and special characters),
+// formatting it with writeSSEData and then parsing the resulting SSE output by
+// extracting the text after each "data: " prefix and joining with "\n" SHALL
+// produce a string identical to the original content.
+func TestProperty_SSEMultilineFormattingRoundTrip(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		// Generate random strings that include newlines, consecutive newlines,
+		// unicode, and special characters.
+		content := rapid.OneOf(
+			// Plain ASCII text with embedded newlines
+			rapid.StringMatching(`[a-zA-Z0-9 ,.!?]{0,30}(\n[a-zA-Z0-9 ,.!?]{0,30}){0,5}`),
+			// Strings with consecutive newlines (blank lines)
+			rapid.SampledFrom([]string{
+				"line1\n\nline3",
+				"\n\n\n",
+				"start\n\n\nend",
+				"a\n\nb\n\nc",
+				"\nleading newline",
+				"trailing newline\n",
+				"\n",
+				"\n\n",
+				"",
+				"no newlines at all",
+				"one\ntwo\nthree\nfour\nfive",
+			}),
+			// Unicode content with newlines
+			rapid.SampledFrom([]string{
+				"你好\n世界",
+				"こんにちは\n\nテスト",
+				"🎉🚀\n✨💯",
+				"café\nrésumé\nnaïve",
+				"αβγ\nδεζ\n\nηθι",
+				"Привет\nмир",
+				"العربية\n한국어",
+				"数据分析\n\n报告内容\n\n总结",
+			}),
+			// Special characters with newlines
+			rapid.SampledFrom([]string{
+				"data: fake\nevent: trick",
+				"## Heading\n\n- item 1\n- item 2\n\n### Sub",
+				"```go\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n```",
+				"tab\there\nnewline\nback\\slash",
+				"<script>\nalert('xss')\n</script>",
+				"line with spaces   \n  indented\n    more indent",
+				"url: https://example.com\n\npath?q=1&r=2",
+			}),
+			// Arbitrary strings from rapid's string generator (may contain any rune)
+			rapid.String(),
+		).Draw(rt, "content")
+
+		// Write using writeSSEData to a bytes.Buffer
+		var buf bytes.Buffer
+		writeSSEData(&buf, content)
+
+		// Parse the output: extract text after "data: " prefix from each line,
+		// then join with "\n". The last line before the empty terminator line
+		// should be included.
+		output := buf.String()
+
+		// The output should end with "\n\n" (last data line's \n + terminator \n)
+		if !strings.HasSuffix(output, "\n\n") {
+			rt.Fatalf("SSE output should end with '\\n\\n', got: %q", output)
+		}
+
+		// Remove the trailing empty line (the event terminator)
+		// The output format is: "data: line1\ndata: line2\n...data: lineN\n\n"
+		// We strip the final "\n" (terminator) to get "data: line1\ndata: line2\n...data: lineN\n"
+		withoutTerminator := output[:len(output)-1]
+
+		// Split by "\n" to get individual lines (last element will be empty due to trailing \n)
+		rawLines := strings.Split(withoutTerminator, "\n")
+
+		// The last element after split will be "" because withoutTerminator ends with \n
+		// Remove that trailing empty element
+		if len(rawLines) > 0 && rawLines[len(rawLines)-1] == "" {
+			rawLines = rawLines[:len(rawLines)-1]
+		}
+
+		// Extract content after "data: " prefix from each line
+		var parsedLines []string
+		for _, line := range rawLines {
+			if !strings.HasPrefix(line, "data: ") {
+				rt.Fatalf("each SSE line should start with 'data: ', got: %q\nfull output: %q", line, output)
+			}
+			parsedLines = append(parsedLines, strings.TrimPrefix(line, "data: "))
+		}
+
+		// Join with "\n" to reconstruct the original content
+		reconstructed := strings.Join(parsedLines, "\n")
+
+		// Verify round-trip: reconstructed must equal original content
+		if reconstructed != content {
+			rt.Fatalf("round-trip mismatch:\n  original:      %q\n  reconstructed: %q\n  SSE output:    %q",
+				content, reconstructed, output)
+		}
+	})
+}
+
+// Feature: ai-summary-ux-fix, Property 2: Invalid language rejection
+// **Validates: Requirements 5.3**
+//
+// Property: For any string value that is not empty ("") and not one of the accepted
+// values ("Chinese", "English"), the CreateSummary handler SHALL return an HTTP 400
+// error response and SHALL NOT create a summary record.
+func TestProperty_InvalidLanguageRejection(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		// Generate a random string that is NOT "", "Chinese", or "English"
+		invalidLang := rapid.OneOf(
+			// Random ASCII strings (filtered)
+			rapid.StringMatching(`[a-zA-Z0-9 _\-]{1,50}`),
+			// Common near-miss values
+			rapid.SampledFrom([]string{
+				"chinese", "english", "CHINESE", "ENGLISH",
+				"中文", "英文", "French", "Spanish", "Japanese",
+				"chi", "eng", "CN", "EN", "zh", "en",
+				"chinese ", " English", "Chinese1", "0English",
+			}),
+			// Unicode strings
+			rapid.StringMatching(`[\x{4e00}-\x{9fff}]{1,10}`),
+			// Special characters
+			rapid.SampledFrom([]string{
+				"<script>", "null", "undefined", "true", "false",
+				"' OR 1=1 --", "../../etc/passwd",
+			}),
+		).Draw(rt, "invalidLang")
+
+		// Filter out the valid values
+		if invalidLang == "" || invalidLang == "Chinese" || invalidLang == "English" {
+			rt.Skip("generated a valid language value, skipping")
+		}
+
+		// Build a JSON request body with valid dates and the invalid language
+		reqBody := fmt.Sprintf(`{"start_date":"2024-01-01","end_date":"2024-01-31","language":%q}`, invalidLang)
+
+		// Create an HTTP request
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/summaries", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		// Set up Echo context with a mock user
+		e := echo.New()
+		c := e.NewContext(req, rec)
+		c.Set(middleware.UserContextKey, &model.User{ID: 1})
+
+		// Create handler with nil service (should not be reached due to validation)
+		h := &SummaryHandler{summaryService: nil}
+
+		// Call the handler
+		err := h.Create(c)
+		if err != nil {
+			rt.Fatalf("handler returned error: %v", err)
+		}
+
+		// Verify HTTP 400 status
+		if rec.Code != http.StatusBadRequest {
+			rt.Fatalf("expected status 400 for language %q, got %d\nbody: %s",
+				invalidLang, rec.Code, rec.Body.String())
+		}
+
+		// Verify error message
+		body := rec.Body.String()
+		expectedMsg := "invalid language value, must be one of: Chinese, English"
+		if !strings.Contains(body, expectedMsg) {
+			rt.Fatalf("expected error message %q in response body, got: %s",
+				expectedMsg, body)
+		}
+	})
 }
