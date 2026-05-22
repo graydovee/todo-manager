@@ -10,6 +10,7 @@ const en = {
   nav: {
     todos: 'Todo List',
     graph: 'Graph View',
+    aiSummary: 'AI Summary',
   },
   login: {
     title: 'Todo Manager',
@@ -132,6 +133,26 @@ const en = {
     reopenAllToo: 'Reopen all of them too?',
     reopenedWithDependents: 'Todo and dependents reopened',
     deleteCommentConfirm: 'Delete this comment?',
+  },
+  aiSummary: {
+    title: 'AI Summary',
+    analyzeButton: 'Analyze',
+    startDate: 'Start Date',
+    endDate: 'End Date',
+    selectRange: 'Select a time range',
+    statusAnalyzing: 'Analyzing',
+    statusCompleted: 'Completed',
+    statusError: 'Error',
+    emptyState: 'No summary records yet',
+    deleteConfirm: 'Delete this summary?',
+    deleteTitle: 'Delete Summary',
+    close: 'Close',
+    presetToday: 'Today',
+    presetLast3Days: 'Last 3 Days',
+    presetLast7Days: 'Last 7 Days',
+    presetLast30Days: 'Last 30 Days',
+    presetThisMonth: 'This Month',
+    presetLastMonth: 'Last Month',
   },
 };
 

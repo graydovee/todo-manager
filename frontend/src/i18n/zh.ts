@@ -10,6 +10,7 @@ const zh = {
   nav: {
     todos: '待办列表',
     graph: '关系视图',
+    aiSummary: 'AI 总结',
   },
   login: {
     title: '待办管理器',
@@ -132,6 +133,26 @@ const zh = {
     reopenAllToo: '是否一并重新开启？',
     reopenedWithDependents: '待办及后续任务已重新开启',
     deleteCommentConfirm: '确定删除此评论？',
+  },
+  aiSummary: {
+    title: 'AI 总结',
+    analyzeButton: '开始分析',
+    startDate: '开始日期',
+    endDate: '结束日期',
+    selectRange: '请选择时间范围',
+    statusAnalyzing: '分析中',
+    statusCompleted: '已完成',
+    statusError: '分析失败',
+    emptyState: '暂无总结记录',
+    deleteConfirm: '确定删除此总结？',
+    deleteTitle: '删除总结',
+    close: '关闭',
+    presetToday: '今天',
+    presetLast3Days: '最近 3 天',
+    presetLast7Days: '最近 7 天',
+    presetLast30Days: '最近 30 天',
+    presetThisMonth: '本月',
+    presetLastMonth: '上月',
   },
 };
 

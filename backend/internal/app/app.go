@@ -67,12 +67,18 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 		}
 	}
 
+	summaryRepo := repository.NewSummaryRepo(db)
+
+	llmClient := service.NewLLMClient(&cfg.LLM)
+
 	authService := service.NewAuthService(cfg, basicAuthProvider, oidcAuthProvider, userRepo, sessionStore)
 	todoService := service.NewTodoService(db, todoRepo, tagRepo, relationRepo, counterRepo)
 	commentService := service.NewCommentService(db, commentRepo, todoRepo)
+	summaryService := service.NewSummaryService(db, summaryRepo, todoRepo, llmClient, &cfg.LLM)
 
 	authHandler := handler.NewAuthHandler(authService)
 	todoHandler := handler.NewTodoHandler(todoService, commentService, todoRepo, tagRepo, relationRepo, db)
+	summaryHandler := handler.NewSummaryHandler(summaryService)
 
 	api := e.Group("/api/v1")
 
@@ -103,6 +109,12 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 	todos.GET("/:id/comments", todoHandler.ListComments)
 	todos.POST("/:id/comments", todoHandler.CreateComment)
 	todos.DELETE("/:id/comments/:cid", todoHandler.DeleteComment)
+
+	summaries := api.Group("/summaries", authMW)
+	summaries.POST("", summaryHandler.Create)
+	summaries.GET("", summaryHandler.List)
+	summaries.GET("/:id", summaryHandler.Get)
+	summaries.DELETE("/:id", summaryHandler.Delete)
 
 	registerSPA(e)
 

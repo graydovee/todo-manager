@@ -30,6 +30,12 @@ session:
   max_age: 86400
   cleanup_interval: 3600
 
+llm:
+  model: "gpt-4o"
+  base_url: "https://api.openai.com"
+  api_key: "sk-your-api-key-here"
+  timeout: 30  # seconds
+
 log:
   format: text
   level: info

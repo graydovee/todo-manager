@@ -1,0 +1,228 @@
+.ai-summary-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-summary-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.ai-summary-page__header h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+}
+
+.ai-summary-page__body {
+  flex: 1;
+  display: flex;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+/* Left panel: date picker + history list */
+.ai-summary-page__left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  overflow: auto;
+}
+
+.ai-summary-page__controls {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ai-summary-page__controls .ant-picker {
+  flex: 1;
+  min-width: 220px;
+}
+
+/* History list */
+.ai-summary-page__list {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.ai-summary-page__list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  margin-bottom: var(--space-2);
+  cursor: default;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.ai-summary-page__list-item--clickable {
+  cursor: pointer;
+}
+
+.ai-summary-page__list-item--clickable:hover {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border-medium);
+}
+
+.ai-summary-page__list-item--selected {
+  background: var(--color-primary-lighter);
+  border-color: var(--color-primary, #1677ff);
+}
+
+.ai-summary-page__list-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ai-summary-page__list-item-range {
+  font-weight: var(--font-bold);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+.ai-summary-page__list-item-meta {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  font-size: 12px;
+  color: var(--color-text-secondary, #666);
+}
+
+.ai-summary-page__list-item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Right panel: detail view */
+.ai-summary-page__right {
+  flex: 1;
+  overflow: auto;
+  border-left: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-4);
+  position: relative;
+}
+
+.ai-summary-page__detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.ai-summary-page__detail-header h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+}
+
+.ai-summary-page__detail-content {
+  line-height: 1.7;
+}
+
+.ai-summary-page__detail-content h1,
+.ai-summary-page__detail-content h2,
+.ai-summary-page__detail-content h3,
+.ai-summary-page__detail-content h4 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.ai-summary-page__detail-content p {
+  margin-bottom: 0.8em;
+}
+
+.ai-summary-page__detail-content ul,
+.ai-summary-page__detail-content ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.8em;
+}
+
+.ai-summary-page__detail-content code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.ai-summary-page__detail-content pre {
+  background: rgba(0, 0, 0, 0.04);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+.ai-summary-page__detail-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.ai-summary-page__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-secondary, #999);
+}
+
+/* Status badges */
+.ai-summary-status--analyzing {
+  color: #1677ff;
+}
+
+.ai-summary-status--completed {
+  color: #52c41a;
+}
+
+.ai-summary-status--error {
+  color: #ff4d4f;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .ai-summary-page__body {
+    flex-direction: column;
+  }
+
+  .ai-summary-page__right {
+    display: none;
+  }
+
+  .ai-summary-page__left {
+    flex: 1;
+  }
+
+  .ai-summary-page__controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ai-summary-page__controls .ant-picker {
+    width: 100%;
+  }
+}
+
+/* Mobile detail drawer */
+.ai-summary-mobile-drawer .ant-drawer-body {
+  padding: var(--space-4);
+}

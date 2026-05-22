@@ -14,6 +14,14 @@ type Config struct {
 	Auth    AuthConfig    `yaml:"auth"`
 	Session SessionConfig `yaml:"session"`
 	Log     LogConfig     `yaml:"log"`
+	LLM     LLMConfig     `yaml:"llm"`
+}
+
+type LLMConfig struct {
+	Model   string `yaml:"model"`
+	BaseURL string `yaml:"base_url"`
+	APIKey  string `yaml:"api_key"`
+	Timeout int    `yaml:"timeout"`
 }
 
 type ServerConfig struct {
@@ -59,6 +67,26 @@ type SessionConfig struct {
 type LogConfig struct {
 	Format string `yaml:"format"`
 	Level  string `yaml:"level"`
+}
+
+// ValidateLLMConfig checks that required LLM config fields are present.
+// It returns an error identifying which specific field(s) are missing.
+// This is called at request time, not at startup.
+func ValidateLLMConfig(cfg *LLMConfig) error {
+	var missing []string
+	if strings.TrimSpace(cfg.Model) == "" {
+		missing = append(missing, "model")
+	}
+	if strings.TrimSpace(cfg.BaseURL) == "" {
+		missing = append(missing, "base_url")
+	}
+	if strings.TrimSpace(cfg.APIKey) == "" {
+		missing = append(missing, "api_key")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("LLM is not configured: missing %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func Load(path string) (*Config, error) {
@@ -108,6 +136,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"
 	}
+	if cfg.LLM.Timeout == 0 {
+		cfg.LLM.Timeout = 30
+	}
 }
 
 func applyEnvOverrides(cfg *Config) error {
@@ -134,6 +165,18 @@ func applyEnvOverrides(cfg *Config) error {
 	}
 	if v := os.Getenv("TODOLIST_LOG_LEVEL"); v != "" {
 		cfg.Log.Level = v
+	}
+	if v := os.Getenv("TODOLIST_LLM_MODEL"); v != "" {
+		cfg.LLM.Model = v
+	}
+	if v := os.Getenv("TODOLIST_LLM_BASE_URL"); v != "" {
+		cfg.LLM.BaseURL = v
+	}
+	if v := os.Getenv("TODOLIST_LLM_API_KEY"); v != "" {
+		cfg.LLM.APIKey = v
+	}
+	if v := os.Getenv("TODOLIST_LLM_TIMEOUT"); v != "" {
+		fmt.Sscanf(v, "%d", &cfg.LLM.Timeout)
 	}
 	return nil
 }
