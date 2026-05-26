@@ -1,21 +1,19 @@
-import { Tag, Button, Space, Typography, Divider, Dropdown, Popconfirm, message, Descriptions, Modal } from 'antd';
+import { useState } from 'react';
+import { Tag, Button, Space, Typography, Divider, Popconfirm, message, Descriptions, Modal } from 'antd';
 import {
   EditOutlined,
   DeleteOutlined,
   PlayCircleOutlined,
   CheckCircleOutlined,
   UndoOutlined,
-  PlusOutlined,
-  DownOutlined,
   LinkOutlined,
-  PushpinOutlined,
-  PushpinFilled,
-  HighlightOutlined,
-  HighlightFilled,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useCompleteTodo, useDeleteTodo, useHighlightTodo, usePinTodo, useReopenTodo, useSetTodoStatus, useStartTodo } from '../hooks/useTodos';
 import { TodoComments } from './TodoComments';
+import { MoreActionsMenu } from './MoreActionsMenu';
+import { DuplicatesList } from './DuplicatesList';
+import { DuplicateSelector } from './DuplicateSelector';
 import { formatDisplayCode } from '../utils/displayCode';
 import type { Status, TodoDetail, TodoSummary } from '../types';
 import type { HttpErrorLike, RelationConflictItem } from '../types/errors';
@@ -29,6 +27,7 @@ const STATUS_LABELS: Record<string, string> = {
   open: 'todo.open',
   in_progress: 'todo.inProgress',
   completed: 'todo.completed',
+  duplicate: 'todo.duplicate',
 };
 
 interface Props {
@@ -49,6 +48,7 @@ export function TodoDetailContent({
   stickyHeader = true,
 }: Props) {
   const { t } = useTranslation();
+  const [showDuplicateSelector, setShowDuplicateSelector] = useState(false);
   const startMutation = useStartTodo();
   const setStatusMutation = useSetTodoStatus();
   const completeMutation = useCompleteTodo();
@@ -154,12 +154,6 @@ export function TodoDetailContent({
     }
   };
 
-  const stageMenuItems = [
-    { key: 'open', label: t('todo.open') },
-    { key: 'in_progress', label: t('todo.inProgress') },
-    { key: 'completed', label: t('todo.completed') },
-  ].filter((item) => item.key !== todo.status);
-
   const SummaryLink = ({ item }: { item: TodoSummary }) => (
     <Space size={4}>
       <Tag className={`detail-panel-tag-status-${item.status}`}>
@@ -213,39 +207,18 @@ export function TodoDetailContent({
             {t('detail.reopen')}
           </Button>
         )}
-        <Dropdown
-          menu={{
-            items: stageMenuItems.map((item) => ({
-              key: item.key,
-              label: item.label,
-              onClick: () => handleJumpToStage(item.key as Status),
-            })),
+        <MoreActionsMenu
+          todo={todo}
+          onJumpToStage={handleJumpToStage}
+          onAddPrerequisite={() => onAddPrerequisite(todo.id)}
+          onTogglePin={handleTogglePin}
+          onToggleHighlight={handleToggleHighlight}
+          onMarkDuplicate={() => {
+            if (todo.status !== 'duplicate') {
+              setShowDuplicateSelector(true);
+            }
           }}
-          disabled={stageMenuItems.length === 0}
-        >
-          <Button loading={setStatusMutation.isPending}>
-            {t('detail.jumpToStage')} <DownOutlined />
-          </Button>
-        </Dropdown>
-        <Button icon={<PlusOutlined />} onClick={() => onAddPrerequisite(todo.id)}>
-          {t('detail.addPrerequisite')}
-        </Button>
-        <Button
-          icon={todo.pinned ? <PushpinFilled /> : <PushpinOutlined />}
-          onClick={handleTogglePin}
-          loading={pinMutation.isPending}
-          title={todo.pinned ? t('detail.unpin') : t('detail.pin')}
-        >
-          {todo.pinned ? t('detail.unpin') : t('detail.pin')}
-        </Button>
-        <Button
-          icon={todo.highlighted ? <HighlightFilled /> : <HighlightOutlined />}
-          onClick={handleToggleHighlight}
-          loading={highlightMutation.isPending}
-          title={todo.highlighted ? t('detail.unhighlight') : t('detail.highlight')}
-        >
-          {todo.highlighted ? t('detail.unhighlight') : t('detail.highlight')}
-        </Button>
+        />
       </Space>
 
       {todo.description && (
@@ -295,6 +268,23 @@ export function TodoDetailContent({
               </div>
             )}
           </div>
+        </>
+      )}
+
+      <DuplicatesList
+        duplicateOf={todo.duplicate_of}
+        duplicates={todo.duplicates}
+        onNavigate={onNavigate}
+      />
+
+      {showDuplicateSelector && (
+        <>
+          <Divider style={{ margin: '8px 0' }} />
+          <DuplicateSelector
+            currentTodoId={todo.id}
+            onSelect={() => setShowDuplicateSelector(false)}
+            onCancel={() => setShowDuplicateSelector(false)}
+          />
         </>
       )}
 

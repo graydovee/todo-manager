@@ -26,8 +26,9 @@ const (
 	StatusOpen       = "open"
 	StatusInProgress = "in_progress"
 	StatusCompleted  = "completed"
+	StatusDuplicate  = "duplicate"
 )
 
 func ValidStatus(s string) bool {
-	return s == StatusOpen || s == StatusInProgress || s == StatusCompleted
+	return s == StatusOpen || s == StatusInProgress || s == StatusCompleted || s == StatusDuplicate
 }

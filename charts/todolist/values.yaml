@@ -106,6 +106,19 @@ session:
   # -- Session cleanup interval in seconds
   cleanupInterval: 3600
 
+# -- LLM configuration (for AI summary feature)
+llm:
+  # -- Enable LLM integration
+  enabled: false
+  # -- LLM model name
+  model: "gpt-4o"
+  # -- LLM API base URL
+  baseUrl: "https://api.openai.com"
+  # -- LLM API key (stored in Secret)
+  apiKey: ""
+  # -- Request timeout in seconds
+  timeout: 30
+
 # -- Logging configuration
 log:
   # -- Log format: "text" or "json"

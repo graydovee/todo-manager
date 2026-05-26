@@ -171,6 +171,10 @@
   --node-status-color: #10b981;
   --node-selected-glow: 0 0 0 3px rgba(16, 185, 129, 0.15);
 }
+.todo-graph-node.status-duplicate {
+  --node-status-color: #6b7280;
+  --node-selected-glow: 0 0 0 3px rgba(107, 114, 128, 0.15);
+}
 
 /* --- Hover / Selected / Neighbor --- */
 .todo-graph-node:hover {
@@ -260,6 +264,10 @@
 .todo-graph-node__tag.tag-status.status-completed {
   background: #d1fae5;
   color: #047857;
+}
+.todo-graph-node__tag.tag-status.status-duplicate {
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
 /* Priority tags — distinct colors matching list view */

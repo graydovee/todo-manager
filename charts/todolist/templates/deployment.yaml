@@ -61,6 +61,13 @@ spec:
                   name: {{ include "todolist.secretName" . }}
                   key: oidc-client-secret
             {{- end }}
+            {{- if .Values.llm.enabled }}
+            - name: TODOLIST_LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "todolist.secretName" . }}
+                  key: llm-api-key
+            {{- end }}
           {{- if .Values.livenessProbe.enabled }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe.spec | nindent 12 }}

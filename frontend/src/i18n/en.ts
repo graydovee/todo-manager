@@ -56,6 +56,7 @@ const en = {
     inProgress: 'In Progress',
     completed: 'Completed',
     done: 'Done',
+    duplicate: 'Duplicate',
     actions: 'Actions',
   },
   filter: {
@@ -71,6 +72,11 @@ const en = {
     tagLoadError: 'Failed to load tags',
     tagRetry: 'Retry',
     tagEmpty: 'No items match the selected tags',
+    updatedAt: 'Updated At',
+    last1Day: 'Last 1 Day',
+    last3Days: 'Last 3 Days',
+    last7Days: 'Last 7 Days',
+    last30Days: 'Last 30 Days',
   },
   graph: {
     title: 'Todo Relationship View',
@@ -117,6 +123,11 @@ const en = {
     unpin: 'Unpin',
     highlight: 'Highlight',
     unhighlight: 'Remove highlight',
+    markDuplicate: 'Mark as Duplicate',
+    duplicateOf: 'Duplicate of',
+    duplicates: 'Duplicates',
+    moreActions: 'More',
+    cannotMarkDuplicate: 'Already marked as duplicate',
   },
   confirm: {
     deleteTodo: 'Delete this todo?',
@@ -133,6 +144,9 @@ const en = {
     reopenAllToo: 'Reopen all of them too?',
     reopenedWithDependents: 'Todo and dependents reopened',
     deleteCommentConfirm: 'Delete this comment?',
+    duplicateTargetNotCanonical: 'Target todo is already marked as duplicate',
+    duplicateMarked: 'Todo marked as duplicate',
+    duplicateError: 'Failed to mark as duplicate',
   },
   aiSummary: {
     title: 'AI Summary',

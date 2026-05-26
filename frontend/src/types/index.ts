@@ -11,7 +11,7 @@ export interface AuthMode {
   mode: 'basic' | 'oidc';
 }
 
-export type Status = 'open' | 'in_progress' | 'completed';
+export type Status = 'open' | 'in_progress' | 'completed' | 'duplicate';
 
 export interface Todo {
   id: number;
@@ -103,6 +103,7 @@ export interface TodoFilters {
   category?: string;
   priority?: string;
   status?: string;
+  updated_after?: string;
   page?: number;
   page_size?: number;
   sort_by?: string;

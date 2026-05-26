@@ -2,13 +2,18 @@ package handler
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/graydovee/todolist/internal/middleware"
 	"github.com/graydovee/todolist/internal/model"
 	"github.com/graydovee/todolist/internal/repository"
+	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"pgregory.net/rapid"
@@ -31,7 +36,7 @@ func setupHandlerTestDB(t *testing.T) *gorm.DB {
 	sqlDB, _ := db.DB()
 	tables := []string{
 		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, auth_provider TEXT NOT NULL DEFAULT '', auth_subject TEXT NOT NULL DEFAULT '', display_name TEXT NOT NULL DEFAULT '', created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, code TEXT NOT NULL, title TEXT NOT NULL, description TEXT DEFAULT '', category TEXT NOT NULL CHECK(category IN ('bug','feature','task')), priority TEXT NOT NULL DEFAULT 'p2' CHECK(priority IN ('p0','p1','p2','p3')), status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','completed')), due_at DATETIME, pinned INTEGER NOT NULL DEFAULT 0, highlighted INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, code))`,
+		`CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, code TEXT NOT NULL, title TEXT NOT NULL, description TEXT DEFAULT '', category TEXT NOT NULL CHECK(category IN ('bug','feature','task')), priority TEXT NOT NULL DEFAULT 'p2' CHECK(priority IN ('p0','p1','p2','p3')), status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','completed','duplicate')), due_at DATETIME, pinned INTEGER NOT NULL DEFAULT 0, highlighted INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, code))`,
 		`CREATE TABLE IF NOT EXISTS todo_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, tag TEXT NOT NULL, UNIQUE(todo_id, tag))`,
 	}
 	for _, ddl := range tables {
@@ -223,6 +228,113 @@ func TestProperty_DateRangeQueryCorrectness(t *testing.T) {
 			if todo.Priority != expected.priority {
 				rt.Fatalf("todo ID %d priority mismatch: expected %q, got %q", todo.ID, expected.priority, todo.Priority)
 			}
+		}
+	})
+}
+
+// Feature: todo-filter-duplicate, Property 2: Invalid updated_after format is rejected
+// **Validates: Requirements 1.5**
+//
+// Property: For any string that is not a valid ISO 8601 (RFC3339) timestamp, when
+// passed as the `updated_after` query parameter, the handler SHALL return a 400
+// error response with message "invalid updated_after format, expected ISO 8601 (RFC3339)".
+func TestProperty_InvalidUpdatedAfterFormatRejection(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		db := setupHandlerTestDB(t)
+		todoRepo := repository.NewTodoRepo(db)
+
+		// Create a minimal handler with the required dependencies
+		h := &TodoHandler{
+			todoRepo: todoRepo,
+			db:       db,
+		}
+
+		// Generate random non-RFC3339 strings (URL-safe to avoid httptest panics)
+		invalidDateStr := rapid.OneOf(
+			// Random alphanumeric strings
+			rapid.StringMatching(`[a-zA-Z0-9]{1,30}`),
+			// Date-like but invalid formats
+			rapid.SampledFrom([]string{
+				"2024-01-01",               // missing time
+				"2024/01/01T00:00:00Z",     // wrong separator
+				"01-01-2024T00:00:00Z",     // wrong date order
+				"2024-13-01T00:00:00Z",     // invalid month
+				"2024-01-32T00:00:00Z",     // invalid day
+				"2024-01-01T25:00:00Z",     // invalid hour
+				"2024-01-01T00:60:00Z",     // invalid minute
+				"2024-01-01T00:00:60Z",     // invalid second
+				"not-a-date",               // plain text
+				"yesterday",                // natural language
+				"1234567890",               // unix timestamp
+				"2024-01-01T00:00:00",      // missing timezone
+				"2024-1-1T00:00:00Z",       // single digit month/day
+				"20240101T000000Z",         // compact ISO without separators
+				"2024-01-01T00:00:00+0800", // timezone without colon
+				"2024.01.01T00:00:00Z",     // dots instead of dashes
+				"2024-01-01T00:00:00UTC",   // named timezone
+				"2024-W01-1T00:00:00Z",     // ISO week date
+				"2024-001T00:00:00Z",       // ordinal date
+			}),
+			// Various non-date strings
+			rapid.SampledFrom([]string{
+				"null",
+				"undefined",
+				"true",
+				"false",
+				"NaN",
+				"Infinity",
+				"abc123",
+				"2024",
+				"01-01",
+				"T00:00:00Z",
+				"today",
+				"now",
+				"latest",
+			}),
+			// Random printable ASCII strings (safe for URLs)
+			rapid.StringMatching(`[a-zA-Z0-9\-_.~]{1,40}`),
+		).Draw(rt, "invalidDateStr")
+
+		// Filter out strings that happen to be valid RFC3339
+		if _, err := time.Parse(time.RFC3339, invalidDateStr); err == nil {
+			rt.Skip("generated a valid RFC3339 string, skipping")
+		}
+
+		// Also skip empty strings since the handler only validates non-empty updated_after
+		if invalidDateStr == "" {
+			rt.Skip("empty string is not sent as query param, skipping")
+		}
+
+		// Create an HTTP request and set the query parameter via URL encoding
+		req := httptest.NewRequest(http.MethodGet, "/api/todos", nil)
+		q := req.URL.Query()
+		q.Set("updated_after", invalidDateStr)
+		req.URL.RawQuery = q.Encode()
+		rec := httptest.NewRecorder()
+
+		// Set up Echo context with a mock user
+		e := echo.New()
+		c := e.NewContext(req, rec)
+		c.Set(middleware.UserContextKey, &model.User{ID: 1})
+
+		// Call the handler
+		err := h.List(c)
+		if err != nil {
+			rt.Fatalf("handler returned error: %v", err)
+		}
+
+		// Verify HTTP 400 status
+		if rec.Code != http.StatusBadRequest {
+			rt.Fatalf("expected status 400 for updated_after=%q, got %d\nbody: %s",
+				invalidDateStr, rec.Code, rec.Body.String())
+		}
+
+		// Verify error message
+		body := rec.Body.String()
+		expectedMsg := "invalid updated_after format, expected ISO 8601 (RFC3339)"
+		if !strings.Contains(body, expectedMsg) {
+			rt.Fatalf("expected error message %q in response body for input %q, got: %s",
+				expectedMsg, invalidDateStr, body)
 		}
 	})
 }

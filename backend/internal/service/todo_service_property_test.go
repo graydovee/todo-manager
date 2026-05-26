@@ -36,7 +36,7 @@ func setupPropertyTestDB(t *testing.T) *gorm.DB {
 	sqlDB, _ := db.DB()
 	tables := []string{
 		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, auth_provider TEXT NOT NULL DEFAULT '', auth_subject TEXT NOT NULL DEFAULT '', display_name TEXT NOT NULL DEFAULT '', created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, code TEXT NOT NULL, title TEXT NOT NULL, description TEXT DEFAULT '', category TEXT NOT NULL CHECK(category IN ('bug','feature','task')), priority TEXT NOT NULL DEFAULT 'p2' CHECK(priority IN ('p0','p1','p2','p3')), status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','completed')), due_at DATETIME, pinned INTEGER NOT NULL DEFAULT 0, highlighted INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, code))`,
+		`CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, code TEXT NOT NULL, title TEXT NOT NULL, description TEXT DEFAULT '', category TEXT NOT NULL CHECK(category IN ('bug','feature','task')), priority TEXT NOT NULL DEFAULT 'p2' CHECK(priority IN ('p0','p1','p2','p3')), status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','completed','duplicate')), due_at DATETIME, pinned INTEGER NOT NULL DEFAULT 0, highlighted INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, code))`,
 		`CREATE TABLE IF NOT EXISTS todo_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, tag TEXT NOT NULL, UNIQUE(todo_id, tag))`,
 		`CREATE TABLE IF NOT EXISTS todo_relations (id INTEGER PRIMARY KEY AUTOINCREMENT, source_id INTEGER NOT NULL, target_id INTEGER NOT NULL, relation_type TEXT NOT NULL CHECK(relation_type IN ('depends_on','duplicate_of')), UNIQUE(source_id, target_id, relation_type))`,
 		`CREATE TABLE IF NOT EXISTS code_counters (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, last_code INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id))`,
@@ -583,6 +583,162 @@ func TestProperty_StatusHistoryRecordsInitialStatus(t *testing.T) {
 		if initialRecord.TodoID != todo.ID {
 			rt.Fatalf("initial status history record has wrong todo_id: got %d, want %d",
 				initialRecord.TodoID, todo.ID)
+		}
+	})
+}
+
+// Feature: todo-filter-duplicate, Property 5: Completing canonical cascades to all duplicates
+// **Validates: Requirements 3.7**
+//
+// Property: For any canonical todo with 1-10 duplicates, when the canonical todo
+// is completed via CompleteTodo, all duplicate todos SHALL have their status set
+// to "completed".
+func TestProperty_CascadeCompleteDuplicates(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		svc := setupPropertyService(t)
+		userID := uint(1)
+
+		// Create the canonical todo
+		canonical, err := svc.CreateTodo(userID, CreateTodoInput{
+			Title:    "Canonical Todo",
+			Category: "task",
+		})
+		if err != nil {
+			rt.Fatalf("failed to create canonical todo: %v", err)
+		}
+
+		// Generate 1-10 duplicate todos pointing to the canonical
+		numDuplicates := rapid.IntRange(1, 10).Draw(rt, "numDuplicates")
+		duplicateIDs := make([]uint, 0, numDuplicates)
+
+		for i := range numDuplicates {
+			dup, err := svc.CreateTodo(userID, CreateTodoInput{
+				Title:         fmt.Sprintf("Duplicate %d", i+1),
+				Category:      "task",
+				DuplicateOfID: &canonical.ID,
+			})
+			if err != nil {
+				rt.Fatalf("failed to create duplicate %d: %v", i+1, err)
+			}
+			// Verify the duplicate was created with duplicate status
+			if dup.Status != model.StatusDuplicate {
+				rt.Fatalf("duplicate %d should have status 'duplicate', got %q", i+1, dup.Status)
+			}
+			duplicateIDs = append(duplicateIDs, dup.ID)
+		}
+
+		// Complete the canonical todo
+		_, err = svc.CompleteTodo(userID, canonical.ID, false)
+		if err != nil {
+			rt.Fatalf("failed to complete canonical todo: %v", err)
+		}
+
+		// Verify all duplicates are now completed
+		for i, dupID := range duplicateIDs {
+			dupTodo, err := svc.GetTodo(userID, dupID)
+			if err != nil {
+				rt.Fatalf("failed to get duplicate %d (id=%d): %v", i+1, dupID, err)
+			}
+			if dupTodo.Status != model.StatusCompleted {
+				rt.Fatalf("duplicate %d (id=%d) should have status 'completed' after canonical completion, got %q",
+					i+1, dupID, dupTodo.Status)
+			}
+		}
+
+		// Also verify the canonical itself is completed
+		canonicalAfter, err := svc.GetTodo(userID, canonical.ID)
+		if err != nil {
+			rt.Fatalf("failed to get canonical todo after completion: %v", err)
+		}
+		if canonicalAfter.Status != model.StatusCompleted {
+			rt.Fatalf("canonical todo should have status 'completed', got %q", canonicalAfter.Status)
+		}
+	})
+}
+
+// Feature: todo-filter-duplicate, Property 6: Reopening canonical cascades to all duplicates
+// **Validates: Requirements 3.8**
+//
+// Property: For any canonical todo that has one or more completed duplicate todos,
+// when the canonical todo is reopened via ReopenTodo, all of its duplicate todos
+// SHALL have their status set to "open".
+func TestProperty_CascadeReopenDuplicates(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		svc := setupPropertyService(t)
+		userID := uint(1)
+
+		// Create the canonical todo
+		canonical, err := svc.CreateTodo(userID, CreateTodoInput{
+			Title:    "Canonical Todo",
+			Category: "task",
+		})
+		if err != nil {
+			rt.Fatalf("failed to create canonical todo: %v", err)
+		}
+
+		// Generate 1-10 duplicate todos pointing to the canonical
+		numDuplicates := rapid.IntRange(1, 10).Draw(rt, "numDuplicates")
+		duplicateIDs := make([]uint, 0, numDuplicates)
+
+		for i := range numDuplicates {
+			dup, err := svc.CreateTodo(userID, CreateTodoInput{
+				Title:         fmt.Sprintf("Duplicate %d", i+1),
+				Category:      "task",
+				DuplicateOfID: &canonical.ID,
+			})
+			if err != nil {
+				rt.Fatalf("failed to create duplicate %d: %v", i+1, err)
+			}
+			// Verify the duplicate was created with duplicate status
+			if dup.Status != model.StatusDuplicate {
+				rt.Fatalf("duplicate %d should have status 'duplicate', got %q", i+1, dup.Status)
+			}
+			duplicateIDs = append(duplicateIDs, dup.ID)
+		}
+
+		// Complete the canonical todo (this cascades to all duplicates)
+		_, err = svc.CompleteTodo(userID, canonical.ID, false)
+		if err != nil {
+			rt.Fatalf("failed to complete canonical todo: %v", err)
+		}
+
+		// Verify all duplicates are now completed (precondition for reopen test)
+		for i, dupID := range duplicateIDs {
+			dupTodo, err := svc.GetTodo(userID, dupID)
+			if err != nil {
+				rt.Fatalf("failed to get duplicate %d (id=%d) after complete: %v", i+1, dupID, err)
+			}
+			if dupTodo.Status != model.StatusCompleted {
+				rt.Fatalf("duplicate %d (id=%d) should be 'completed' before reopen, got %q",
+					i+1, dupID, dupTodo.Status)
+			}
+		}
+
+		// Reopen the canonical todo (this should cascade to all duplicates)
+		_, err = svc.ReopenTodo(userID, canonical.ID, false)
+		if err != nil {
+			rt.Fatalf("failed to reopen canonical todo: %v", err)
+		}
+
+		// Verify all duplicates are now open
+		for i, dupID := range duplicateIDs {
+			dupTodo, err := svc.GetTodo(userID, dupID)
+			if err != nil {
+				rt.Fatalf("failed to get duplicate %d (id=%d) after reopen: %v", i+1, dupID, err)
+			}
+			if dupTodo.Status != model.StatusOpen {
+				rt.Fatalf("duplicate %d (id=%d) should have status 'open' after canonical reopen, got %q",
+					i+1, dupID, dupTodo.Status)
+			}
+		}
+
+		// Also verify the canonical itself is open
+		canonicalAfter, err := svc.GetTodo(userID, canonical.ID)
+		if err != nil {
+			rt.Fatalf("failed to get canonical todo after reopen: %v", err)
+		}
+		if canonicalAfter.Status != model.StatusOpen {
+			rt.Fatalf("canonical todo should have status 'open', got %q", canonicalAfter.Status)
 		}
 	})
 }

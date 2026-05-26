@@ -102,6 +102,12 @@
   border-color: var(--color-status-completed);
 }
 
+.detail-panel-tag-status-duplicate {
+  background-color: var(--color-status-duplicate-bg);
+  color: var(--color-status-duplicate);
+  border-color: var(--color-status-duplicate);
+}
+
 /* --- 分类彩色 Tag --- */
 .detail-panel-tag-category-bug {
   background-color: var(--color-category-bug-bg);
@@ -208,4 +214,18 @@
 
 .detail-panel-dependencies-list {
   padding-left: var(--space-4);
+}
+
+/* --- MoreActionsMenu mobile touch targets (Requirements: 5.5) --- */
+@media (max-width: 768px) {
+  .more-actions-menu-trigger {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .ant-dropdown-menu-item {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
 }

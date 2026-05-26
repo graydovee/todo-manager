@@ -48,3 +48,11 @@ data:
     log:
       format: {{ .Values.log.format }}
       level: {{ .Values.log.level }}
+
+    {{- if .Values.llm.enabled }}
+    llm:
+      model: {{ .Values.llm.model | quote }}
+      base_url: {{ .Values.llm.baseUrl | quote }}
+      api_key: "placeholder"
+      timeout: {{ .Values.llm.timeout }}
+    {{- end }}

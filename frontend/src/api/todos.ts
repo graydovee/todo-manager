@@ -32,6 +32,7 @@ export async function listTodos(filters: TodoFilters = {}): Promise<PaginatedRes
   if (filters.sort_by) params.sort_by = filters.sort_by;
   if (filters.sort_order) params.sort_order = filters.sort_order;
   if (filters.tag?.length) params.tag = filters.tag.join(',');
+  if (filters.updated_after) params.updated_after = filters.updated_after;
 
   const res = await client.get('/todos', { params });
   return res.data;

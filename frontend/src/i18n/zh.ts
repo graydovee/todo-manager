@@ -57,6 +57,7 @@ const zh = {
     completed: '已完成',
     done: '完成',
     actions: '操作',
+    duplicate: '重复',
   },
   filter: {
     searchTitle: '搜索标题...',
@@ -71,6 +72,11 @@ const zh = {
     tagLoadError: '标签加载失败',
     tagRetry: '重试',
     tagEmpty: '没有匹配所选标签的待办事项',
+    updatedAt: '更新时间',
+    last1Day: '最近 1 天',
+    last3Days: '最近 3 天',
+    last7Days: '最近 7 天',
+    last30Days: '最近 30 天',
   },
   graph: {
     title: '待办关系视图',
@@ -117,6 +123,11 @@ const zh = {
     unpin: '取消置顶',
     highlight: '高亮',
     unhighlight: '取消高亮',
+    markDuplicate: '标记重复',
+    duplicateOf: '重复于',
+    duplicates: '重复任务',
+    moreActions: '更多',
+    cannotMarkDuplicate: '该待办已被标记为重复',
   },
   confirm: {
     deleteTodo: '确定删除此待办？',
@@ -133,6 +144,9 @@ const zh = {
     reopenAllToo: '是否一并重新开启？',
     reopenedWithDependents: '待办及后续任务已重新开启',
     deleteCommentConfirm: '确定删除此评论？',
+    duplicateTargetNotCanonical: '所选目标本身已是重复待办，不能作为原始待办',
+    duplicateMarked: '已标记为重复',
+    duplicateError: '标记重复失败',
   },
   aiSummary: {
     title: 'AI 总结',

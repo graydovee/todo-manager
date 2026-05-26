@@ -111,6 +111,12 @@
   border-color: var(--color-status-completed) !important;
 }
 
+.tag-status-duplicate {
+  background-color: var(--color-status-duplicate) !important;
+  color: var(--color-text-inverse) !important;
+  border-color: var(--color-status-duplicate) !important;
+}
+
 /* --- Priority Tag Styles --- */
 .tag-priority-p0 {
   background-color: var(--color-priority-p0) !important;

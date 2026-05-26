@@ -639,6 +639,29 @@ func (s *TodoService) createRelations(tx *gorm.DB, todoID, userID uint, dependsO
 		if err := s.relationRepo.Create(tx, rel); err != nil {
 			return err
 		}
+
+		// Set the current todo's status to duplicate
+		todo, err := s.todoRepo.FindByID(tx, todoID, userID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch todo for duplicate status update")
+		}
+		oldStatus := todo.Status
+		if oldStatus != model.StatusDuplicate {
+			todo.Status = model.StatusDuplicate
+			todo.UpdatedAt = time.Now()
+			if err := s.todoRepo.Update(tx, todo); err != nil {
+				return err
+			}
+			// Record status history entry for the transition to duplicate
+			if err := s.statusHistoryRepo.Create(tx, &model.TodoStatusHistory{
+				TodoID:    todo.ID,
+				OldStatus: oldStatus,
+				NewStatus: model.StatusDuplicate,
+				ChangedAt: time.Now(),
+			}); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

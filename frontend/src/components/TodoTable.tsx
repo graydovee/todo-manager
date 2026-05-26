@@ -15,6 +15,7 @@ const STATUS_COLORS: Record<string, string> = {
   open: 'tag-status-open',
   in_progress: 'tag-status-in_progress',
   completed: 'tag-status-completed',
+  duplicate: 'tag-status-duplicate',
 };
 
 const PRIORITY_WEIGHT: Record<string, number> = {
@@ -82,6 +83,7 @@ export function TodoTable({ data, loading, selectedRowId, onSelect, onEdit, onPa
           open: t('todo.open'),
           in_progress: t('todo.inProgress'),
           completed: t('todo.completed'),
+          duplicate: t('todo.duplicate'),
         };
         return <Tag className={STATUS_COLORS[status]}>{labels[status] || status}</Tag>;
       },

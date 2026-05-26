@@ -18,16 +18,17 @@ func NewTodoRepo(db *gorm.DB) *TodoRepo {
 }
 
 type TodoFilters struct {
-	Query     string
-	Code      string
-	Tags      []string
-	Category  string
-	Priority  string
-	Status    string
-	Page      int
-	PageSize  int
-	SortBy    string
-	SortOrder string
+	Query        string
+	Code         string
+	Tags         []string
+	Category     string
+	Priority     string
+	Status       string
+	UpdatedAfter *time.Time
+	Page         int
+	PageSize     int
+	SortBy       string
+	SortOrder    string
 }
 
 func (r *TodoRepo) Create(tx *gorm.DB, todo *model.Todo) error {
@@ -109,6 +110,10 @@ func (r *TodoRepo) List(tx *gorm.DB, userID uint, filters TodoFilters) ([]*model
 		db = db.Joins("JOIN todo_tags ON todo_tags.todo_id = todos.id").
 			Where("todo_tags.tag IN ?", filters.Tags).
 			Group("todos.id")
+	}
+
+	if filters.UpdatedAfter != nil {
+		db = db.Where("todos.updated_at >= ?", *filters.UpdatedAfter)
 	}
 
 	var total int64

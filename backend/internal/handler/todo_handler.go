@@ -58,6 +58,14 @@ func (h *TodoHandler) List(c echo.Context) error {
 		filters.Status = status
 	}
 
+	if updatedAfter := c.QueryParam("updated_after"); updatedAfter != "" {
+		t, err := time.Parse(time.RFC3339, updatedAfter)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid updated_after format, expected ISO 8601 (RFC3339)"})
+		}
+		filters.UpdatedAfter = &t
+	}
+
 	filters.Page = queryParamInt(c, "page", 1)
 	filters.PageSize = queryParamInt(c, "page_size", 20)
 

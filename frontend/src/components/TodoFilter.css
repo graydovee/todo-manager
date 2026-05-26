@@ -1,14 +1,13 @@
 /* ============================================
-   TodoFilter: 筛选栏样式
-   Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
+   TodoFilter: Two-row filter bar layout
+   Requirements: 2.1, 2.2, 2.3, 2.4, 2.5
    ============================================ */
 
-/* --- 容器样式 --- */
+/* --- Container: flex column with gap between rows --- */
 .todo-filter-bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border-subtle);
@@ -16,7 +15,15 @@
   margin-bottom: var(--space-4);
 }
 
-/* --- 统一输入控件样式 --- */
+/* --- Row: horizontal flex with gap between controls --- */
+.filter-bar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* --- Uniform input control height --- */
 .todo-filter-bar .filter-control {
   height: 34px;
 }
@@ -53,7 +60,7 @@
   align-items: center !important;
 }
 
-/* --- 激活态控件样式（筛选条件非空时） --- */
+/* --- Active state (filter has value) --- */
 .todo-filter-bar .filter-control.filter-active .ant-input,
 .todo-filter-bar .filter-control.filter-active .ant-input-affix-wrapper,
 .todo-filter-bar .filter-control.filter-active .ant-input-search .ant-input {
@@ -66,7 +73,7 @@
   background-color: var(--color-primary-lighter) !important;
 }
 
-/* --- 清除按钮样式 --- */
+/* --- Clear button --- */
 .todo-filter-bar .filter-clear-btn {
   height: 34px;
   border-radius: var(--radius-sm);
@@ -79,14 +86,29 @@
   border-color: var(--color-primary-light);
 }
 
-/* --- 响应式：768px 断点 --- */
-/* Requirements: 8.2 */
+/* --- Responsive: ≤768px stack controls vertically within each row --- */
 @media (max-width: 768px) {
-  .todo-filter-bar {
-    flex-wrap: wrap;
+  .filter-bar__row {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .todo-filter-bar .filter-control {
-    min-width: 120px;
+  .filter-bar__row .filter-control {
+    width: 100%;
+    height: auto;
+    min-width: 0;
+  }
+
+  .filter-bar__row .filter-control .ant-input-affix-wrapper,
+  .filter-bar__row .filter-control .ant-select {
+    width: 100% !important;
+  }
+
+  .filter-bar__row .filter-control .ant-input {
+    width: 100% !important;
+  }
+
+  .todo-filter-bar .filter-clear-btn {
+    width: 100%;
   }
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"github.com/graydovee/todolist/internal/model"
@@ -29,7 +30,7 @@ func setupRepoTestDB(t *testing.T) *gorm.DB {
 	sqlDB, _ := db.DB()
 	tables := []string{
 		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, auth_provider TEXT NOT NULL DEFAULT '', auth_subject TEXT NOT NULL DEFAULT '', display_name TEXT NOT NULL DEFAULT '', created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
-		`CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, code TEXT NOT NULL, title TEXT NOT NULL, description TEXT DEFAULT '', category TEXT NOT NULL CHECK(category IN ('bug','feature','task')), priority TEXT NOT NULL DEFAULT 'p2' CHECK(priority IN ('p0','p1','p2','p3')), status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','completed')), due_at DATETIME, pinned INTEGER NOT NULL DEFAULT 0, highlighted INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, code))`,
+		`CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, code TEXT NOT NULL, title TEXT NOT NULL, description TEXT DEFAULT '', category TEXT NOT NULL CHECK(category IN ('bug','feature','task')), priority TEXT NOT NULL DEFAULT 'p2' CHECK(priority IN ('p0','p1','p2','p3')), status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_progress','completed','duplicate')), due_at DATETIME, pinned INTEGER NOT NULL DEFAULT 0, highlighted INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, code))`,
 		`CREATE TABLE IF NOT EXISTS todo_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, todo_id INTEGER NOT NULL, tag TEXT NOT NULL, UNIQUE(todo_id, tag))`,
 	}
 	for _, ddl := range tables {
@@ -41,118 +42,111 @@ func setupRepoTestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-// Feature: todo-enhancements, Property 3: Tag filter correctness
-// **Validates: Requirements 2.5**
+// Feature: todo-filter-duplicate, Property 1: updated_after filter returns exactly matching todos
+// **Validates: Requirements 1.2, 1.4**
 //
-// Property: For any set of todos with various tags and any non-empty subset of
-// filter tags, the filtered result SHALL contain exactly those todos that have at
-// least one tag present in the filter set — no todos with a matching tag are
-// excluded, and no todos without a matching tag are included.
-func TestTagFilterCorrectness(t *testing.T) {
+// Property: For any set of todos with various updated_at timestamps and for any valid
+// updated_after threshold, the List method with UpdatedAfter filter SHALL return exactly
+// those todos whose updated_at is greater than or equal to the threshold, and no others.
+func TestProperty_UpdatedAfterFilterCorrectness(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
 		db := setupRepoTestDB(t)
 		todoRepo := NewTodoRepo(db)
-		tagRepo := NewTagRepo(db)
 
 		userID := uint(1)
+
 		categories := []string{"bug", "feature", "task"}
+		priorities := []string{"p0", "p1", "p2", "p3"}
+		statuses := []string{"open", "in_progress", "completed"}
 
-		// Generate a pool of possible tags (3 to 8 distinct tags)
-		numPoolTags := rapid.IntRange(3, 8).Draw(rt, "numPoolTags")
-		tagPool := make([]string, 0, numPoolTags)
-		tagPoolSet := make(map[string]bool)
-		tagGen := rapid.StringMatching(`[a-z]{1,10}`)
-		for len(tagPool) < numPoolTags {
-			tag := tagGen.Draw(rt, fmt.Sprintf("poolTag_%d", len(tagPool)))
-			if !tagPoolSet[tag] {
-				tagPool = append(tagPool, tag)
-				tagPoolSet[tag] = true
-			}
+		// Generate a base date around which we create todos
+		baseYear := rapid.IntRange(2020, 2025).Draw(rt, "baseYear")
+		baseMonth := rapid.IntRange(1, 12).Draw(rt, "baseMonth")
+		baseDay := rapid.IntRange(1, 28).Draw(rt, "baseDay")
+		baseDate := time.Date(baseYear, time.Month(baseMonth), baseDay, 12, 0, 0, 0, time.UTC)
+
+		// Generate random todos (3 to 20) with various updated_at values
+		numTodos := rapid.IntRange(3, 20).Draw(rt, "numTodos")
+
+		type todoRecord struct {
+			id        uint
+			updatedAt time.Time
 		}
-
-		// Generate random todos (2 to 10) with random subsets of the tag pool
-		numTodos := rapid.IntRange(2, 10).Draw(rt, "numTodos")
-
-		type todoInfo struct {
-			id   uint
-			tags map[string]bool
-		}
-		todos := make([]todoInfo, 0, numTodos)
+		allTodos := make([]todoRecord, 0, numTodos)
 
 		for i := range numTodos {
-			cat := categories[i%3]
+			cat := categories[rapid.IntRange(0, len(categories)-1).Draw(rt, fmt.Sprintf("cat_%d", i))]
+			pri := priorities[rapid.IntRange(0, len(priorities)-1).Draw(rt, fmt.Sprintf("pri_%d", i))]
+			status := statuses[rapid.IntRange(0, len(statuses)-1).Draw(rt, fmt.Sprintf("status_%d", i))]
+
+			// Generate updated_at within a 60-day window around baseDate
+			dayOffset := rapid.IntRange(-30, 30).Draw(rt, fmt.Sprintf("dayOffset_%d", i))
+			hourOffset := rapid.IntRange(0, 23).Draw(rt, fmt.Sprintf("hour_%d", i))
+			minOffset := rapid.IntRange(0, 59).Draw(rt, fmt.Sprintf("min_%d", i))
+			updatedAt := baseDate.AddDate(0, 0, dayOffset).Add(
+				time.Duration(hourOffset)*time.Hour + time.Duration(minOffset)*time.Minute,
+			)
+
+			code := fmt.Sprintf("T-%04d", i+1)
+			title := fmt.Sprintf("Todo %d", i+1)
+
 			todo := model.Todo{
 				UserID:   userID,
-				Code:     fmt.Sprintf("%d", i+1),
-				Title:    fmt.Sprintf("Todo %d", i+1),
+				Code:     code,
+				Title:    title,
 				Category: cat,
-				Priority: "p2",
-				Status:   "open",
+				Priority: pri,
+				Status:   status,
 			}
 			if err := db.Create(&todo).Error; err != nil {
 				rt.Fatalf("create todo %d: %v", i, err)
 			}
 
-			// Each todo gets a random subset of the tag pool (using Bool per tag)
-			selectedTags := make(map[string]bool)
-			for j, tag := range tagPool {
-				if rapid.Bool().Draw(rt, fmt.Sprintf("include_tag_%d_%d", i, j)) {
-					selectedTags[tag] = true
-				}
+			// Manually set updated_at since GORM auto-updates it
+			if err := db.Exec("UPDATE todos SET updated_at = ? WHERE id = ?", updatedAt, todo.ID).Error; err != nil {
+				rt.Fatalf("update updated_at for todo %d: %v", i, err)
 			}
 
-			tagList := make([]string, 0, len(selectedTags))
-			for tag := range selectedTags {
-				tagList = append(tagList, tag)
-			}
-
-			if err := tagRepo.ReplaceTags(nil, todo.ID, tagList); err != nil {
-				rt.Fatalf("replace tags for todo %d: %v", i, err)
-			}
-
-			todos = append(todos, todoInfo{id: todo.ID, tags: selectedTags})
+			allTodos = append(allTodos, todoRecord{
+				id:        todo.ID,
+				updatedAt: updatedAt,
+			})
 		}
 
-		// Pick a random non-empty subset of the tag pool as the filter
-		// Use Bool per tag, but ensure at least one is selected
-		filterTags := make([]string, 0)
-		filterTagSet := make(map[string]bool)
-		for j, tag := range tagPool {
-			if rapid.Bool().Draw(rt, fmt.Sprintf("filter_tag_%d", j)) {
-				filterTags = append(filterTags, tag)
-				filterTagSet[tag] = true
-			}
-		}
-		// Ensure non-empty filter: if nothing was selected, pick the first tag
-		if len(filterTags) == 0 {
-			idx := rapid.IntRange(0, len(tagPool)-1).Draw(rt, "fallbackFilterIdx")
-			filterTags = append(filterTags, tagPool[idx])
-			filterTagSet[tagPool[idx]] = true
-		}
+		// Generate a random threshold within the range of generated timestamps
+		thresholdDayOffset := rapid.IntRange(-30, 30).Draw(rt, "thresholdDayOffset")
+		thresholdHour := rapid.IntRange(0, 23).Draw(rt, "thresholdHour")
+		thresholdMin := rapid.IntRange(0, 59).Draw(rt, "thresholdMin")
+		threshold := baseDate.AddDate(0, 0, thresholdDayOffset).Add(
+			time.Duration(thresholdHour)*time.Hour + time.Duration(thresholdMin)*time.Minute,
+		)
 
-		// Call TodoRepo.List with the tag filter
+		// Call List with UpdatedAfter filter, use large page size to get all results
 		filters := TodoFilters{
-			Tags:     filterTags,
-			Page:     1,
-			PageSize: 100, // large enough to get all results
+			UpdatedAfter: &threshold,
+			Page:         1,
+			PageSize:     1000,
 		}
-		results, _, err := todoRepo.List(nil, userID, filters)
+		results, total, err := todoRepo.List(nil, userID, filters)
 		if err != nil {
-			rt.Fatalf("List with tag filter: %v", err)
+			rt.Fatalf("List with UpdatedAfter: %v", err)
 		}
 
-		// Compute expected set: todos that have at least one tag in the filter set
+		// Compute expected set: todos with updated_at >= threshold
 		expectedIDs := make(map[uint]bool)
-		for _, ti := range todos {
-			for tag := range ti.tags {
-				if filterTagSet[tag] {
-					expectedIDs[ti.id] = true
-					break
-				}
+		for _, todo := range allTodos {
+			if !todo.updatedAt.Before(threshold) {
+				expectedIDs[todo.id] = true
 			}
 		}
 
-		// Verify: result contains exactly the expected todos
+		// Verify total count matches expected
+		if int64(len(expectedIDs)) != total {
+			rt.Fatalf("total mismatch: expected %d, got %d (threshold: %v)",
+				len(expectedIDs), total, threshold)
+		}
+
+		// Verify result set matches expected
 		resultIDs := make(map[uint]bool)
 		for _, todo := range results {
 			resultIDs[todo.ID] = true
@@ -161,16 +155,16 @@ func TestTagFilterCorrectness(t *testing.T) {
 		// No missing todos
 		for id := range expectedIDs {
 			if !resultIDs[id] {
-				rt.Fatalf("expected todo ID %d in results but it was missing\nfilter tags: %v\nexpected IDs: %v\ngot IDs: %v",
-					id, filterTags, expectedIDs, resultIDs)
+				rt.Fatalf("expected todo ID %d in results but it was missing (threshold: %v)",
+					id, threshold)
 			}
 		}
 
 		// No extra todos
 		for id := range resultIDs {
 			if !expectedIDs[id] {
-				rt.Fatalf("unexpected todo ID %d in results\nfilter tags: %v\nexpected IDs: %v\ngot IDs: %v",
-					id, filterTags, expectedIDs, resultIDs)
+				rt.Fatalf("unexpected todo ID %d in results (threshold: %v)",
+					id, threshold)
 			}
 		}
 	})

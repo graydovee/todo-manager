@@ -284,6 +284,7 @@ function TodoGraphPageInner() {
           open: t('todo.open'),
           in_progress: t('todo.inProgress'),
           completed: t('todo.completed'),
+          duplicate: t('todo.duplicate'),
         };
 
         for (const node of nodes) {

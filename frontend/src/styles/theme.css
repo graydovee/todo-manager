@@ -50,6 +50,10 @@
   --color-status-completed-bg-start: #d1fae5;
   --color-status-completed-bg-end: #a7f3d0;
 
+  --color-status-duplicate: #6b7280;
+  --color-status-duplicate-bg: rgba(107, 114, 128, 0.10);
+  --color-status-duplicate-border: rgba(107, 114, 128, 0.20);
+
   /* --- Priority Colors --- */
   --color-priority-p0: #dc2626;
   --color-priority-p0-bg: #fee2e2;
