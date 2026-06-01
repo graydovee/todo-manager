@@ -46,9 +46,9 @@ export function AISummaryPage() {
     void fetchEntries();
   }, [fetchEntries]);
 
-  const handleStartAnalysis = async (startDate: string, endDate: string, todoIds: number[], language: string) => {
+  const handleStartAnalysis = async (startDate: string, endDate: string, todoIds: number[], language: string, customPrompt?: string) => {
     try {
-      const entry = await createSummaryWithTodos(startDate, endDate, todoIds, language);
+      const entry = await createSummaryWithTodos(startDate, endDate, todoIds, language, customPrompt);
       setEntries((prev) => [entry, ...prev]);
       setSelectedId(entry.id);
     } catch {

@@ -27,10 +27,11 @@ func NewSummaryHandler(summaryService *service.SummaryService) *SummaryHandler {
 }
 
 type CreateSummaryRequest struct {
-	StartDate string `json:"start_date"`
-	EndDate   string `json:"end_date"`
-	TodoIDs   []uint `json:"todo_ids,omitempty"`
-	Language  string `json:"language,omitempty"` // "Chinese", "English", or ""
+	StartDate    string `json:"start_date"`
+	EndDate      string `json:"end_date"`
+	TodoIDs      []uint `json:"todo_ids,omitempty"`
+	Language     string `json:"language,omitempty"`      // "Chinese", "English", or ""
+	CustomPrompt string `json:"custom_prompt,omitempty"` // optional, max 500 characters
 }
 
 func (h *SummaryHandler) Create(c echo.Context) error {
@@ -53,6 +54,12 @@ func (h *SummaryHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid language value, must be one of: Chinese, English"})
 	}
 
+	// Validate and trim custom_prompt
+	customPrompt := strings.TrimSpace(req.CustomPrompt)
+	if len(req.CustomPrompt) > 500 {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "custom prompt exceeds maximum length of 500 characters"})
+	}
+
 	startDate, err := time.Parse("2006-01-02", req.StartDate)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "start_date and end_date are required in ISO 8601 format"})
@@ -63,7 +70,7 @@ func (h *SummaryHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "start_date and end_date are required in ISO 8601 format"})
 	}
 
-	summary, err := h.summaryService.CreateSummaryWithTodos(user.ID, startDate, endDate, req.TodoIDs, req.Language)
+	summary, err := h.summaryService.CreateSummaryWithTodos(user.ID, startDate, endDate, req.TodoIDs, req.Language, customPrompt)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 	}

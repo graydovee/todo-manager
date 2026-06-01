@@ -1,22 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, waitFor, cleanup } from '@testing-library/react'
+import { render, waitFor, cleanup, act } from '@testing-library/react'
 import { SummaryDetailPanel } from '../src/components/SummaryDetailPanel'
 
 // Mock react-i18next
+const mockT = (key: string) => {
+  const translations: Record<string, string> = {
+    'summaryDetail.selectSummary': 'Select a summary from the left to view details',
+    'summaryDetail.emptyContent': 'No analysis content available',
+    'analysis.result.error': 'Analysis Error',
+    'analysis.result.streaming': 'AI is generating analysis...',
+    'analysis.result.retryButton': 'Retry',
+    'analysis.result.connectionError': 'Connection Lost',
+    'analysis.result.connectionErrorDesc': 'Connection to server was lost',
+  }
+  return translations[key] || key
+}
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => {
-      const translations: Record<string, string> = {
-        'summaryDetail.selectSummary': 'Select a summary from the left to view details',
-        'summaryDetail.emptyContent': 'No analysis content available',
-        'analysis.result.error': 'Analysis Error',
-        'analysis.result.streaming': 'AI is generating analysis...',
-        'analysis.result.retryButton': 'Retry',
-        'analysis.result.connectionError': 'Connection Lost',
-        'analysis.result.connectionErrorDesc': 'Connection to server was lost',
-      }
-      return translations[key] || key
-    },
+    t: mockT,
   }),
 }))
 
@@ -24,6 +25,13 @@ vi.mock('react-i18next', () => ({
 vi.mock('../src/api/summaries', () => ({
   getSummary: vi.fn(),
   getStreamUrl: vi.fn((id: number) => `/api/v1/summaries/${id}/stream`),
+}))
+
+// Mock the followups API module
+vi.mock('../src/api/followups', () => ({
+  listFollowups: vi.fn().mockResolvedValue([]),
+  createFollowup: vi.fn(),
+  getFollowupStreamUrl: vi.fn(),
 }))
 
 // Import the mocked module for controlling return values
@@ -228,16 +236,18 @@ describe('SummaryDetailPanel', () => {
 
       const { container } = render(<SummaryDetailPanel summaryId={5} />)
 
-      // Wait for streaming hint to appear (SSE connected, no content yet)
+      // Wait for EventSource to be created and stabilize
+      let es: MockEventSource
       await waitFor(() => {
-        const hint = container.querySelector('.summary-detail-panel__streaming-hint')
-        expect(hint).not.toBeNull()
+        expect(MockEventSource.instances.length).toBeGreaterThan(0)
+        es = MockEventSource.instances[MockEventSource.instances.length - 1]
+        expect(es.onmessage).not.toBeNull()
       })
 
-      const es = MockEventSource.instances[MockEventSource.instances.length - 1]
-
-      // Simulate receiving content
-      es.simulateMessage('Some content')
+      // Simulate receiving content wrapped in act for state updates
+      act(() => {
+        es!.simulateMessage('Some content')
+      })
 
       // Verify cursor is present
       await waitFor(() => {
@@ -245,7 +255,9 @@ describe('SummaryDetailPanel', () => {
       })
 
       // Simulate done event
-      es.simulateDone()
+      act(() => {
+        es!.simulateDone()
+      })
 
       // Cursor should be removed after done
       await waitFor(() => {

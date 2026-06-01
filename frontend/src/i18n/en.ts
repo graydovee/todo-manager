@@ -187,6 +187,23 @@ const en = {
     detailEmpty: 'No content available',
     detailError: 'Summary generation failed',
     streamingIndicator: 'Generating...',
+    customPrompt: {
+      placeholder: 'Enter custom requirements, e.g.: Focus on analyzing work efficiency trends...',
+      label: 'Custom Requirements',
+      charCount: '{count}/500',
+    },
+    followup: {
+      inputPlaceholder: 'Ask a follow-up question...',
+      send: 'Send',
+      editTooltip: 'Edit question',
+      regenerateTooltip: 'Regenerate',
+      versionIndicator: '{current}/{total}',
+      loading: 'AI is thinking...',
+      error: 'Failed to generate response',
+      networkError: 'Network connection failed, please check and retry',
+      emptyResponse: 'AI returned no valid response, please retry',
+      retryButton: 'Retry',
+    },
   },
   summaryDetail: {
     drawerTitle: 'Summary Details',

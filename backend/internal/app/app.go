@@ -69,6 +69,7 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 	}
 
 	summaryRepo := repository.NewSummaryRepo(db)
+	followupRepo := repository.NewFollowupRepo(db)
 
 	llmClient := service.NewLLMClient(&cfg.LLM)
 
@@ -76,10 +77,12 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 	todoService := service.NewTodoService(db, todoRepo, tagRepo, relationRepo, counterRepo, statusHistoryRepo)
 	commentService := service.NewCommentService(db, commentRepo, todoRepo)
 	summaryService := service.NewSummaryService(db, summaryRepo, todoRepo, commentRepo, relationRepo, statusHistoryRepo, llmClient, &cfg.LLM)
+	followupService := service.NewFollowupService(db, followupRepo, summaryRepo, llmClient, &cfg.LLM)
 
 	authHandler := handler.NewAuthHandler(authService)
 	todoHandler := handler.NewTodoHandler(todoService, commentService, todoRepo, tagRepo, relationRepo, db)
 	summaryHandler := handler.NewSummaryHandler(summaryService)
+	followupHandler := handler.NewFollowupHandler(followupService, followupRepo)
 
 	api := e.Group("/api/v1")
 
@@ -118,6 +121,8 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 	summaries.GET("/:id/stream", summaryHandler.Stream)
 	summaries.GET("/:id", summaryHandler.Get)
 	summaries.DELETE("/:id", summaryHandler.Delete)
+	summaries.POST("/:id/followup", followupHandler.Followup)
+	summaries.GET("/:id/followups", followupHandler.ListFollowups)
 
 	registerSPA(e)
 

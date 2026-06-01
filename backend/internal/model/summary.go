@@ -11,6 +11,7 @@ type Summary struct {
 	ResultContent string    `gorm:"type:text" json:"result_content,omitempty"`
 	TodoIDs       string    `gorm:"type:text" json:"todo_ids,omitempty"`
 	Language      string    `json:"language" gorm:"size:20"` // "Chinese", "English", or ""
+	CustomPrompt  string    `gorm:"type:text" json:"custom_prompt,omitempty"`
 	CreatedAt     time.Time `gorm:"not null" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"not null" json:"updated_at"`
 }

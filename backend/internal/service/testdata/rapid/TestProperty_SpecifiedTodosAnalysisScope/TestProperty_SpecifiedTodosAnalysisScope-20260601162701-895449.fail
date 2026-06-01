@@ -1,0 +1,37 @@
+# 2026/06/01 16:27:01.552134 [TestProperty_SpecifiedTodosAnalysisScope] [rapid] draw rangeStartDaysAgo: 30
+# 2026/06/01 16:27:01.552139 [TestProperty_SpecifiedTodosAnalysisScope] [rapid] draw rangeEndDaysAgo: 1
+# 2026/06/01 16:27:01.552140 [TestProperty_SpecifiedTodosAnalysisScope] [rapid] draw numInsideRange: 1
+# 2026/06/01 16:27:01.552141 [TestProperty_SpecifiedTodosAnalysisScope] [rapid] draw numOutsideRange: 1
+# 2026/06/01 16:27:01.552141 [TestProperty_SpecifiedTodosAnalysisScope] [rapid] draw insideOffset_0: 0
+# 2026/06/01 16:27:01.552321 [TestProperty_SpecifiedTodosAnalysisScope] [rapid] draw beforeOrAfter_1: false
+# 2026/06/01 16:27:01.552322 [TestProperty_SpecifiedTodosAnalysisScope] [rapid] draw daysBeforeFallback_1: 1
+# 2026/06/01 16:27:01.552417 [TestProperty_SpecifiedTodosAnalysisScope] [rapid] draw subsetSize: 1
+# 2026/06/01 16:27:01.552419 [TestProperty_SpecifiedTodosAnalysisScope] [rapid] draw perm: []uint{0x1, 0x2}
+# 2026/06/01 16:27:01.552554 [TestProperty_SpecifiedTodosAnalysisScope] CreateSummaryWithTodos failed: failed to create summary: SQL logic error: table summaries has no column named custom_prompt (1)
+# 
+v0.4.8#5421555238774528986
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

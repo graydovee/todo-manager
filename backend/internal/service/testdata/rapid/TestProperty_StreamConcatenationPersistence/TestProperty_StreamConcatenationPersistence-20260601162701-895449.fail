@@ -1,0 +1,13 @@
+# 2026/06/01 16:27:01.573446 [TestProperty_StreamConcatenationPersistence] [rapid] draw numChunks: 1
+# 2026/06/01 16:27:01.573457 [TestProperty_StreamConcatenationPersistence] [rapid] draw chunk_0: "\n"
+# 2026/06/01 16:27:01.573762 [TestProperty_StreamConcatenationPersistence] failed to create summary: SQL logic error: table summaries has no column named custom_prompt (1)
+# 
+v0.4.8#5327508923084208758
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

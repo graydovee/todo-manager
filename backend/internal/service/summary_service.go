@@ -113,7 +113,8 @@ func (s *SummaryService) CreateSummary(userID uint, startDate, endDate time.Time
 // If todoIDs is non-empty, it validates that all IDs belong to the user and stores them as JSON.
 // If todoIDs is empty/nil, it falls back to existing date-range query behavior.
 // The language parameter is persisted so that StreamAnalysis can skip auto-detection when set.
-func (s *SummaryService) CreateSummaryWithTodos(userID uint, startDate, endDate time.Time, todoIDs []uint, language string) (*model.Summary, error) {
+// The customPrompt parameter, if non-empty, is persisted and appended to the LLM prompt.
+func (s *SummaryService) CreateSummaryWithTodos(userID uint, startDate, endDate time.Time, todoIDs []uint, language string, customPrompt string) (*model.Summary, error) {
 	// Validate: end date must not be earlier than start date
 	if endDate.Before(startDate) {
 		return nil, fmt.Errorf("end_date must not be earlier than start_date")
@@ -172,6 +173,11 @@ func (s *SummaryService) CreateSummaryWithTodos(userID uint, startDate, endDate 
 		Language:  language,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
+	}
+
+	// Persist custom prompt if non-empty
+	if customPrompt != "" {
+		summary.CustomPrompt = customPrompt
 	}
 
 	if err := s.summaryRepo.Create(nil, summary); err != nil {
@@ -248,7 +254,7 @@ func (s *SummaryService) runAnalysis(summaryID, userID uint, startDate, endDate 
 	slog.Info("summary analysis detected language", "summary_id", summaryID, "language", language)
 
 	// Step 2: Build enriched prompt with all context and detected language
-	prompt := s.buildEnrichedPrompt(todos, enrichedData, language, startDate, endDate)
+	prompt := s.buildEnrichedPrompt(todos, enrichedData, language, startDate, endDate, "")
 
 	// Call LLM with enriched prompt for analysis (with its own timeout)
 	analysisCtx, analysisCancel := context.WithTimeout(context.Background(), timeout)
@@ -491,7 +497,8 @@ func (s *SummaryService) loadEnrichedData(todos []*model.Todo, start, end time.T
 
 // buildEnrichedPrompt builds a comprehensive prompt string with enriched todo data
 // and tag-grouped output instructions for the LLM analysis step.
-func (s *SummaryService) buildEnrichedPrompt(todos []*model.Todo, enrichedData *EnrichedTodoData, language string, startDate, endDate time.Time) string {
+// If customPrompt is non-empty, it is appended after the output instructions.
+func (s *SummaryService) buildEnrichedPrompt(todos []*model.Todo, enrichedData *EnrichedTodoData, language string, startDate, endDate time.Time, customPrompt string) string {
 	var sb strings.Builder
 
 	// System-level instruction with language directive
@@ -569,6 +576,11 @@ func (s *SummaryService) buildEnrichedPrompt(todos []*model.Todo, enrichedData *
 	sb.WriteString("  - Activity summary: what was worked on\n")
 	sb.WriteString("  - Completion progress: how many todos are completed vs open\n")
 	sb.WriteString("  - Notable status transitions: significant changes during the period\n")
+
+	// Append custom prompt if non-empty
+	if customPrompt != "" {
+		fmt.Fprintf(&sb, "\nAdditional user requirements: %s\n", customPrompt)
+	}
 
 	return sb.String()
 }
@@ -717,7 +729,7 @@ func (s *SummaryService) StreamAnalysis(ctx context.Context, summaryID, userID u
 	}
 
 	// 5. Build enriched prompt
-	prompt := s.buildEnrichedPrompt(todos, enrichedData, language, summary.StartDate, summary.EndDate)
+	prompt := s.buildEnrichedPrompt(todos, enrichedData, language, summary.StartDate, summary.EndDate, summary.CustomPrompt)
 
 	// 6. Create a cancellable context for the LLM call
 	llmCtx, llmCancel := context.WithCancel(ctx)

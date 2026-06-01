@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import { getSummary, getStreamUrl } from '../api/summaries';
 import type { SummaryEntry } from '../api/summaries';
+import { FollowupSection } from './FollowupSection';
 import './SummaryDetailPanel.css';
 
 interface Props {
@@ -253,6 +254,8 @@ export function SummaryDetailPanel({ summaryId, onStatusChange }: Props) {
   }
 
   // Main content display (streaming or completed)
+  const isCompleted = summary?.status === 'completed';
+
   return (
     <div className="summary-detail-panel">
       <div
@@ -274,6 +277,15 @@ export function SummaryDetailPanel({ summaryId, onStatusChange }: Props) {
             <LoadingOutlined />
             <span>{t('analysis.result.streaming')}</span>
           </div>
+        )}
+
+        {/* Followup section rendered inline within the same scroll area */}
+        {isCompleted && summary && (
+          <FollowupSection
+            summaryId={summary.id}
+            summaryContent={summary.result_content || ''}
+            scrollContainerRef={contentRef}
+          />
         )}
       </div>
     </div>

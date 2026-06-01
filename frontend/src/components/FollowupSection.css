@@ -1,0 +1,66 @@
+/* FollowupSection - Conversation thread for follow-up questions */
+/* Rendered inline within the same scrollable area as the summary content */
+.followup-section {
+  border-top: 1px solid var(--color-border-subtle);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+/* Message list area - flows naturally in the document */
+.followup-section__messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Loading indicator */
+.followup-section__loading {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-4);
+}
+
+/* Error message */
+.followup-section__error {
+  align-self: flex-start;
+  max-width: 80%;
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.15);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  color: #dc2626;
+  font-size: var(--text-sm);
+}
+
+/* Input area - sticky at bottom of the scrollable panel */
+.followup-section__input-area {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) 0 0;
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  position: sticky;
+  bottom: 0;
+  background: var(--color-bg-surface);
+  z-index: 1;
+}
+
+.followup-section__input-area .ant-input {
+  border-radius: var(--radius-sm);
+}
+
+.followup-section__send-btn {
+  flex-shrink: 0;
+}
+
+/* Mobile responsive (≤768px) */
+@media (max-width: 768px) {
+  .followup-section__error {
+    max-width: 90%;
+  }
+}

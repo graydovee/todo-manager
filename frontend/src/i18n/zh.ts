@@ -187,6 +187,23 @@ const zh = {
     detailEmpty: '暂无内容',
     detailError: '总结生成失败',
     streamingIndicator: '正在生成中...',
+    customPrompt: {
+      placeholder: '请输入自定义要求，例如：请重点分析工作效率变化趋势...',
+      label: '自定义要求',
+      charCount: '{count}/500',
+    },
+    followup: {
+      inputPlaceholder: '输入追问内容...',
+      send: '发送',
+      editTooltip: '编辑问题',
+      regenerateTooltip: '重新生成',
+      versionIndicator: '{current}/{total}',
+      loading: 'AI 正在思考...',
+      error: '生成回答失败',
+      networkError: '网络连接失败，请检查网络后重试',
+      emptyResponse: 'AI 未返回有效回答，请重试',
+      retryButton: '重试',
+    },
   },
   summaryDetail: {
     drawerTitle: '总结详情',

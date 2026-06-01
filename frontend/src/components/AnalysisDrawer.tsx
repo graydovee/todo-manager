@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Drawer, DatePicker, Button, Checkbox, List, Spin, Empty, Tag, Select } from 'antd';
+import { Drawer, DatePicker, Button, Checkbox, List, Spin, Empty, Tag, Select, Input } from 'antd';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
@@ -12,7 +12,7 @@ const { RangePicker } = DatePicker;
 interface AnalysisDrawerProps {
   open: boolean;
   onClose: () => void;
-  onStartAnalysis: (startDate: string, endDate: string, todoIds: number[], language: string) => void;
+  onStartAnalysis: (startDate: string, endDate: string, todoIds: number[], language: string, customPrompt?: string) => void;
 }
 
 // Map frontend language value to backend language value
@@ -42,6 +42,7 @@ export function AnalysisDrawer({ open, onClose, onStartAnalysis }: AnalysisDrawe
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [language, setLanguage] = useState<string>(() => getDefaultLanguage(i18n.language));
+  const [customPrompt, setCustomPrompt] = useState('');
 
   // Fetch todos when date range changes
   const fetchTodos = useCallback(async (start: string, end: string) => {
@@ -77,6 +78,7 @@ export function AnalysisDrawer({ open, onClose, onStartAnalysis }: AnalysisDrawe
       setTodos([]);
       setSelectedIds([]);
       setLanguage(getDefaultLanguage(i18n.language));
+      setCustomPrompt('');
     }
   }, [open, i18n.language]);
 
@@ -104,7 +106,8 @@ export function AnalysisDrawer({ open, onClose, onStartAnalysis }: AnalysisDrawe
     if (!dateRange || selectedIds.length === 0) return;
     const startDate = dateRange[0].format('YYYY-MM-DD');
     const endDate = dateRange[1].format('YYYY-MM-DD');
-    onStartAnalysis(startDate, endDate, selectedIds, mapLanguageToBackend(language));
+    const trimmedPrompt = customPrompt.trim();
+    onStartAnalysis(startDate, endDate, selectedIds, mapLanguageToBackend(language), trimmedPrompt || undefined);
     onClose();
   };
 
@@ -232,6 +235,16 @@ export function AnalysisDrawer({ open, onClose, onStartAnalysis }: AnalysisDrawe
               { value: 'zh', label: t('aiSummary.languageChinese') },
               { value: 'en', label: t('aiSummary.languageEnglish') },
             ]}
+          />
+        </div>
+        <div className="analysis-drawer__custom-prompt">
+          <Input.TextArea
+            value={customPrompt}
+            onChange={(e) => setCustomPrompt(e.target.value)}
+            placeholder={t('aiSummary.customPrompt.placeholder')}
+            maxLength={500}
+            showCount
+            autoSize={{ minRows: 3 }}
           />
         </div>
         {renderTodoList()}

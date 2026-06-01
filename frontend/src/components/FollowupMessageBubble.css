@@ -1,0 +1,256 @@
+/* FollowupMessageBubble - Individual message exchange display */
+
+.followup-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* User question row - aligned right */
+.followup-bubble__user-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* User bubble with actions */
+.followup-bubble__user-bubble {
+  position: relative;
+  max-width: 80%;
+  background: var(--color-primary-lighter);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  word-break: break-word;
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.followup-bubble__question-text {
+  flex: 1;
+  white-space: pre-wrap;
+}
+
+/* Action buttons container */
+.followup-bubble__actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* Show actions on hover (desktop) */
+.followup-bubble__user-bubble:hover .followup-bubble__actions {
+  opacity: 1;
+}
+
+/* Individual action button */
+.followup-bubble__action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  padding: 0;
+  font-size: 14px;
+}
+
+.followup-bubble__action-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--color-text-primary);
+}
+
+.followup-bubble__action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* Edit mode container */
+.followup-bubble__edit-container {
+  max-width: 80%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.followup-bubble__edit-actions {
+  display: flex;
+  gap: var(--space-1);
+  justify-content: flex-end;
+}
+
+/* AI answer row - aligned left */
+.followup-bubble__ai-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* AI bubble */
+.followup-bubble__ai-bubble {
+  max-width: 80%;
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  word-break: break-word;
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+  line-height: 1.7;
+}
+
+/* Markdown content inside AI bubble */
+.followup-bubble__ai-bubble h1,
+.followup-bubble__ai-bubble h2,
+.followup-bubble__ai-bubble h3,
+.followup-bubble__ai-bubble h4 {
+  margin-top: 0.8em;
+  margin-bottom: 0.4em;
+}
+
+.followup-bubble__ai-bubble p {
+  margin-bottom: 0.6em;
+}
+
+.followup-bubble__ai-bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.followup-bubble__ai-bubble ul,
+.followup-bubble__ai-bubble ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.6em;
+}
+
+.followup-bubble__ai-bubble code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.followup-bubble__ai-bubble pre {
+  background: rgba(0, 0, 0, 0.04);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.followup-bubble__ai-bubble pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Loading indicator */
+.followup-bubble__loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-4);
+}
+
+/* Error message with retry */
+.followup-bubble__error {
+  max-width: 80%;
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.15);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  color: #dc2626;
+  font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.followup-bubble__retry-btn {
+  padding: 0;
+  height: auto;
+  font-size: var(--text-sm);
+}
+
+/* Version navigation */
+.followup-bubble__version-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.followup-bubble__version-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  padding: 0;
+  font-size: 12px;
+}
+
+.followup-bubble__version-arrow:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--color-text-primary);
+}
+
+.followup-bubble__version-arrow:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+.followup-bubble__version-indicator {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  user-select: none;
+}
+
+/* Mobile responsive - always show action buttons */
+@media (max-width: 768px) {
+  .followup-bubble__user-bubble {
+    max-width: 90%;
+  }
+
+  .followup-bubble__ai-bubble {
+    max-width: 90%;
+  }
+
+  .followup-bubble__error {
+    max-width: 90%;
+  }
+
+  .followup-bubble__edit-container {
+    max-width: 90%;
+  }
+
+  /* Always visible on mobile */
+  .followup-bubble__actions {
+    opacity: 1;
+  }
+
+  /* 44x44px touch targets on mobile */
+  .followup-bubble__action-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
+}

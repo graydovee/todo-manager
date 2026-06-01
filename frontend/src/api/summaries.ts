@@ -20,14 +20,19 @@ export async function createSummaryWithTodos(
   startDate: string,
   endDate: string,
   todoIds: number[],
-  language?: string
+  language?: string,
+  customPrompt?: string
 ): Promise<SummaryEntry> {
-  const res = await client.post('/summaries', {
+  const body: Record<string, unknown> = {
     start_date: startDate,
     end_date: endDate,
     todo_ids: todoIds,
     language: language || '',
-  });
+  };
+  if (customPrompt) {
+    body.custom_prompt = customPrompt;
+  }
+  const res = await client.post('/summaries', body);
   return res.data;
 }
 

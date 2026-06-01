@@ -1,0 +1,19 @@
+# 2026/06/01 16:26:56.743615 [TestProperty_TodoIDValidationAndErrorReporting] [rapid] draw numUserTodos: 1
+# 2026/06/01 16:26:56.743763 [TestProperty_TodoIDValidationAndErrorReporting] [rapid] draw numOtherTodos: 1
+# 2026/06/01 16:26:56.743824 [TestProperty_TodoIDValidationAndErrorReporting] [rapid] draw includeInvalid: false
+# 2026/06/01 16:26:56.743826 [TestProperty_TodoIDValidationAndErrorReporting] [rapid] draw numValidPicked: 0
+# 2026/06/01 16:26:56.743828 [TestProperty_TodoIDValidationAndErrorReporting] [rapid] draw validPerm: []uint{0x1}
+# 2026/06/01 16:26:56.743962 [TestProperty_TodoIDValidationAndErrorReporting] expected no error for valid IDs [1], got: failed to create summary: SQL logic error: table summaries has no column named custom_prompt (1)
+# 
+v0.4.8#6805717888353765100
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
