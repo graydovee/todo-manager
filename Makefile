@@ -1,4 +1,4 @@
-.PHONY: frontend-dev backend-dev frontend-build test build run docker-build release clean
+.PHONY: frontend-dev backend-dev frontend-build cli-build cli-test test build run docker-build release clean
 
 frontend-dev:
 	cd frontend && npm run dev -- --port 5173
@@ -11,12 +11,21 @@ frontend-build:
 	rm -rf backend/static/frontend_dist
 	cp -r frontend/dist backend/static/frontend_dist
 
+cli-build:
+	mkdir -p bin
+	cd todo-cli && go build -o ../bin/todo-cli .
+
+cli-test:
+	cd todo-cli && go test ./...
+
 test:
 	cd backend && go test ./...
 	cd frontend && npm run test -- --passWithNoTests
+	cd todo-cli && go test ./...
 
-build: frontend-build
-	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/todolist cmd/server/main.go
+build: frontend-build cli-build
+	mkdir -p bin
+	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../bin/todolist cmd/server/main.go
 
 IMAGE_NAME := graydovee/todolist
 GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
@@ -36,8 +45,8 @@ release:
 	$(CONTAINER_ENGINE) manifest push $(IMAGE_NAME):$(GIT_VERSION) docker://docker.io/$(IMAGE_NAME):latest
 
 run:
-	cd backend && ./bin/todolist -config ../config.yaml
+	./bin/todolist -config config.yaml
 
 clean:
-	rm -rf frontend/dist backend/static/frontend_dist backend/bin
+	rm -rf frontend/dist backend/static/frontend_dist bin
 	find . -name "*.db" -not -path "./.git/*" -delete
