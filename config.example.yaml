@@ -3,7 +3,7 @@ server:
 
 db:
   driver: sqlite
-  dsn: "todolist.db"
+  dsn: "todo-manager.db"
 
 auth:
   mode: basic

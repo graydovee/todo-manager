@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/graydovee/todolist/internal/authz"
-	"github.com/graydovee/todolist/internal/model"
-	"github.com/graydovee/todolist/internal/repository"
+	"github.com/graydovee/todo-manager/internal/authz"
+	"github.com/graydovee/todo-manager/internal/model"
+	"github.com/graydovee/todo-manager/internal/repository"
 	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm"
 )

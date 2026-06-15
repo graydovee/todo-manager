@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/graydovee/todolist/internal/middleware"
-	"github.com/graydovee/todolist/internal/model"
+	"github.com/graydovee/todo-manager/internal/middleware"
+	"github.com/graydovee/todo-manager/internal/model"
 	"github.com/labstack/echo/v4"
 )
 

@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "todolist.configmapName" . }}
+  name: {{ include "todo-manager.configmapName" . }}
   labels:
-    {{- include "todolist.labels" . | nindent 4 }}
+    {{- include "todo-manager.labels" . | nindent 4 }}
 data:
   config.yaml: |
     server:
@@ -14,8 +14,8 @@ data:
         {{- end }}
 
     db:
-      driver: {{ include "todolist.databaseDriver" . }}
-      dsn: {{ include "todolist.databaseDSN" . | quote }}
+      driver: {{ include "todo-manager.databaseDriver" . }}
+      dsn: {{ include "todo-manager.databaseDSN" . | quote }}
 
     auth:
       mode: {{ .Values.auth.mode }}

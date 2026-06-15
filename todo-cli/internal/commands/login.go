@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/graydovee/todolist/todo-cli/internal/config"
+	"github.com/graydovee/todo-manager/todo-cli/internal/config"
 	"github.com/spf13/cobra"
 )
 

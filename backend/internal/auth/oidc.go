@@ -8,8 +8,8 @@ import (
 	"fmt"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/graydovee/todolist/internal/config"
-	"github.com/graydovee/todolist/internal/model"
+	"github.com/graydovee/todo-manager/internal/config"
+	"github.com/graydovee/todo-manager/internal/model"
 	"golang.org/x/oauth2"
 )
 

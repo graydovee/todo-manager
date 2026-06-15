@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/graydovee/todolist/internal/model"
-	"github.com/graydovee/todolist/internal/repository"
-	"github.com/graydovee/todolist/internal/service"
-	"github.com/graydovee/todolist/internal/session"
+	"github.com/graydovee/todo-manager/internal/model"
+	"github.com/graydovee/todo-manager/internal/repository"
+	"github.com/graydovee/todo-manager/internal/service"
+	"github.com/graydovee/todo-manager/internal/session"
 	"github.com/labstack/echo/v4"
 )
 

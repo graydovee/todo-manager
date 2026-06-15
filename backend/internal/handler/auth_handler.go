@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/graydovee/todolist/internal/middleware"
-	"github.com/graydovee/todolist/internal/service"
+	"github.com/graydovee/todo-manager/internal/middleware"
+	"github.com/graydovee/todo-manager/internal/service"
 	"github.com/labstack/echo/v4"
 )
 

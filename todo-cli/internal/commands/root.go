@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/graydovee/todolist/todo-cli/internal/client"
-	"github.com/graydovee/todolist/todo-cli/internal/config"
-	"github.com/graydovee/todolist/todo-cli/internal/output"
+	"github.com/graydovee/todo-manager/todo-cli/internal/client"
+	"github.com/graydovee/todo-manager/todo-cli/internal/config"
+	"github.com/graydovee/todo-manager/todo-cli/internal/output"
 	"github.com/spf13/cobra"
 )
 

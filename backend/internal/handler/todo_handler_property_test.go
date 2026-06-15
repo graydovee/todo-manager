@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"github.com/graydovee/todolist/internal/middleware"
-	"github.com/graydovee/todolist/internal/model"
-	"github.com/graydovee/todolist/internal/repository"
+	"github.com/graydovee/todo-manager/internal/middleware"
+	"github.com/graydovee/todo-manager/internal/model"
+	"github.com/graydovee/todo-manager/internal/repository"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

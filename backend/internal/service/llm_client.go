@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/graydovee/todolist/internal/config"
+	"github.com/graydovee/todo-manager/internal/config"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )

@@ -3,7 +3,7 @@ package handler
 import (
 	"time"
 
-	"github.com/graydovee/todolist/internal/model"
+	"github.com/graydovee/todo-manager/internal/model"
 )
 
 type ErrorResponse struct {

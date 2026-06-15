@@ -1,6 +1,6 @@
 package commands
 
-import "github.com/graydovee/todolist/todo-cli/internal/client"
+import "github.com/graydovee/todo-manager/todo-cli/internal/client"
 
 type ExitError struct {
 	Code int

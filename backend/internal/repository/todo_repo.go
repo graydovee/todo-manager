@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/graydovee/todolist/internal/model"
+	"github.com/graydovee/todo-manager/internal/model"
 	"gorm.io/gorm"
 )
 

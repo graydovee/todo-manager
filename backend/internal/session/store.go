@@ -13,11 +13,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/securecookie"
-	"github.com/graydovee/todolist/internal/model"
+	"github.com/graydovee/todo-manager/internal/model"
 	"gorm.io/gorm"
 )
 
-const SessionCookieName = "todolist_session"
+const SessionCookieName = "todo_manager_session"
 
 type DBStore struct {
 	db              *gorm.DB

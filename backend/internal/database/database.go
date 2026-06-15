@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/glebarez/sqlite"
-	"github.com/graydovee/todolist/internal/config"
+	"github.com/graydovee/todo-manager/internal/config"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

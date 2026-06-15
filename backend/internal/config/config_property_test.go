@@ -15,8 +15,8 @@ import (
 //
 // Property: For any valid LLM configuration values (model, base_url, api_key, timeout)
 // written to a YAML config, loading the config SHALL preserve all field values.
-// Furthermore, for any environment variable override (TODOLIST_LLM_MODEL,
-// TODOLIST_LLM_BASE_URL, TODOLIST_LLM_API_KEY, TODOLIST_LLM_TIMEOUT), the environment
+// Furthermore, for any environment variable override (TODO_MANAGER_LLM_MODEL,
+// TODO_MANAGER_LLM_BASE_URL, TODO_MANAGER_LLM_API_KEY, TODO_MANAGER_LLM_TIMEOUT), the environment
 // variable value SHALL take precedence over the YAML value in the loaded config.
 func TestProperty_LLMConfigRoundTripWithEnvPrecedence(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
@@ -55,10 +55,10 @@ llm:
 		}
 
 		// Clear any LLM env vars before testing YAML round-trip
-		os.Unsetenv("TODOLIST_LLM_MODEL")
-		os.Unsetenv("TODOLIST_LLM_BASE_URL")
-		os.Unsetenv("TODOLIST_LLM_API_KEY")
-		os.Unsetenv("TODOLIST_LLM_TIMEOUT")
+		os.Unsetenv("TODO_MANAGER_LLM_MODEL")
+		os.Unsetenv("TODO_MANAGER_LLM_BASE_URL")
+		os.Unsetenv("TODO_MANAGER_LLM_API_KEY")
+		os.Unsetenv("TODO_MANAGER_LLM_TIMEOUT")
 
 		// Load config and verify YAML values are preserved
 		cfg, err := Load(cfgPath)
@@ -98,20 +98,20 @@ llm:
 		}
 
 		if setModel {
-			os.Setenv("TODOLIST_LLM_MODEL", envModel)
-			defer os.Unsetenv("TODOLIST_LLM_MODEL")
+			os.Setenv("TODO_MANAGER_LLM_MODEL", envModel)
+			defer os.Unsetenv("TODO_MANAGER_LLM_MODEL")
 		}
 		if setBaseURL {
-			os.Setenv("TODOLIST_LLM_BASE_URL", envBaseURL)
-			defer os.Unsetenv("TODOLIST_LLM_BASE_URL")
+			os.Setenv("TODO_MANAGER_LLM_BASE_URL", envBaseURL)
+			defer os.Unsetenv("TODO_MANAGER_LLM_BASE_URL")
 		}
 		if setAPIKey {
-			os.Setenv("TODOLIST_LLM_API_KEY", envAPIKey)
-			defer os.Unsetenv("TODOLIST_LLM_API_KEY")
+			os.Setenv("TODO_MANAGER_LLM_API_KEY", envAPIKey)
+			defer os.Unsetenv("TODO_MANAGER_LLM_API_KEY")
 		}
 		if setTimeout {
-			os.Setenv("TODOLIST_LLM_TIMEOUT", fmt.Sprintf("%d", envTimeout))
-			defer os.Unsetenv("TODOLIST_LLM_TIMEOUT")
+			os.Setenv("TODO_MANAGER_LLM_TIMEOUT", fmt.Sprintf("%d", envTimeout))
+			defer os.Unsetenv("TODO_MANAGER_LLM_TIMEOUT")
 		}
 
 		// Reload config with env vars set

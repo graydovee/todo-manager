@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/graydovee/todolist/internal/middleware"
-	"github.com/graydovee/todolist/internal/model"
-	"github.com/graydovee/todolist/internal/repository"
-	"github.com/graydovee/todolist/internal/service"
+	"github.com/graydovee/todo-manager/internal/middleware"
+	"github.com/graydovee/todo-manager/internal/model"
+	"github.com/graydovee/todo-manager/internal/repository"
+	"github.com/graydovee/todo-manager/internal/service"
 	"github.com/labstack/echo/v4"
 )
 

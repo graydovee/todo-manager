@@ -3,7 +3,7 @@ replicaCount: 1
 
 image:
   # -- Container image repository
-  repository: graydovee/todolist
+  repository: graydovee/todo-manager
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Image tag (defaults to appVersion in Chart.yaml)
@@ -54,11 +54,11 @@ database:
     # -- Enable bundled PostgreSQL deployment
     enabled: false
     # -- Database name to create
-    database: todolist
+    database: todo-manager
     # -- Username for the database
-    username: todolist
+    username: todo-manager
     # -- Password for the database user (stored in Secret)
-    password: "todolist-password"
+    password: "todo-manager-password"
 
   # -- External database configuration (only used when mode=external)
   external:
@@ -166,15 +166,15 @@ ingress:
     # kubernetes.io/ingress.class: nginx
     # cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:
-    - host: todolist.local
+    - host: todo-manager.local
       paths:
         - path: /
           pathType: Prefix
   # -- TLS configuration
   tls: []
-  #  - secretName: todolist-tls
+  #  - secretName: todo-manager-tls
   #    hosts:
-  #      - todolist.local
+  #      - todo-manager.local
 
 # -- Resource requests and limits
 resources: {}
@@ -224,9 +224,9 @@ affinity: {}
 # =============================================================================
 postgresql:
   auth:
-    username: todolist
-    password: "todolist-password"
-    database: todolist
+    username: todo-manager
+    password: "todo-manager-password"
+    database: todo-manager
   primary:
     persistence:
       enabled: true

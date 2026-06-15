@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/graydovee/todolist/internal/auth"
-	"github.com/graydovee/todolist/internal/config"
-	"github.com/graydovee/todolist/internal/model"
-	"github.com/graydovee/todolist/internal/repository"
-	"github.com/graydovee/todolist/internal/session"
+	"github.com/graydovee/todo-manager/internal/auth"
+	"github.com/graydovee/todo-manager/internal/config"
+	"github.com/graydovee/todo-manager/internal/model"
+	"github.com/graydovee/todo-manager/internal/repository"
+	"github.com/graydovee/todo-manager/internal/session"
 )
 
 type AuthService struct {

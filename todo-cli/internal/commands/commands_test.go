@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/graydovee/todolist/todo-cli/internal/client"
+	"github.com/graydovee/todo-manager/todo-cli/internal/client"
 )
 
 func TestConfigViewMasksAPIKey(t *testing.T) {

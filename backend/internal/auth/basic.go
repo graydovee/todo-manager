@@ -1,8 +1,8 @@
 package auth
 
 import (
-	"github.com/graydovee/todolist/internal/config"
-	"github.com/graydovee/todolist/internal/model"
+	"github.com/graydovee/todo-manager/internal/config"
+	"github.com/graydovee/todo-manager/internal/model"
 )
 
 type BasicAuthProvider struct {

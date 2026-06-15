@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/graydovee/todolist/internal/config"
+	"github.com/graydovee/todo-manager/internal/config"
 	"pgregory.net/rapid"
 )
 

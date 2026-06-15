@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/graydovee/todolist/todo-cli/internal/commands"
+	"github.com/graydovee/todo-manager/todo-cli/internal/commands"
 )
 
 func main() {

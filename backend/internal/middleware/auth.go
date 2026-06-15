@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"github.com/graydovee/todolist/internal/model"
+	"github.com/graydovee/todo-manager/internal/model"
 	"github.com/labstack/echo/v4"
 )
 

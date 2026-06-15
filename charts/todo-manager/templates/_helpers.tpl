@@ -1,14 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "todolist.name" -}}
+{{- define "todo-manager.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
 */}}
-{{- define "todolist.fullname" -}}
+{{- define "todo-manager.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -24,16 +24,16 @@ Create a default fully qualified app name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "todolist.chart" -}}
+{{- define "todo-manager.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "todolist.labels" -}}
-helm.sh/chart: {{ include "todolist.chart" . }}
-{{ include "todolist.selectorLabels" . }}
+{{- define "todo-manager.labels" -}}
+helm.sh/chart: {{ include "todo-manager.chart" . }}
+{{ include "todo-manager.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -43,17 +43,17 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "todolist.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "todolist.name" . }}
+{{- define "todo-manager.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "todo-manager.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "todolist.serviceAccountName" -}}
+{{- define "todo-manager.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "todolist.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "todo-manager.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
@@ -62,21 +62,21 @@ Create the name of the service account to use
 {{/*
 Secret name
 */}}
-{{- define "todolist.secretName" -}}
-{{- include "todolist.fullname" . }}
+{{- define "todo-manager.secretName" -}}
+{{- include "todo-manager.fullname" . }}
 {{- end }}
 
 {{/*
 ConfigMap name
 */}}
-{{- define "todolist.configmapName" -}}
-{{- include "todolist.fullname" . }}
+{{- define "todo-manager.configmapName" -}}
+{{- include "todo-manager.fullname" . }}
 {{- end }}
 
 {{/*
 Bundled PostgreSQL fullname (matches bitnami subchart naming)
 */}}
-{{- define "todolist.postgresql.fullname" -}}
+{{- define "todo-manager.postgresql.fullname" -}}
 {{- printf "%s-postgresql" .Release.Name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
@@ -86,11 +86,11 @@ For sqlite: returns the file path.
 For bundled: constructs a postgres DSN using the subchart service.
 For external: constructs a DSN from the external config.
 */}}
-{{- define "todolist.databaseDSN" -}}
+{{- define "todo-manager.databaseDSN" -}}
 {{- if eq .Values.database.mode "sqlite" }}
 {{- .Values.database.sqlite.path }}
 {{- else if eq .Values.database.mode "bundled" }}
-{{- printf "host=%s port=5432 user=%s dbname=%s sslmode=disable" (include "todolist.postgresql.fullname" .) .Values.database.bundled.username .Values.database.bundled.database }}
+{{- printf "host=%s port=5432 user=%s dbname=%s sslmode=disable" (include "todo-manager.postgresql.fullname" .) .Values.database.bundled.username .Values.database.bundled.database }}
 {{- else if eq .Values.database.mode "external" }}
 {{- if eq .Values.database.external.type "postgres" }}
 {{- printf "host=%s port=%d user=%s dbname=%s sslmode=disable" .Values.database.external.host (int .Values.database.external.port) .Values.database.external.username .Values.database.external.database }}
@@ -103,9 +103,9 @@ For external: constructs a DSN from the external config.
 {{/*
 Construct the database DSN with actual password (for Secret).
 */}}
-{{- define "todolist.databaseDSNWithPassword" -}}
+{{- define "todo-manager.databaseDSNWithPassword" -}}
 {{- if eq .Values.database.mode "bundled" }}
-{{- printf "host=%s port=5432 user=%s password=%s dbname=%s sslmode=disable" (include "todolist.postgresql.fullname" .) .Values.database.bundled.username .Values.database.bundled.password .Values.database.bundled.database }}
+{{- printf "host=%s port=5432 user=%s password=%s dbname=%s sslmode=disable" (include "todo-manager.postgresql.fullname" .) .Values.database.bundled.username .Values.database.bundled.password .Values.database.bundled.database }}
 {{- else if eq .Values.database.mode "external" }}
 {{- if eq .Values.database.external.type "postgres" }}
 {{- printf "host=%s port=%d user=%s password=%s dbname=%s sslmode=disable" .Values.database.external.host (int .Values.database.external.port) .Values.database.external.username .Values.database.external.password .Values.database.external.database }}
@@ -118,7 +118,7 @@ Construct the database DSN with actual password (for Secret).
 {{/*
 Database driver name
 */}}
-{{- define "todolist.databaseDriver" -}}
+{{- define "todo-manager.databaseDriver" -}}
 {{- if eq .Values.database.mode "sqlite" }}
 {{- "sqlite" }}
 {{- else if eq .Values.database.mode "bundled" }}

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"github.com/graydovee/todolist/internal/model"
+	"github.com/graydovee/todo-manager/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"pgregory.net/rapid"

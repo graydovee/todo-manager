@@ -8,11 +8,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/graydovee/todolist/internal/app"
-	"github.com/graydovee/todolist/internal/config"
-	"github.com/graydovee/todolist/internal/database"
-	"github.com/graydovee/todolist/internal/repository"
-	"github.com/graydovee/todolist/internal/service"
+	"github.com/graydovee/todo-manager/internal/app"
+	"github.com/graydovee/todo-manager/internal/config"
+	"github.com/graydovee/todo-manager/internal/database"
+	"github.com/graydovee/todo-manager/internal/repository"
+	"github.com/graydovee/todo-manager/internal/service"
 	"gorm.io/gorm/logger"
 )
 

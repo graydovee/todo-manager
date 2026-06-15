@@ -1,4 +1,4 @@
-module github.com/graydovee/todolist
+module github.com/graydovee/todo-manager
 
 go 1.25.0
 

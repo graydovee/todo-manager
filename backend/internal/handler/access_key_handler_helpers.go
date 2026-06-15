@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/graydovee/todolist/internal/model"
+	"github.com/graydovee/todo-manager/internal/model"
 )
 
 func decodeAuthorizedAPIs(key *model.AccessKey) ([]string, error) {

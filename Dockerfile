@@ -13,12 +13,12 @@ COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
 COPY --from=frontend /app/frontend/dist ./static/frontend_dist/
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /todolist cmd/server/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /todo-manager cmd/server/main.go
 
 # Stage 3: Final image
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=backend /todolist /todolist
+COPY --from=backend /todo-manager /todo-manager
 COPY config.example.yaml /config.yaml
 EXPOSE 8080
-ENTRYPOINT ["/todolist"]
+ENTRYPOINT ["/todo-manager"]
 CMD ["-config", "/config.yaml"]

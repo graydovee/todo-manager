@@ -25,9 +25,9 @@ test:
 
 build: frontend-build cli-build
 	mkdir -p bin
-	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../bin/todolist cmd/server/main.go
+	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../bin/todo-manager cmd/server/main.go
 
-IMAGE_NAME := graydovee/todolist
+IMAGE_NAME := graydovee/todo-manager
 GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
 GIT_VERSION := $(if $(GIT_TAG),$(GIT_TAG),$(shell git describe --tags --abbrev=7 2>/dev/null || echo dev))
 CONTAINER_ENGINE := $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null)
@@ -45,7 +45,7 @@ release:
 	$(CONTAINER_ENGINE) manifest push $(IMAGE_NAME):$(GIT_VERSION) docker://docker.io/$(IMAGE_NAME):latest
 
 run:
-	./bin/todolist -config config.yaml
+	./bin/todo-manager -config config.yaml
 
 clean:
 	rm -rf frontend/dist backend/static/frontend_dist bin

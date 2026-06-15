@@ -119,7 +119,7 @@ func applyDefaults(cfg *Config) {
 		cfg.DB.Driver = "sqlite"
 	}
 	if cfg.DB.DSN == "" && cfg.DB.Driver == "sqlite" {
-		cfg.DB.DSN = "todolist.db"
+		cfg.DB.DSN = "todo-manager.db"
 	}
 	if cfg.Auth.Mode == "" {
 		cfg.Auth.Mode = "basic"
@@ -142,40 +142,40 @@ func applyDefaults(cfg *Config) {
 }
 
 func applyEnvOverrides(cfg *Config) error {
-	if v := os.Getenv("TODOLIST_SERVER_PORT"); v != "" {
+	if v := os.Getenv("TODO_MANAGER_SERVER_PORT"); v != "" {
 		fmt.Sscanf(v, "%d", &cfg.Server.Port)
 	}
-	if v := os.Getenv("TODOLIST_DB_DRIVER"); v != "" {
+	if v := os.Getenv("TODO_MANAGER_DB_DRIVER"); v != "" {
 		cfg.DB.Driver = v
 	}
-	if v := os.Getenv("TODOLIST_DB_DSN"); v != "" {
+	if v := os.Getenv("TODO_MANAGER_DB_DSN"); v != "" {
 		cfg.DB.DSN = v
 	}
-	if v := os.Getenv("TODOLIST_AUTH_MODE"); v != "" {
+	if v := os.Getenv("TODO_MANAGER_AUTH_MODE"); v != "" {
 		cfg.Auth.Mode = v
 	}
-	if v := os.Getenv("TODOLIST_SESSION_SECRET"); v != "" {
+	if v := os.Getenv("TODO_MANAGER_SESSION_SECRET"); v != "" {
 		cfg.Session.Secret = v
 	}
-	if v := os.Getenv("TODOLIST_OIDC_CLIENT_SECRET"); v != "" {
+	if v := os.Getenv("TODO_MANAGER_OIDC_CLIENT_SECRET"); v != "" {
 		cfg.Auth.OIDC.ClientSecret = v
 	}
-	if v := os.Getenv("TODOLIST_LOG_FORMAT"); v != "" {
+	if v := os.Getenv("TODO_MANAGER_LOG_FORMAT"); v != "" {
 		cfg.Log.Format = v
 	}
-	if v := os.Getenv("TODOLIST_LOG_LEVEL"); v != "" {
+	if v := os.Getenv("TODO_MANAGER_LOG_LEVEL"); v != "" {
 		cfg.Log.Level = v
 	}
-	if v := os.Getenv("TODOLIST_LLM_MODEL"); v != "" {
+	if v := os.Getenv("TODO_MANAGER_LLM_MODEL"); v != "" {
 		cfg.LLM.Model = v
 	}
-	if v := os.Getenv("TODOLIST_LLM_BASE_URL"); v != "" {
+	if v := os.Getenv("TODO_MANAGER_LLM_BASE_URL"); v != "" {
 		cfg.LLM.BaseURL = v
 	}
-	if v := os.Getenv("TODOLIST_LLM_API_KEY"); v != "" {
+	if v := os.Getenv("TODO_MANAGER_LLM_API_KEY"); v != "" {
 		cfg.LLM.APIKey = v
 	}
-	if v := os.Getenv("TODOLIST_LLM_TIMEOUT"); v != "" {
+	if v := os.Getenv("TODO_MANAGER_LLM_TIMEOUT"); v != "" {
 		fmt.Sscanf(v, "%d", &cfg.LLM.Timeout)
 	}
 	return nil
