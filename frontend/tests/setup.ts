@@ -13,3 +13,19 @@ class MockResizeObserver {
 if (typeof Element !== 'undefined') {
   Element.prototype.scrollIntoView = function () {}
 }
+
+if (typeof window !== 'undefined' && !window.matchMedia) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent() { return false },
+    }),
+  })
+}

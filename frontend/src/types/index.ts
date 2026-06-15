@@ -7,6 +7,49 @@ export interface User {
   display_name: string;
 }
 
+export interface AccessKey {
+  id: number;
+  name: string;
+  key_prefix: string;
+  authorized_apis: string[];
+  expires_at: string | null;
+  last_used_at: string | null;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface AccessKeyAPI {
+  id: string;
+  group_id: string;
+  method: string;
+  path_pattern: string;
+  label: string;
+  description: string;
+}
+
+export interface AccessKeyGroup {
+  id: string;
+  label: string;
+  description: string;
+  permission_ids: string[];
+}
+
+export interface AccessKeyPermissionCatalog {
+  apis: AccessKeyAPI[];
+  groups: AccessKeyGroup[];
+  presets: Record<string, string[]>;
+}
+
+export interface CreateAccessKeyInput {
+  name: string;
+  authorized_apis: string[];
+  expires_at?: string;
+}
+
+export interface RotateAccessKeyResponse extends AccessKey {
+  plain_key: string;
+}
+
 export interface AuthMode {
   mode: 'basic' | 'oidc';
 }

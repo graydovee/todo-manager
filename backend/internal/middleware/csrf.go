@@ -10,6 +10,9 @@ import (
 
 func CSRF(skipPrefixes ...string) echo.MiddlewareFunc {
 	skipper := func(c echo.Context) bool {
+		if authHeader := c.Request().Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			return true
+		}
 		path := c.Request().URL.Path
 		for _, prefix := range skipPrefixes {
 			if strings.HasPrefix(path, prefix) {

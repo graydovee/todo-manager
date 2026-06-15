@@ -1,5 +1,5 @@
 import { Layout as AntLayout, Button, Drawer, Menu, Typography } from 'antd';
-import { LogoutOutlined, GlobalOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MenuOutlined, ApartmentOutlined, UnorderedListOutlined, RobotOutlined } from '@ant-design/icons';
+import { LogoutOutlined, GlobalOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MenuOutlined, ApartmentOutlined, UnorderedListOutlined, RobotOutlined, KeyOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../stores/authContext';
 import { useLang } from '../stores/langStore';
@@ -41,6 +41,7 @@ export function Layout() {
   }, [collapsed]);
 
   const selectedKey = useMemo(() => {
+    if (location.pathname.startsWith('/access-keys')) return '/access-keys';
     if (location.pathname.startsWith('/ai-summary')) return '/ai-summary';
     if (location.pathname.startsWith('/todos/graph')) return '/todos/graph';
     return '/todos';
@@ -64,6 +65,12 @@ export function Layout() {
       icon: <RobotOutlined />,
       label: t('nav.aiSummary'),
       onClick: () => { navigate('/ai-summary'); setMobileMenuOpen(false); },
+    },
+    {
+      key: '/access-keys',
+      icon: <KeyOutlined />,
+      label: t('nav.accessKeys'),
+      onClick: () => { navigate('/access-keys'); setMobileMenuOpen(false); },
     },
   ];
 

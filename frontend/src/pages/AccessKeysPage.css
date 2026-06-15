@@ -1,0 +1,105 @@
+.access-keys-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.access-keys-page__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.access-keys-page__header h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+}
+
+.access-keys-page__header .ant-typography {
+  margin-bottom: 0;
+}
+
+.access-keys-page__notice {
+  border-radius: var(--radius-lg);
+}
+
+.access-keys-page__empty {
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.access-keys-page__name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.access-keys-page__preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.access-keys-page__group {
+  margin-bottom: var(--space-5);
+}
+
+.access-keys-page__group-header {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-3);
+}
+
+.access-keys-page__api-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.access-keys-page__api-card {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(243,248,252,0.92));
+}
+
+.access-keys-page__api-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.access-keys-page__reveal-box {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-dark);
+}
+
+.access-keys-page__reveal-box .ant-typography {
+  color: var(--color-text-inverse);
+}
+
+@media (max-width: 768px) {
+  .access-keys-page__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .access-keys-page__api-grid {
+    grid-template-columns: 1fr;
+  }
+}
