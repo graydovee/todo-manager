@@ -37,7 +37,7 @@ database:
   # -- SQLite mode configuration (only used when mode=sqlite)
   sqlite:
     # -- Path to the SQLite database file inside the container
-    path: "/data/todolist.db"
+    path: "/data/todo-manager.db"
     persistence:
       # -- Enable persistent volume for SQLite data
       enabled: false
