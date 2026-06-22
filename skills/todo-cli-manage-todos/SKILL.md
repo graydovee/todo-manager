@@ -1,6 +1,6 @@
 ---
 name: todo-cli-manage-todos
-description: "Manage todos end-to-end with the `todo-cli` command-line client — the primary skill for any todo workflow in this repo. Use it whenever Codex is asked to create, list, filter, inspect, update, or delete todos; change a todo's state (start, complete, reopen, pin, highlight); add or read comments; browse the tag vocabulary; or view the dependency graph. Trigger it for concrete todo requests like 'add a bug for auth rotation', 'show me what's still open', 'mark TASK-12 done', 'leave a blocking note', or 'what depends on this'. It also takes care of one-time setup — installing `todo-cli` and running `todo-cli login` — only when those are missing, and returns JSON by default so output stays script-friendly."
+description: "Manage todos end-to-end with the `todo-cli` command-line client — the primary skill for any todo workflow in this repo. Use it whenever Codex is asked to create, list, filter, inspect, update, or delete todos; change a todo's state (start, complete, reopen, pin, highlight); add or read comments; record progress updates; browse the tag vocabulary; or view the dependency graph. Trigger it for concrete todo requests like 'add a bug for auth rotation', 'show me what's still open', 'mark TASK-12 done', 'leave a blocking note', 'record the latest progress on TASK-7' (记一下进度 / 更新最新进展), or 'what depends on this'. It also takes care of one-time setup — installing `todo-cli` and running `todo-cli login` — only when those are missing, and returns JSON by default so output stays script-friendly."
 ---
 
 # Todo Cli Manage Todos
@@ -62,12 +62,25 @@ Important defaults:
 - Use `todo-cli todos create` for new items.
 - Use `todo-cli todos update <id>` for title, description, category, priority, due date, tags, dependencies, or duplicate target updates.
 - Use `todo-cli todos status|start|complete|reopen|pin|highlight` for lifecycle changes.
-- Use `todo-cli todos comments ...` for comment operations.
+- Use `todo-cli todos comments create <id> --content '…'` when the user wants to **record progress** — phrases like 'update the progress', '记一下进度', '最新进展是 …', or 'where is TASK-7 at now' should land as a comment, not as edits to the title or description. See [Progress Updates](#progress-updates).
+- Use `todo-cli todos comments ...` for other comment operations (list, delete).
 - Use `todo-cli todos tags` to inspect the tag vocabulary.
 - Use `todo-cli todos graph` when the dependency graph matters.
 - Use `todo-cli todos by-date-range --start-date YYYY-MM-DD --end-date YYYY-MM-DD` for updated-date filtering.
 
 Prefer specific mutation commands over generic `update` when the user intent is status-only or pin/highlight-only.
+
+## Progress Updates
+
+When the user wants to capture where a todo currently stands — 'update the progress', 'record the latest', '记一下进度', '更新最新进展', '进度大概 80%' — add a comment rather than rewriting fields.
+
+The reasoning matters here. A todo's `title` and `description` describe **what the work is**, so they should stay stable enough that the item stays recognizable over its lifetime. `status` tracks lifecycle (open / in_progress / completed). Progress, by contrast, is **chronological** — 'auth flow implemented, waiting on backend review', '约 80%，剩联调'. Each update is a moment in time, and overwriting the description with every new status erases that history. Comments are timestamped and append-only, so they naturally form a progress timeline that anyone can scroll back through with `todos comments list`.
+
+Concretely:
+
+- 'Record progress / 记一下进度 / 最新进展是 …' → `todo-cli todos comments create <id> --content '…'`.
+- Edit the `--description` only when the user is redefining the **scope or nature** of the work, not narrating how far along it is.
+- If the progress update also crosses a lifecycle boundary (e.g. 'done — testing finished'), pair the comment with the matching lifecycle command (`complete`, `reopen`, …) instead of encoding the state change in prose alone.
 
 ## Output Rules
 

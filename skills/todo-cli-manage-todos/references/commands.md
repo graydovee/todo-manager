@@ -153,6 +153,12 @@ Create comment:
 todo-cli todos comments create 123 --content 'Blocked on API key provisioning'
 ```
 
+Record a progress update (prefer this over rewriting the description — progress is a timestamped timeline, not a single field):
+
+```bash
+todo-cli todos comments create 123 --content 'Progress: auth flow implemented, waiting on backend review (~80%)'
+```
+
 Delete comment:
 
 ```bash
