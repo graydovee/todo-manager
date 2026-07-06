@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/graydovee/todo-manager/todo-cli/internal/client"
 	"github.com/graydovee/todo-manager/todo-cli/internal/config"
@@ -12,16 +13,18 @@ import (
 )
 
 type AppContext struct {
-	Config *config.Config
-	Client *client.Client
-	Output output.Format
-	NewClient func(baseURL, apiKey string) *client.Client
+	Config        *config.Config
+	EffectiveUser *config.UserEntry
+	Client        *client.Client
+	Output        output.Format
+	NewClient     func(baseURL, apiKey string) *client.Client
 }
 
 func NewRootCommand() *cobra.Command {
 	var (
 		baseURLFlag string
 		apiKeyFlag  string
+		userFlag    string
 		outputFlag  string
 		appCtx      AppContext
 	)
@@ -30,31 +33,48 @@ func NewRootCommand() *cobra.Command {
 		Use:   "todo-cli",
 		Short: "CLI for Todo Manager API",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(config.LoaderOptions{
-				BaseURLOverride: baseURLFlag,
-				APIKeyOverride:  apiKeyFlag,
-			})
+			cfg, err := config.Load(config.LoaderOptions{})
 			if err != nil {
 				return &ExitError{Code: 2, Err: err}
 			}
 			appCtx.Config = cfg
-			switch outputFlag {
-			case string(output.FormatPretty):
-				appCtx.Output = output.FormatPretty
-			default:
-				appCtx.Output = output.FormatJSON
+
+			if cfg.Migrated() {
+				if werr := cfg.MigrationWriteErr(); werr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: migrated config in memory but could not persist (%v); continuing.\n", werr)
+				} else {
+					fmt.Fprintln(cmd.ErrOrStderr(), "Migrated config to multi-user format.")
+				}
 			}
-			cmd.Root().SetContext(context.WithValue(cmd.Root().Context(), appContextKey{}, &appCtx))
-			if cmd.CommandPath() == "todo-cli config view" || cmd.CommandPath() == "todo-cli config validate" || cmd.CommandPath() == "todo-cli login" {
-				return nil
-			}
-			if err := config.Validate(cfg); err != nil {
+
+			format, err := output.Parse(outputFlag)
+			if err != nil {
 				return &ExitError{Code: 2, Err: err}
 			}
+			appCtx.Output = format
+
+			cmd.Root().SetContext(context.WithValue(cmd.Root().Context(), appContextKey{}, &appCtx))
+
+			// Config subcommands and login manage users/config themselves and do
+			// not need an effective user or HTTP client.
+			path := cmd.CommandPath()
+			if path == "todo-cli login" || strings.HasPrefix(path, "todo-cli config") {
+				return nil
+			}
+
+			effective, err := resolveEffectiveUser(cmd, cfg)
+			if err != nil {
+				return &ExitError{Code: 2, Err: err}
+			}
+			if err := config.ValidateUser(effective); err != nil {
+				return &ExitError{Code: 2, Err: err}
+			}
+			appCtx.EffectiveUser = &effective
+
 			if appCtx.NewClient != nil {
-				appCtx.Client = appCtx.NewClient(cfg.BaseURL, cfg.APIKey)
+				appCtx.Client = appCtx.NewClient(effective.BaseURL, effective.APIKey)
 			} else {
-				appCtx.Client = client.New(cfg.BaseURL, cfg.APIKey)
+				appCtx.Client = client.New(effective.BaseURL, effective.APIKey)
 			}
 			return nil
 		},
@@ -64,13 +84,42 @@ func NewRootCommand() *cobra.Command {
 
 	rootCmd.PersistentFlags().StringVar(&baseURLFlag, "base-url", "", "Todo Manager server base URL")
 	rootCmd.PersistentFlags().StringVar(&apiKeyFlag, "api-key", "", "Todo Manager API key")
-	rootCmd.PersistentFlags().StringVar(&outputFlag, "output", string(output.FormatJSON), "Output format: json|pretty")
+	rootCmd.PersistentFlags().StringVarP(&userFlag, "user", "u", "", "User profile to use (defaults to auth.default_user)")
+	rootCmd.PersistentFlags().StringVarP(&outputFlag, "output", "o", string(output.FormatJSON), "Output format: yaml|json (pretty is a backward-compatible alias for json)")
 	rootCmd.SetContext(context.WithValue(context.Background(), appContextKey{}, &appCtx))
 
 	rootCmd.AddCommand(newConfigCommand())
 	rootCmd.AddCommand(newLoginCommand())
 	rootCmd.AddCommand(newTodosCommand())
 	return rootCmd
+}
+
+// resolveEffectiveUser resolves the effective user from cfg and the -u flag,
+// then applies env and flag overrides to a copy of that user. Precedence is
+// flag > env > file.
+func resolveEffectiveUser(cmd *cobra.Command, cfg *config.Config) (config.UserEntry, error) {
+	userFlag, _ := cmd.Flags().GetString("user")
+	u, err := cfg.ResolveUser(userFlag)
+	if err != nil {
+		return u, err
+	}
+	if v := strings.TrimSpace(os.Getenv(config.EnvAPIKey)); v != "" {
+		u.APIKey = v
+	}
+	if v := strings.TrimSpace(os.Getenv(config.EnvBaseURL)); v != "" {
+		if normalized, err := config.NormalizeBaseURL(v); err == nil {
+			u.BaseURL = normalized
+		}
+	}
+	if v, _ := cmd.Flags().GetString("api-key"); strings.TrimSpace(v) != "" {
+		u.APIKey = strings.TrimSpace(v)
+	}
+	if v, _ := cmd.Flags().GetString("base-url"); strings.TrimSpace(v) != "" {
+		if normalized, err := config.NormalizeBaseURL(v); err == nil {
+			u.BaseURL = normalized
+		}
+	}
+	return u, nil
 }
 
 type appContextKey struct{}

@@ -8,30 +8,45 @@ go install github.com/graydovee/todo-manager/todo-cli@latest
 
 ## Login And Config
 
-Write config from a provided key:
+The CLI supports **multiple user profiles** stored under `auth.users` in `~/.todo-manager/config.yaml`. The first `login` (no `-u`) bootstraps the `default` profile; `login -u <name>` adds or overwrites a named profile. Select the active profile on any command with `-u`/`--user` (defaults to `auth.default_user`).
+
+Bootstrap the default profile from a provided key:
 
 ```bash
 todo-cli login --api-key 'tdk_xxx'
 ```
 
-Write config from stdin:
+From stdin:
 
 ```bash
 printf 'tdk_xxx\n' | todo-cli login
 ```
 
-Override base URL during login:
+Add or update a named profile (overwrites if the name exists):
 
 ```bash
-todo-cli login --api-key 'tdk_xxx' --base-url 'https://todo.qaer.io'
+todo-cli login -u work --api-key 'tdk_yyy' --base-url 'https://work.example.com'
 ```
 
-Inspect effective config:
+Inspect config (`config view` defaults to YAML — use `-o json` to parse):
 
 ```bash
 todo-cli config view
+todo-cli config view -o json
 todo-cli config validate
 ```
+
+Manage user profiles:
+
+```bash
+todo-cli config user list                       # list profiles (masked keys, default flagged)
+todo-cli config user set-default work           # set the default profile
+todo-cli config user set-default ''             # clear the default (then -u is required)
+todo-cli config user rename work office         # rename; fails if the target name already exists
+todo-cli config user remove work                # remove a profile (clears default if it was it)
+```
+
+A legacy single-user config (flat `api_key`/`base_url`) is auto-migrated to the `default` profile on first run.
 
 ## Read Operations
 

@@ -186,14 +186,34 @@ See [`config.example.yaml`](config.example.yaml) for the full schema including t
 
 ## Command-line client (`todo-cli`)
 
-`todo-cli` is a Go client for the REST API — handy on its own and the backbone of the bundled Claude Code skill. After `make build` (or `make cli-build`), sign in once and start managing todos from the shell:
+`todo-cli` is a Go client for the REST API — handy on its own and the backbone of the bundled Claude Code skill. After `make build` (or `make cli-build`), sign in and start managing todos from the shell:
 
 ```bash
-./bin/todo-cli login                    # authenticate against your server
-./bin/todo-cli todo list --status open
-./bin/todo-cli todo create --type bug --title "Rotate auth keys quarterly"
-./bin/todo-cli todo complete TASK-7
+./bin/todo-cli login                          # first run: creates the "default" profile
+./bin/todo-cli login -u work --api-key ...    # add/update another profile
+./bin/todo-cli todos list --status open -u work
+./bin/todo-cli todos create --category bug --title "Rotate auth keys quarterly"
+./bin/todo-cli todos complete TASK-7
 ```
+
+The CLI stores **multiple user profiles** in `~/.todo-manager/config.yaml` (names may contain any characters, so they live in a list, not a map):
+
+```yaml
+auth:
+  default_user: default
+  users:
+    - name: default
+      base_url: https://todo.qaer.io
+      api_key: tdk_...
+    - name: work
+      base_url: https://work.example.com
+      api_key: tdk_...
+```
+
+- **`-u`/`--user`** selects the profile for a command (defaults to `auth.default_user`; if that's empty, `-u` is required).
+- **`config user`** manages profiles: `list`, `set-default <name>` (`""` clears it), `remove <name>`, `rename <old> <new>`.
+- **`--output`/`-o`** picks the output format: `yaml` or `json` (both pretty); `pretty` is a kept as a `json` alias. `config view` defaults to YAML — pass `-o json` for machine parsing.
+- A legacy single-user config (flat `api_key`/`base_url`) is **auto-migrated** to the `default` profile on first run.
 
 Run `todo-cli --help` for the full command tree.
 

@@ -2,11 +2,13 @@ package commands
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/graydovee/todo-manager/todo-cli/internal/config"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 func newLoginCommand() *cobra.Command {
@@ -17,17 +19,34 @@ func newLoginCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Generate and save CLI configuration",
+		Short: "Create or update a user profile and save configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			appCtx := getAppContext(cmd)
+			if appCtx == nil || appCtx.Config == nil {
+				return writeError(cmd, fmt.Errorf("configuration is not loaded"))
+			}
+			cfg := appCtx.Config
+
+			userFlag, _ := cmd.Flags().GetString("user")
+			name := strings.TrimSpace(userFlag)
+			bootstrap := name == ""
+			if bootstrap {
+				if cfg.Auth.DefaultUser != "" {
+					return writeError(cmd, &ExitError{Code: 2,
+						Err: errors.New("default user already set; use -u <name> to add another")})
+				}
+				name = "default"
+			}
+
 			apiKey := strings.TrimSpace(apiKeyFlag)
 			if apiKey == "" {
 				reader := bufio.NewReader(cmd.InOrStdin())
 				_, _ = fmt.Fprint(cmd.ErrOrStderr(), "Enter API key: ")
-				line, err := reader.ReadString('\n')
-				if err != nil && strings.TrimSpace(line) == "" {
+				line, _ := reader.ReadString('\n')
+				apiKey = strings.TrimSpace(line)
+				if apiKey == "" {
 					return writeError(cmd, &ExitError{Code: 2, Err: fmt.Errorf("api_key is required")})
 				}
-				apiKey = strings.TrimSpace(line)
 			}
 
 			baseURL := strings.TrimSpace(baseURLFlag)
@@ -39,31 +58,41 @@ func newLoginCommand() *cobra.Command {
 				return writeError(cmd, &ExitError{Code: 2, Err: err})
 			}
 
-			cfg := &config.Config{
+			candidate := config.UserEntry{
+				Name:    name,
 				APIKey:  apiKey,
 				BaseURL: normalizedBaseURL,
 			}
-			if err := config.Validate(cfg); err != nil {
+			if err := config.ValidateUser(candidate); err != nil {
 				return writeError(cmd, &ExitError{Code: 2, Err: err})
 			}
+
+			// UpsertUser overwrites an existing entry with the same name in place.
+			cfg.UpsertUser(candidate)
+			if bootstrap {
+				cfg.Auth.DefaultUser = "default"
+			}
+
 			if err := config.Write("", cfg); err != nil {
 				return writeError(cmd, err)
 			}
-			data, err := config.MarshalYAML(cfg)
+
+			// Print the target user entry (clear api_key) — mirrors the old
+			// single-user behavior of echoing the just-entered key.
+			data, err := yaml.Marshal(candidate)
 			if err != nil {
 				return writeError(cmd, err)
 			}
-			if _, err := cmd.OutOrStdout().Write(data); err != nil {
+			if _, err := cmd.OutOrStdout().Write(append(data, '\n')); err != nil {
 				return writeError(cmd, err)
 			}
-			homeDir, err := configUserHomeDir()
-			if err == nil {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Wrote configuration to %s\n", config.ConfigPath(homeDir))
+			if homeDir, err := configUserHomeDir(); err == nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Wrote configuration for user %q to %s\n", name, config.ConfigPath(homeDir))
 			}
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&apiKeyFlag, "api-key", "", "Access key to save into config")
+	cmd.Flags().StringVar(&apiKeyFlag, "api-key", "", "Access key to save for this user")
 	cmd.Flags().StringVar(&baseURLFlag, "base-url", "", "Todo Manager server base URL")
 	return cmd
 }

@@ -41,19 +41,23 @@ todo-cli config validate
 Write config from a provided key:
 
 ```bash
-todo-cli login --api-key 'tdk_xxx'
+todo-cli login --api-key 'tdk_xxx'             # first run: creates the "default" profile and sets it as default
 # or from stdin:
 printf 'tdk_xxx\n' | todo-cli login
+# add or update an additional named profile:
+todo-cli login -u work --api-key 'tdk_yyy' --base-url 'https://work.example.com'
 ```
+
+The CLI supports **multiple user profiles**. `login` without `-u` bootstraps the `default` profile (only allowed when no default exists yet); `login -u <name>` adds or overwrites a named profile. Select the profile per command with `-u`/`--user` (defaults to `auth.default_user`). Manage profiles with `config user list|set-default|remove|rename`.
 
 Important defaults:
 
-- Config file path: `~/.todo-manager/config.yaml`
+- Config file path: `~/.todo-manager/config.yaml` (multi-user `auth:` block; a legacy flat config auto-migrates to the `default` profile on first run)
 - Default base URL: `https://todo.qaer.io`
-- Environment overrides:
+- Environment overrides (applied to the selected user for the current run only):
   - `TODO_MANAGER_API_KEY`
   - `TODO_MANAGER_BASE_URL`
-- Successful `login` writes config and prints YAML to stdout.
+- Successful `login` writes config and prints the target user's YAML to stdout.
 
 ## Command Selection
 
@@ -84,8 +88,9 @@ Concretely:
 
 ## Output Rules
 
-- The CLI defaults to JSON output. Keep that default unless the user explicitly asks for something else.
-- Use `--output pretty` only when the user wants prettier JSON for reading.
+- The CLI defaults to JSON output (pretty/indented, still machine-parseable). Keep that default unless the user explicitly asks for something else.
+- `--output`/`-o` accepts `yaml` or `json` (both pretty); `pretty` is kept as a backward-compatible `json` alias. Use `-o yaml` for human-readable data.
+- `config view` defaults to **YAML**; pass `config view -o json` when you need to parse its output programmatically.
 - Do not invent table output; this CLI does not provide it.
 - When showing commands to the user, emit ready-to-run shell commands, not pseudocode.
 
@@ -109,7 +114,7 @@ The backend rejects values outside these sets, so always use them verbatim. Do n
 - Repeat `--tag` for multiple tags.
 - Repeat `--depends-on` for multiple dependency IDs.
 - Use `--duplicate-of <id>` to mark duplicate relationships.
-- `todo-cli login` accepts `--api-key` and optional `--base-url`.
+- `todo-cli login` accepts `--api-key`, optional `--base-url`, and optional `-u`/`--user` (profile name). Select the active profile on any command with `-u`/`--user`.
 
 For detailed command examples and flag mappings, read [references/commands.md](references/commands.md).
 

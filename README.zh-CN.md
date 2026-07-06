@@ -186,14 +186,34 @@ log:
 
 ## 命令行客户端（`todo-cli`）
 
-`todo-cli` 是一个对接 REST API 的 Go 客户端 —— 既能独立使用，也是内置 Claude Code skill 的底座。执行 `make build`（或 `make cli-build`）后，登录一次即可在终端里管理待办：
+`todo-cli` 是一个对接 REST API 的 Go 客户端 —— 既能独立使用，也是内置 Claude Code skill 的底座。执行 `make build`（或 `make cli-build`）后，登录并在终端里管理待办：
 
 ```bash
-./bin/todo-cli login                    # 在你的服务器上完成认证
-./bin/todo-cli todo list --status open
-./bin/todo-cli todo create --type bug --title "Rotate auth keys quarterly"
-./bin/todo-cli todo complete TASK-7
+./bin/todo-cli login                          # 首次运行：创建名为 "default" 的用户
+./bin/todo-cli login -u work --api-key ...    # 新增 / 更新另一个用户
+./bin/todo-cli todos list --status open -u work
+./bin/todo-cli todos create --category bug --title "定期轮换认证密钥"
+./bin/todo-cli todos complete TASK-7
 ```
+
+CLI 在 `~/.todo-manager/config.yaml` 中保存**多个用户配置**（名字可包含任意字符，因此使用列表而非 map）：
+
+```yaml
+auth:
+  default_user: default
+  users:
+    - name: default
+      base_url: https://todo.qaer.io
+      api_key: tdk_...
+    - name: work
+      base_url: https://work.example.com
+      api_key: tdk_...
+```
+
+- **`-u`/`--user`** 指定本次命令使用的用户（缺省时取 `auth.default_user`；若为空则必须传 `-u`）。
+- **`config user`** 管理用户：`list`、`set-default <name>`（传 `""` 清空默认）、`remove <name>`、`rename <old> <new>`。
+- **`--output`/`-o`** 选择输出格式：`yaml` 或 `json`（均为 pretty 打印）；`pretty` 作为 `json` 的兼容别名保留。`config view` 默认输出 YAML —— 机器解析请加 `-o json`。
+- 旧版单用户配置（扁平的 `api_key`/`base_url`）会在首次运行时**自动迁移**为 `default` 用户。
 
 运行 `todo-cli --help` 查看完整命令树。
 
