@@ -29,10 +29,15 @@ func centeredText(gtx layout.Context, th *material.Theme, msg string, c color.NR
 }
 
 // colWidth constrains a column to a fixed dp width and renders body inside.
+// It always reports the exact fixed width so header and data rows align even
+// when their content differs in natural size.
 func colWidth(gtx layout.Context, width unit.Dp, body layout.Widget) layout.Dimensions {
-	gtx.Constraints.Max.X = gtx.Dp(width)
-	gtx.Constraints.Min.X = gtx.Constraints.Max.X
-	return body(gtx)
+	px := gtx.Dp(width)
+	gtx.Constraints.Max.X = px
+	gtx.Constraints.Min.X = px
+	dims := body(gtx)
+	dims.Size.X = px
+	return dims
 }
 
 // verticalCenter wraps body so it is vertically centred in the given area.
