@@ -1,4 +1,4 @@
-.PHONY: frontend-dev backend-dev frontend-build cli-build cli-test test build run docker-build release clean
+.PHONY: frontend-dev backend-dev frontend-build cli-build cli-test desktop-build desktop-windows desktop-run test build run docker-build release clean
 
 frontend-dev:
 	cd frontend && npm run dev -- --port 5173
@@ -17,6 +17,19 @@ cli-build:
 
 cli-test:
 	cd todo-cli && go test ./...
+
+# Desktop GUI client (Gio). Windows is the primary target.
+desktop-build:
+	mkdir -p bin
+	cd desktop && go build -o ../bin/todo-desktop .
+
+# Cross-compile a Windows binary with no console window.
+desktop-windows:
+	mkdir -p bin
+	cd desktop && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w -H windowsgui" -o ../bin/todo-desktop.exe .
+
+desktop-run:
+	cd desktop && go run .
 
 test:
 	cd backend && go test ./...
