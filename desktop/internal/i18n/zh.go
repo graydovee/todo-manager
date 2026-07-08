@@ -99,6 +99,8 @@ var zh = map[string]string{
 	"manage.createFailed":  "创建失败：",
 	"manage.created":       "已创建",
 	"manage.language":      "语言",
+	"manage.animDuration":  "动画时长 (毫秒)",
+	"manage.hideDelay":     "隐藏延迟 (毫秒)",
 
 	// tray
 	"tray.unlock":  "解锁",

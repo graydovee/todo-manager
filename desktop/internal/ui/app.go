@@ -99,6 +99,52 @@ func (a *App) isTopMost() bool {
 // IsTopMost reports the top-most state (safe for any goroutine).
 func (a *App) IsTopMost() bool { return a.isTopMost() }
 
+// CurrentPage returns the current page (safe for any goroutine).
+func (a *App) CurrentPage() store.Page {
+	a.State.Lock()
+	defer a.State.Unlock()
+	return a.State.Page
+}
+
+// DockSnapshot returns a copy of the dock state (safe for any goroutine).
+func (a *App) DockSnapshot() store.DockSnapshot {
+	return a.State.Dock.Snapshot()
+}
+
+// SetDockHidden toggles the dock hidden flag (safe for any goroutine).
+func (a *App) SetDockHidden(v bool, curX, curY int, nowMs int64) {
+	a.State.Dock.SetHidden(v, curX, curY, nowMs)
+}
+
+// StopAnim clears the dock animation-in-progress flag.
+func (a *App) StopAnim() {
+	a.State.Dock.Lock()
+	a.State.Dock.Animating = false
+	a.State.Dock.Unlock()
+}
+
+// DockAnimMs returns the configured slide animation duration (ms), defaulting to
+// 500 when unset.
+func (a *App) DockAnimMs() int {
+	a.State.Lock()
+	defer a.State.Unlock()
+	if v := a.State.Config.Dock.AnimMs; v > 0 {
+		return v
+	}
+	return 500
+}
+
+// DockHideDelayMs returns the configured cursor-leave delay before auto-hide
+// (ms), defaulting to 600 when unset.
+func (a *App) DockHideDelayMs() int {
+	a.State.Lock()
+	defer a.State.Unlock()
+	if v := a.State.Config.Dock.HideDelayMs; v > 0 {
+		return v
+	}
+	return 600
+}
+
 func (a *App) message() string {
 	a.State.Lock()
 	defer a.State.Unlock()

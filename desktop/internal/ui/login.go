@@ -2,10 +2,14 @@ package ui
 
 import (
 	"context"
+	"image"
 	"time"
 
 	"gioui.org/app"
 	"gioui.org/layout"
+	"gioui.org/op"
+	"gioui.org/op/clip"
+	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -175,9 +179,20 @@ func labeledEditor(gtx layout.Context, th *material.Theme, ed *widget.Editor, la
 			return lbl.Layout(gtx)
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			// Lay out the editor, then draw an underline beneath it. Focused
+			// editors get a darker line.
 			de := material.Editor(th, ed, hint)
 			de.Color = textPrimary
-			return de.Layout(gtx)
+			de.HintColor = textMuted
+			dims := de.Layout(gtx)
+			// Underline: shift down by the editor height and fill a 1px line.
+			lineColor := border
+			if gtx.Source.Focused(ed) {
+				lineColor = textSecondary
+			}
+			defer op.Offset(image.Pt(0, dims.Size.Y)).Push(gtx.Ops).Pop()
+			paint.FillShape(gtx.Ops, lineColor, clip.Rect{Max: image.Pt(dims.Size.X, 1)}.Op())
+			return layout.Dimensions{Size: image.Pt(dims.Size.X, dims.Size.Y + 1)}
 		}),
 	)
 }

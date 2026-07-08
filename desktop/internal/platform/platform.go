@@ -17,6 +17,20 @@ type Controller interface {
 	// HideFromTaskbar removes the window from the taskbar and Alt+Tab so the tray
 	// icon is the only taskbar presence.
 	HideFromTaskbar()
+
+	// WindowGeometry returns the window's position and size (screen coordinates).
+	WindowGeometry() (x, y, w, h int)
+	// MoveWindow repositions the window to the given screen coordinates, keeping
+	// its current size when w/h are zero.
+	MoveWindow(x, y, w, h int)
+	// MoveWindowSync repositions the window synchronously (bypassing the async
+	// win-thread queue) for smooth animation. Only safe from non-UI goroutines.
+	MoveWindowSync(x, y, w, h int)
+	// WorkArea returns the work area (excluding taskbar) of the monitor nearest
+	// the window.
+	WorkArea() (x, y, w, h int)
+	// CursorPos returns the cursor position in screen coordinates.
+	CursorPos() (x, y int)
 }
 
 // Handle carries the native window identifier once it becomes available.
@@ -25,6 +39,11 @@ type Handle uintptr
 // Noop is a Controller that does nothing; used on unsupported platforms.
 type Noop struct{}
 
-func (Noop) SetTopMost(bool)      {}
-func (Noop) SetLock(bool)         {}
-func (Noop) HideFromTaskbar()     {}
+func (Noop) SetTopMost(bool)       {}
+func (Noop) SetLock(bool)          {}
+func (Noop) HideFromTaskbar()      {}
+func (Noop) WindowGeometry() (int, int, int, int) { return 0, 0, 0, 0 }
+func (Noop) MoveWindow(int, int, int, int)        {}
+func (Noop) MoveWindowSync(int, int, int, int)    {}
+func (Noop) WorkArea() (int, int, int, int)       { return 0, 0, 0, 0 }
+func (Noop) CursorPos() (int, int)                 { return 0, 0 }

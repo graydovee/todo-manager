@@ -113,6 +113,73 @@ func (c *Controller) HideFromTaskbar() {
 	})
 }
 
+// WindowGeometry returns the current position and size synchronously. It reads
+// directly (not via the task queue) because callers need an immediate value.
+func (c *Controller) WindowGeometry() (x, y, w, h int) {
+	if c.hwnd == 0 {
+		return 0, 0, 0, 0
+	}
+	return GetWindowRect(c.hwnd)
+}
+
+// MoveWindow repositions the window asynchronously via the win thread. Calling
+// user32!MoveWindow synchronously on the UI goroutine deadlocks against Gio's
+// window thread (MoveWindow sends WM_WINDOWPOSCHANGING/WM_PAINT synchronously).
+// The async queue is drained fast enough for smooth dragging.
+func (c *Controller) MoveWindow(x, y, w, h int) {
+	if c.hwnd == 0 {
+		return
+	}
+	if w == 0 || h == 0 {
+		_, _, cw, ch := GetWindowRect(c.hwnd)
+		if w == 0 {
+			w = cw
+		}
+		if h == 0 {
+			h = ch
+		}
+	}
+	finalW, finalH := w, h
+	c.exec("MoveWindow", func() error {
+		MoveWindow(c.hwnd, x, y, finalW, finalH)
+		return nil
+	})
+}
+
+// MoveWindowSync repositions the window synchronously on the calling goroutine.
+// It bypasses the win-thread queue so the position is applied immediately —
+// necessary for smooth animation where each frame must land before the next.
+// Safe to call from the dock poll goroutine (which does not hold Gio's render
+// context, so there is no deadlock risk).
+func (c *Controller) MoveWindowSync(x, y, w, h int) {
+	if c.hwnd == 0 {
+		return
+	}
+	if w == 0 || h == 0 {
+		_, _, cw, ch := GetWindowRect(c.hwnd)
+		if w == 0 {
+			w = cw
+		}
+		if h == 0 {
+			h = ch
+		}
+	}
+	MoveWindow(c.hwnd, x, y, w, h)
+}
+
+// WorkArea returns the work area of the monitor nearest the window.
+func (c *Controller) WorkArea() (x, y, w, h int) {
+	if c.hwnd == 0 {
+		return 0, 0, 0, 0
+	}
+	return WorkArea(c.hwnd)
+}
+
+// CursorPos returns the cursor position in screen coordinates.
+func (c *Controller) CursorPos() (x, y int) {
+	return CursorPos()
+}
+
 // SetLock toggles click-through + translucency. Idempotent: if the requested
 // state already matches what was last applied, it returns immediately.
 func (c *Controller) SetLock(locked bool) {

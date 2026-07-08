@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,6 +45,10 @@ type ManageUI struct {
 	newPri   widget.Editor
 	newTags  widget.Editor
 	newDue   widget.Editor
+
+	// Dock settings editors.
+	animEditor   widget.Editor
+	hideEditor   widget.Editor
 }
 
 var (
@@ -61,6 +66,8 @@ func NewManageUI(a *App) *ManageUI {
 	m.newPri.SingleLine = true
 	m.newTags.SingleLine = true
 	m.newDue.SingleLine = true
+	m.animEditor.SingleLine = true
+	m.hideEditor.SingleLine = true
 
 	m.statusToggles = make(map[string]*widget.Clickable, len(statusOptions))
 	m.categoryToggles = make(map[string]*widget.Clickable, len(categoryOptions))
@@ -79,6 +86,17 @@ func NewManageUI(a *App) *ManageUI {
 	f := a.State.Config.Filters
 	m.qEditor.SetText(f.Query)
 	m.codeEditor.SetText(f.Code)
+	// Seed dock timing editors from config (show default when unset).
+	animMs := a.State.Config.Dock.AnimMs
+	if animMs <= 0 {
+		animMs = 500
+	}
+	hideMs := a.State.Config.Dock.HideDelayMs
+	if hideMs <= 0 {
+		hideMs = 600
+	}
+	m.animEditor.SetText(strconv.Itoa(animMs))
+	m.hideEditor.SetText(strconv.Itoa(hideMs))
 	return m
 }
 
@@ -149,6 +167,20 @@ func (m *ManageUI) filtersView(gtx layout.Context) layout.Dimensions {
 		layout.Rigid(sectionLabel(m.app.Theme, i18n.T("manage.language"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 		layout.Rigid(m.langRow),
+		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
+
+		// Dock timing settings.
+		layout.Rigid(sectionLabel(m.app.Theme, i18n.T("manage.animDuration"))),
+		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return labeledEditor(gtx, m.app.Theme, &m.animEditor, i18n.T("manage.animDuration"), "500")
+		}),
+		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
+		layout.Rigid(sectionLabel(m.app.Theme, i18n.T("manage.hideDelay"))),
+		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return labeledEditor(gtx, m.app.Theme, &m.hideEditor, i18n.T("manage.hideDelay"), "600")
+		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
 
 		layout.Rigid(sectionLabel(m.app.Theme, i18n.T("manage.search"))),
@@ -328,9 +360,13 @@ func (m *ManageUI) toggleFilter(kind, value string) {
 }
 
 func (m *ManageUI) applyFilters() {
+	animMs, _ := strconv.Atoi(strings.TrimSpace(m.animEditor.Text()))
+	hideMs, _ := strconv.Atoi(strings.TrimSpace(m.hideEditor.Text()))
 	m.app.State.Lock()
 	m.app.State.Config.Filters.Query = strings.TrimSpace(m.qEditor.Text())
 	m.app.State.Config.Filters.Code = strings.TrimSpace(m.codeEditor.Text())
+	m.app.State.Config.Dock.AnimMs = animMs
+	m.app.State.Config.Dock.HideDelayMs = hideMs
 	m.app.State.Unlock()
 	homePersist(m.app.State.Config)
 	m.app.List.RequestRefresh()

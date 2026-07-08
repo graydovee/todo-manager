@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"time"
 
 	"gioui.org/app"
 	"gioui.org/op"
@@ -94,6 +95,11 @@ func runWindow(state *store.AppState, todos *store.TodoStore, theme *material.Th
 	// the loop can process tray commands promptly even without window input.
 	trayCmds := make(chan platform.TrayCmd, 8)
 	go platform.RunTray(cfg.Window.TopMost, trayCmds, func() { w.Invalidate() })
+
+	// Dock poll goroutine: when the window is docked to an edge and unlocked,
+	// auto-hide it (slide off-screen) and slide it back out when the cursor
+	// approaches the edge.
+	go dockPollLoop(gui, w)
 
 	logf("runWindow: entering event loop")
 
@@ -187,4 +193,143 @@ func dim(v, fallback int) int {
 		return fallback
 	}
 	return v
+}
+
+// dockPollLoop watches cursor proximity to auto-hide/show a docked window.
+// It runs on its own goroutine and polls every ~150ms. The window auto-hides
+// (slides off-screen) only when: docked, unlocked, not dragging, and on the list
+// page. When hidden, the cursor approaching the docked edge slides it back out.
+func dockPollLoop(gui *ui.App, w *app.Window) {
+	const (
+		animInterval = 16  // ms between animation ticks (~60fps); only affects smoothness
+		nearEdge     = 6   // px from edge to trigger slide-out
+		gracePeriod  = 1000 // ms after slide-out before hiding is allowed again
+	)
+	var (
+		lastLeftTime int64
+		lastShownMs  int64 // when the window last finished sliding out
+	)
+	for {
+		time.Sleep(animInterval * time.Millisecond)
+
+		// Read tunable timing from config (0 = built-in default).
+		animDuration := int64(gui.DockAnimMs())
+		hideDelay := int64(gui.DockHideDelayMs())
+
+		ctrl := gui.Platform
+		if ctrl == nil {
+			continue
+		}
+
+		dock := gui.DockSnapshot()
+
+		// Animate an in-progress slide, driven by wall-clock time so the
+		// duration is exact regardless of sleep/tick jitter.
+		if dock.Animating {
+			elapsed := time.Now().UnixMilli() - dock.AnimStartMs
+			if elapsed >= animDuration {
+				ctrl.MoveWindowSync(dock.AnimTargetX, dock.AnimTargetY, 0, 0)
+				gui.StopAnim()
+				// Record when the window settled so we can apply a grace period
+				// before hiding again (prevents show/hide oscillation at edges).
+				lastShownMs = time.Now().UnixMilli()
+				continue
+			}
+			t := float32(elapsed) / float32(animDuration)
+			// Ease-out for a natural deceleration feel.
+			t = 1 - (1-t)*(1-t)
+			nx := lerp(dock.AnimStartX, dock.AnimTargetX, t)
+			ny := lerp(dock.AnimStartY, dock.AnimTargetY, t)
+			ctrl.MoveWindowSync(nx, ny, 0, 0)
+			continue
+		}
+
+		// Idle logic: auto-hide only when docked, top-most, unlocked, not
+		// dragging, and on the list page.
+		if !dock.Docked || dock.Dragging || gui.IsLocked() || !gui.IsTopMost() {
+			lastLeftTime = 0
+			continue
+		}
+		if gui.CurrentPage() != store.PageList {
+			lastLeftTime = 0
+			continue
+		}
+
+		cx, cy := ctrl.CursorPos()
+		wx, wy, ww, wh := ctrl.WindowGeometry()
+		workX, workY, workW, workH := ctrl.WorkArea()
+		now := time.Now().UnixMilli()
+
+		if dock.Hidden {
+			// Hidden: slide out when cursor nears the docked edge.
+			if cursorNearEdge(cx, cy, dock.Edge, dock.DockX, dock.DockY, ww, wh, nearEdge, workX, workY, workW, workH) {
+				gui.SetDockHidden(false, dock.HideX, dock.HideY, now) // animate from hide→dock
+			}
+		} else {
+			// Shown: hide when cursor leaves the window area (after a delay).
+			// Skip during the grace period right after sliding out.
+			if now-lastShownMs < gracePeriod {
+				lastLeftTime = 0
+			} else if cursorInWindow(cx, cy, wx, wy, ww, wh) {
+				lastLeftTime = 0
+			} else {
+				if lastLeftTime == 0 {
+					lastLeftTime = now
+				}
+				if now-lastLeftTime > hideDelay {
+					gui.SetDockHidden(true, dock.DockX, dock.DockY, now) // animate from dock→hide
+				}
+			}
+		}
+	}
+}
+
+// approach moves cur towards target by at most step, returning the new value.
+func approach(cur, target, step int) int {
+	switch {
+	case cur < target:
+		if cur+step >= target {
+			return target
+		}
+		return cur + step
+	case cur > target:
+		if cur-step <= target {
+			return target
+		}
+		return cur - step
+	}
+	return target
+}
+
+// abs returns the absolute value of x.
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// lerp linearly interpolates between a and b by t (0..1).
+func lerp(a, b int, t float32) int {
+	return a + int(float32(b-a)*t)
+}
+
+// cursorInWindow reports whether (cx,cy) is within the window rect.
+func cursorInWindow(cx, cy, wx, wy, ww, wh int) bool {
+	return cx >= wx && cx < wx+ww && cy >= wy && cy < wy+wh
+}
+
+// cursorNearEdge reports whether the cursor is close to the docked edge.
+func cursorNearEdge(cx, cy int, edge store.Edge, dx, dy, ww, wh, threshold, workX, workY, workW, workH int) bool {
+	switch edge {
+	case store.EdgeTop:
+		return cy <= workY+threshold && cx >= dx && cx < dx+ww
+	case store.EdgeBottom:
+		return cy >= workY+workH-threshold && cx >= dx && cx < dx+ww
+	case store.EdgeLeft:
+		return cx <= workX+threshold && cy >= dy && cy < dy+wh
+	case store.EdgeRight:
+		return cx >= workX+workW-threshold && cy >= dy && cy < dy+wh
+	}
+	return false
 }

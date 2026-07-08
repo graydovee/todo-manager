@@ -3,16 +3,16 @@ package ui
 import (
 	"context"
 	"fmt"
-	"image"
 	"image/color"
 	"strings"
 	"time"
 
 	"gioui.org/app"
 	"gioui.org/font"
+	"gioui.org/gesture"
+	"gioui.org/io/pointer"
 	"gioui.org/io/system"
 	"gioui.org/layout"
-	"gioui.org/op/clip"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -39,6 +39,10 @@ type ListUI struct {
 
 	// Sort column header clickables.
 	headerTitle widget.Clickable
+
+	// Custom window drag (replaces system ActionMove to avoid Win11 Snap).
+	drag      gesture.Drag
+	dragStart struct{ cursorX, cursorY, winX, winY int }
 
 	// firstLoad tracks whether the initial fetch has been triggered.
 	firstLoad bool
@@ -95,24 +99,25 @@ func (u *ListUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 }
 
 // topBar renders the title and the pin/lock/manage icon buttons. The title text
-// is the window drag handle for the frameless window; the drag action is scoped
-// to a small explicit region so the buttons on the right keep receiving clicks.
+// is a custom drag handle (gesture.Drag) that moves the native window via Win32
+// SetWindowPos — this avoids registering system.ActionMove, which would make
+// Gio return HTCAPTION and trigger Windows 11 Snap on edge drag.
 func (u *ListUI) topBar(gtx layout.Context) layout.Dimensions {
 	return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(12), Right: unit.Dp(8)}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-				// Draggable title: lay out the text, then register ActionMove over
-				// its exact bounds via a clip so it cannot swallow button clicks.
+				// Draggable title: the whole left area is a drag handle.
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					t := material.Body1(u.app.Theme, i18n.T("list.title"))
-					t.TextSize = unit.Sp(16)
-					t.Font.Weight = font.SemiBold
-					t.Color = textPrimary
-					dims := t.Layout(gtx)
-					// Scope the drag handle to the title's own bounding box.
-					r := image.Rect(0, 0, dims.Size.X, dims.Size.Y)
-					defer clip.Rect(r).Push(gtx.Ops).Pop()
-					system.ActionInputOp(system.ActionMove).Add(gtx.Ops)
+					dims := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							t := material.Body1(u.app.Theme, i18n.T("list.title"))
+							t.TextSize = unit.Sp(16)
+							t.Font.Weight = font.SemiBold
+							t.Color = textPrimary
+							return t.Layout(gtx)
+						}),
+					)
+					u.handleDrag(gtx)
 					return dims
 				}),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, u.app.Theme, &u.refreshBtn, IconRefresh, false) }),
@@ -127,6 +132,158 @@ func (u *ListUI) topBar(gtx layout.Context) layout.Dimensions {
 			)
 		},
 	)
+}
+
+// handleDrag processes custom window-drag pointer events over the title area.
+// On Press it captures the cursor + window origin; on Drag it moves the window
+// by the delta (constrained to the edge if docked); on Release it checks for
+// edge snapping.
+func (u *ListUI) handleDrag(gtx layout.Context) {
+	u.drag.Add(gtx.Ops)
+	ctrl := u.app.Platform
+	if ctrl == nil {
+		return
+	}
+	for {
+		ev, ok := u.drag.Update(gtx.Metric, gtx.Source, gesture.Both)
+		if !ok {
+			break
+		}
+		switch {
+		case ev.Kind == pointer.Press && ev.Buttons == pointer.ButtonPrimary:
+			cx, cy := ctrl.CursorPos()
+			wx, wy, _, _ := ctrl.WindowGeometry()
+			u.dragStart.cursorX = cx
+			u.dragStart.cursorY = cy
+			u.dragStart.winX = wx
+			u.dragStart.winY = wy
+			u.app.State.Dock.SetDragging(true)
+		case ev.Kind == pointer.Drag:
+			cx, cy := ctrl.CursorPos()
+			dx := cx - u.dragStart.cursorX
+			dy := cy - u.dragStart.cursorY
+			newX := u.dragStart.winX + dx
+			newY := u.dragStart.winY + dy
+			// If already docked, constrain movement along the docked edge.
+			u.constrainDragged(ctrl, &newX, &newY)
+			ctrl.MoveWindow(newX, newY, 0, 0)
+		case ev.Kind == pointer.Release:
+			u.app.State.Dock.SetDragging(false)
+			u.tryDock(ctrl)
+		}
+	}
+}
+
+// constrainDragged adjusts newX/newY so the window sticks to the docked edge
+// while allowing free movement along it. If the window is dragged far from the
+// edge, it undocks.
+func (u *ListUI) constrainDragged(ctrl platformCtrl, newX, newY *int) {
+	dock := u.app.State.Dock.Snapshot()
+	if !dock.Docked {
+		return
+	}
+	const undockThreshold = 20 // px from edge to break free
+	wx2, wy2, ww2, wh2 := dock.WorkX, dock.WorkY, dock.WorkW, dock.WorkH
+	switch dock.Edge {
+	case store.EdgeTop:
+		if abs(*newY-wy2) > undockThreshold {
+			u.app.State.Dock.Reset()
+			return
+		}
+		*newY = wy2
+		u.app.State.Dock.UpdateDockPos(*newX, *newY)
+	case store.EdgeBottom:
+		if abs((*newY+dock.WinH)-(wy2+wh2)) > undockThreshold {
+			u.app.State.Dock.Reset()
+			return
+		}
+		*newY = wy2 + wh2 - dock.WinH
+		u.app.State.Dock.UpdateDockPos(*newX, *newY)
+	case store.EdgeLeft:
+		if abs(*newX-wx2) > undockThreshold {
+			u.app.State.Dock.Reset()
+			return
+		}
+		*newX = wx2
+		u.app.State.Dock.UpdateDockPos(*newX, *newY)
+	case store.EdgeRight:
+		if abs((*newX+dock.WinW)-(wx2+ww2)) > undockThreshold {
+			u.app.State.Dock.Reset()
+			return
+		}
+		*newX = wx2 + ww2 - dock.WinW
+		u.app.State.Dock.UpdateDockPos(*newX, *newY)
+	}
+}
+
+// tryDock checks the window position against screen edges and snaps if close.
+// Corners prioritise Top/Bottom over Left/Right. The window keeps its current
+// along-edge position (not forced to centre).
+func (u *ListUI) tryDock(ctrl platformCtrl) {
+	const threshold = 30 // pixels from edge to trigger snap
+	wx, wy, ww, wh := ctrl.WindowGeometry()
+	workX, workY, workW, workH := ctrl.WorkArea()
+	if ww == 0 || workW == 0 {
+		return
+	}
+
+	// Distance from each edge of the work area.
+	nearTop := abs(wy - workY) < threshold
+	nearBottom := abs((wy + wh) - (workY + workH)) < threshold
+	nearLeft := abs(wx - workX) < threshold
+	nearRight := abs((wx + ww) - (workX + workW)) < threshold
+
+	var edge store.Edge
+	switch {
+	case nearTop:
+		edge = store.EdgeTop
+	case nearBottom:
+		edge = store.EdgeBottom
+	case nearLeft:
+		edge = store.EdgeLeft
+	case nearRight:
+		edge = store.EdgeRight
+	default:
+		// Not near any edge — ensure undocked.
+		u.app.State.Dock.Reset()
+		return
+	}
+
+	// Snap: clamp to the edge but keep the current along-edge position.
+	var dockX, dockY int
+	switch edge {
+	case store.EdgeTop:
+		dockX = wx
+		dockY = workY
+	case store.EdgeBottom:
+		dockX = wx
+		dockY = workY + workH - wh
+	case store.EdgeLeft:
+		dockX = workX
+		dockY = wy
+	case store.EdgeRight:
+		dockX = workX + workW - ww
+		dockY = wy
+	}
+
+	ctrl.MoveWindow(dockX, dockY, ww, wh)
+	u.app.State.Dock.SetDock(edge, dockX, dockY, ww, wh, workX, workY, workW, workH)
+}
+
+// abs returns the absolute value of x.
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// platformCtrl is the subset of platform.Controller needed for dragging/docking.
+type platformCtrl interface {
+	WindowGeometry() (x, y, w, h int)
+	MoveWindow(x, y, w, h int)
+	WorkArea() (x, y, w, h int)
+	CursorPos() (x, y int)
 }
 
 // table renders the header row plus all item rows in a scrollable list.

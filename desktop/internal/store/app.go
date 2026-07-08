@@ -39,6 +39,8 @@ type AppState struct {
 	// Window mode (top-most / lock). Locking implies top-most.
 	TopMost bool
 	Locked  bool
+	// Dock tracks edge-snapping and auto-hide state.
+	Dock DockState
 
 	// SelectedID is the todo currently open in the detail page (0 = none).
 	SelectedID uint

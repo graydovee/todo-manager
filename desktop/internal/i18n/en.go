@@ -99,6 +99,8 @@ var en = map[string]string{
 	"manage.createFailed":  "Create failed: ",
 	"manage.created":       "Created",
 	"manage.language":      "Language",
+	"manage.animDuration":  "Animation (ms)",
+	"manage.hideDelay":     "Hide delay (ms)",
 
 	// tray
 	"tray.unlock":  "Unlock",

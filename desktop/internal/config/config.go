@@ -23,6 +23,13 @@ type Config struct {
 	Language string      `yaml:"language,omitempty"` // "en" | "zh"; empty = follow system
 	Window   Window      `yaml:"window"`
 	Filters  ListFilters `yaml:"filters"`
+	Dock     DockSettings `yaml:"dock"`
+}
+
+// DockSettings controls the auto-hide animation and timing.
+type DockSettings struct {
+	AnimMs     int `yaml:"anim_ms,omitempty"`     // slide animation duration (ms); 0 = default 500
+	HideDelayMs int `yaml:"hide_delay_ms,omitempty"` // cursor-leave delay before auto-hide (ms); 0 = default 600
 }
 
 // Window holds the last window geometry and pin/lock state.
@@ -77,7 +84,8 @@ func Load(homeDir string) (*Config, error) {
 		}
 	}
 
-	data, err := os.ReadFile(Path(homeDir))
+	configPath := Path(homeDir)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return Default(), nil
@@ -87,7 +95,12 @@ func Load(homeDir string) (*Config, error) {
 
 	cfg := Default()
 	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("parse config file: %w", err)
+		// A corrupt config (e.g. all NUL bytes after a crash/power loss during a
+		// non-atomic write) must not make the app unlaunchable. Quarantine the
+		// bad file (best effort) and fall back to defaults so the user lands on
+		// the login page instead of a hard exit.
+		quarantine(configPath, data)
+		return Default(), nil
 	}
 	// Ensure slices are non-nil so JSON/query handling is uniform.
 	if cfg.Filters.Status == nil {
@@ -111,7 +124,9 @@ func Load(homeDir string) (*Config, error) {
 	return cfg, nil
 }
 
-// Write persists the config (0600, dir 0700).
+// Write persists the config (0600, dir 0700). It writes to a sibling temp file
+// and atomically renames it over the real path, so a crash or power loss mid-write
+// can never leave a truncated/corrupt config (the previous full content survives).
 func Write(homeDir string, cfg *Config) error {
 	if homeDir == "" {
 		var err error
@@ -130,10 +145,49 @@ func Write(homeDir string, cfg *Config) error {
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
-	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+
+	// tmp + rename keeps the on-disk config always-complete. os.Rename is atomic
+	// on POSIX and on Windows (MoveFileEx with MOVEFILE_REPLACE_EXISTENCE).
+	tmp, err := os.CreateTemp(filepath.Dir(configPath), ".gui-config-*.yaml.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp config file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
 		return fmt.Errorf("write config file: %w", err)
 	}
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod config file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close config file: %w", err)
+	}
+	if err := os.Rename(tmpPath, configPath); err != nil {
+		return fmt.Errorf("rename config file: %w", err)
+	}
+	cleanup = false
 	return nil
+}
+
+// quarantine saves a copy of the unreadable config alongside the real one so the
+// user can inspect/recover it, then truncates the live file so the next write
+// starts clean. Failures are ignored: this is best-effort cleanup, never fatal.
+func quarantine(configPath string, data []byte) {
+	if len(data) == 0 {
+		return
+	}
+	backup := configPath + ".corrupt"
+	if werr := os.WriteFile(backup, data, 0o600); werr == nil {
+		_ = os.Remove(configPath)
+	}
 }
 
 func marshal(cfg *Config) ([]byte, error) {
