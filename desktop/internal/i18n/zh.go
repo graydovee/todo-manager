@@ -28,8 +28,9 @@ var zh = map[string]string{
 	// list
 	"list.title":        "待办事项",
 	"list.colTitle":     "标题",
-	"list.colPriority":  "P",
+	"list.colPriority":  "优先级",
 	"list.colStatus":    "状态",
+	"list.colAction":    "操作",
 	"list.noTodos":      "暂无待办",
 	"list.refreshing":   "  ·  刷新中…",
 	"list.blocked":      "存在未完成的前置依赖",

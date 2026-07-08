@@ -49,9 +49,16 @@ type ListUI struct {
 }
 
 type rowWidgets struct {
-	row     widget.Clickable // whole row -> open detail
-	action  widget.Clickable // start / complete button
+	row    widget.Clickable // whole row -> open detail
+	action widget.Clickable // start / complete button
 }
+
+// Shared column widths (dp) so the header and rows stay aligned.
+const (
+	colPriorityW = 44
+	colStatusW   = 78
+	colActionW   = 52
+)
 
 func NewListUI(a *App) *ListUI {
 	return &ListUI{app: a, list: layout.List{Axis: layout.Vertical}}
@@ -316,7 +323,7 @@ func (u *ListUI) headerRow(gtx layout.Context) layout.Dimensions {
 				})
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return colWidth(gtx, 26, func(gtx layout.Context) layout.Dimensions {
+				return colWidth(gtx, colPriorityW, func(gtx layout.Context) layout.Dimensions {
 					lbl := material.Label(u.app.Theme, unit.Sp(11), i18n.T("list.colPriority"))
 					lbl.Font.Weight = font.SemiBold
 					lbl.Color = textSecondary
@@ -324,7 +331,7 @@ func (u *ListUI) headerRow(gtx layout.Context) layout.Dimensions {
 				})
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return colWidth(gtx, 78, func(gtx layout.Context) layout.Dimensions {
+				return colWidth(gtx, colStatusW, func(gtx layout.Context) layout.Dimensions {
 					lbl := material.Label(u.app.Theme, unit.Sp(11), i18n.T("list.colStatus"))
 					lbl.Font.Weight = font.SemiBold
 					lbl.Color = textSecondary
@@ -332,8 +339,11 @@ func (u *ListUI) headerRow(gtx layout.Context) layout.Dimensions {
 				})
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return colWidth(gtx, 52, func(gtx layout.Context) layout.Dimensions {
-					return layout.Dimensions{}
+				return colWidth(gtx, colActionW, func(gtx layout.Context) layout.Dimensions {
+					lbl := material.Label(u.app.Theme, unit.Sp(11), i18n.T("list.colAction"))
+					lbl.Font.Weight = font.SemiBold
+					lbl.Color = textSecondary
+					return lbl.Layout(gtx)
 				})
 			}),
 		)
@@ -351,13 +361,13 @@ func (u *ListUI) row(gtx layout.Context, todo client.Todo, row *rowWidgets) layo
 				}),
 				// Priority.
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return colWidth(gtx, 26, func(gtx layout.Context) layout.Dimensions {
+					return colWidth(gtx, colPriorityW, func(gtx layout.Context) layout.Dimensions {
 						return priorityCell(gtx, u.app.Theme, todo.Priority)
 					})
 				}),
 				// Status.
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return colWidth(gtx, 78, func(gtx layout.Context) layout.Dimensions {
+					return colWidth(gtx, colStatusW, func(gtx layout.Context) layout.Dimensions {
 						s := material.Label(u.app.Theme, unit.Sp(12), StatusLabel(todo.Status))
 						s.Color = statusColor(todo.Status)
 						return s.Layout(gtx)
@@ -365,7 +375,7 @@ func (u *ListUI) row(gtx layout.Context, todo client.Todo, row *rowWidgets) layo
 				}),
 				// Action button.
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return colWidth(gtx, 52, func(gtx layout.Context) layout.Dimensions {
+					return colWidth(gtx, colActionW, func(gtx layout.Context) layout.Dimensions {
 						return u.actionButton(gtx, todo, row)
 					})
 				}),

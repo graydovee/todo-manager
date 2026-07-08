@@ -28,8 +28,9 @@ var en = map[string]string{
 	// list
 	"list.title":        "Todos",
 	"list.colTitle":     "Title",
-	"list.colPriority":  "P",
+	"list.colPriority":  "Priority",
 	"list.colStatus":    "Status",
+	"list.colAction":    "Action",
 	"list.noTodos":      "No todos",
 	"list.refreshing":   "  ·  refreshing…",
 	"list.blocked":      "Blocked by pending dependencies",
