@@ -180,6 +180,17 @@ func (c *Controller) CursorPos() (x, y int) {
 	return CursorPos()
 }
 
+// Minimize minimises the window asynchronously via the win thread.
+func (c *Controller) Minimize() {
+	if c.hwnd == 0 {
+		return
+	}
+	c.exec("Minimize", func() error {
+		Minimize(c.hwnd)
+		return nil
+	})
+}
+
 // SetLock toggles click-through + translucency. Idempotent: if the requested
 // state already matches what was last applied, it returns immediately.
 func (c *Controller) SetLock(locked bool) {

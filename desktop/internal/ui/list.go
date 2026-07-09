@@ -46,6 +46,10 @@ type ListUI struct {
 
 	// firstLoad tracks whether the initial fetch has been triggered.
 	firstLoad bool
+
+	// closeDialogActive blocks all main-window interaction while the close
+	// confirmation dialog is open (modal behaviour).
+	closeDialogActive bool
 }
 
 type rowWidgets struct {
@@ -84,7 +88,8 @@ func (u *ListUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 	u.handleTopBarClicks(gtx, w)
 	u.handleRowClicks(gtx, items)
 
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+	// Build the main content, then overlay the close dialog if active.
+	content := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(u.topBar),
 		layout.Rigid(separator),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
@@ -103,6 +108,8 @@ func (u *ListUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 			return u.footer(gtx, total, len(items), loading)
 		}),
 	)
+
+	return content
 }
 
 // topBar renders the title and the pin/lock/manage icon buttons. The title text
@@ -146,6 +153,9 @@ func (u *ListUI) topBar(gtx layout.Context) layout.Dimensions {
 // by the delta (constrained to the edge if docked); on Release it checks for
 // edge snapping.
 func (u *ListUI) handleDrag(gtx layout.Context) {
+	if u.closeDialogActive {
+		return
+	}
 	u.drag.Add(gtx.Ops)
 	ctrl := u.app.Platform
 	if ctrl == nil {
@@ -411,6 +421,9 @@ func (u *ListUI) footer(gtx layout.Context, total int64, shown int, loading bool
 // --- click handling --------------------------------------------------------
 
 func (u *ListUI) handleTopBarClicks(gtx layout.Context, w *app.Window) {
+	if u.closeDialogActive {
+		return
+	}
 	for u.headerTitle.Clicked(gtx) {
 		u.toggleSort("title")
 	}
@@ -427,11 +440,42 @@ func (u *ListUI) handleTopBarClicks(gtx layout.Context, w *app.Window) {
 		u.app.nav().goTo(store.PageManage)
 	}
 	for u.closeBtn.Clicked(gtx) {
-		w.Perform(system.ActionClose)
+		go u.promptCloseAction(w)
+	}
+}
+
+// promptCloseAction opens a separate window asking the user to minimize or
+// close. It blocks until the user picks an option (or closes the dialog
+// window), then performs the chosen action on the main window. While the dialog
+// is open, all main-window interaction is blocked (modal).
+func (u *ListUI) promptCloseAction(mainWin *app.Window) {
+	u.closeDialogActive = true
+	if u.app.Invalidate != nil {
+		u.app.Invalidate()
+	}
+	result := showChoiceDialog(u.app.Theme, u.app.OwnerHandle, i18n.T("list.closeTitle"), i18n.T("list.closeHint"), []choiceOption{
+		{Label: i18n.T("list.minimize"), Value: "minimize"},
+		{Label: i18n.T("list.close"), Value: "close"},
+		{Label: i18n.T("common.cancel"), Value: "cancel"},
+	})
+	u.closeDialogActive = false
+	if u.app.Invalidate != nil {
+		u.app.Invalidate()
+	}
+	switch result {
+	case "minimize":
+		if u.app.Platform != nil {
+			u.app.Platform.Minimize()
+		}
+	case "close":
+		mainWin.Perform(system.ActionClose)
 	}
 }
 
 func (u *ListUI) handleRowClicks(gtx layout.Context, items []client.Todo) {
+	if u.closeDialogActive {
+		return
+	}
 	for i := range items {
 		if i >= len(u.rows) {
 			break

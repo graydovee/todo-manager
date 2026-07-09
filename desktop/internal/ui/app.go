@@ -23,6 +23,9 @@ type App struct {
 
 	// Platform window controller; nil until the native handle arrives.
 	Platform platform.Controller
+	// OwnerHandle is the main window's native handle; used as the owner for
+	// dialog windows so they always render above it (Win32 owner-owned z-order).
+	OwnerHandle platform.Handle
 	// Invalidate triggers a repaint (passed in from main).
 	Invalidate func()
 

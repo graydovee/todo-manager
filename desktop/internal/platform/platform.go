@@ -31,6 +31,8 @@ type Controller interface {
 	WorkArea() (x, y, w, h int)
 	// CursorPos returns the cursor position in screen coordinates.
 	CursorPos() (x, y int)
+	// Minimize minimises the window to the taskbar.
+	Minimize()
 }
 
 // Handle carries the native window identifier once it becomes available.
@@ -47,3 +49,4 @@ func (Noop) MoveWindow(int, int, int, int)        {}
 func (Noop) MoveWindowSync(int, int, int, int)    {}
 func (Noop) WorkArea() (int, int, int, int)       { return 0, 0, 0, 0 }
 func (Noop) CursorPos() (int, int)                 { return 0, 0 }
+func (Noop) Minimize()                             {}
