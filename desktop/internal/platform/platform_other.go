@@ -11,5 +11,17 @@ func NewController(_ Handle) Controller {
 	return Noop{}
 }
 
+// CenterAndTopMost is a no-op on unsupported platforms.
+func CenterAndTopMost(_ Handle) {}
+
+// CenterWindow is a no-op on unsupported platforms.
+func CenterWindow(_ Handle) {}
+
+// SetDialogOwner is a no-op on unsupported platforms.
+func SetDialogOwner(_, _ Handle) {}
+
+// ActivateWindow is a no-op on unsupported platforms.
+func ActivateWindow(_ Handle) {}
+
 // SetLogFile is a no-op on platforms without a native platform layer.
 func SetLogFile(_ *os.File) {}

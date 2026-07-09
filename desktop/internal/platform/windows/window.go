@@ -30,6 +30,12 @@ var (
 	procMoveWindow       = modUser32Ex.NewProc("MoveWindow")
 	procMonitorFromWin   = modUser32Ex.NewProc("MonitorFromWindow")
 	procGetMonitorInfo   = modUser32Ex.NewProc("GetMonitorInfoW")
+	procShowWindow       = modUser32Ex.NewProc("ShowWindow")
+)
+
+// Win32 ShowWindow commands.
+const (
+	SW_MINIMIZE = 6
 )
 
 // GetWindowRect returns the window's outer rectangle (x, y, width, height) in
@@ -73,4 +79,49 @@ func CursorPos() (x, y int) {
 		return 0, 0
 	}
 	return int(pt.X), int(pt.Y)
+}
+
+// CenterAndTopMost centres the window on the primary monitor's work area and
+// makes it top-most. It calls Win32 directly (no goroutine/queue) so it is safe
+// to invoke from a dialog's own goroutine.
+func CenterAndTopMost(hwnd syscall.Handle) {
+	if hwnd == 0 {
+		return
+	}
+	centerOnWorkArea(hwnd)
+	_ = SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)
+}
+
+// CenterWindow centres the window on the monitor's work area (no top-most).
+func CenterWindow(hwnd syscall.Handle) {
+	if hwnd == 0 {
+		return
+	}
+	centerOnWorkArea(hwnd)
+}
+
+// centerOnWorkArea moves hwnd to the centre of its monitor's work area.
+func centerOnWorkArea(hwnd syscall.Handle) {
+	wx, wy, workW, workH := WorkArea(hwnd)
+	_, _, w, h := GetWindowRect(hwnd)
+	if w == 0 || h == 0 {
+		w, h = 480, 240
+	}
+	x := wx + (workW-w)/2
+	y := wy + (workH-h)/2
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+	MoveWindow(hwnd, x, y, w, h)
+}
+
+// Minimize minimises the window.
+func Minimize(hwnd syscall.Handle) {
+	if hwnd == 0 {
+		return
+	}
+	_, _, _ = procShowWindow.Call(uintptr(hwnd), SW_MINIMIZE)
 }

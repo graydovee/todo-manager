@@ -118,6 +118,7 @@ func runWindow(state *store.AppState, todos *store.TodoStore, theme *material.Th
 			h := platform.ExtractHandle(e)
 			if h != 0 && gui.Platform == nil {
 				gui.Platform = platform.NewController(platform.Handle(h))
+				gui.OwnerHandle = platform.Handle(h)
 				logf("platform controller installed hwnd=%v", h)
 				// Only touch native window flags when the persisted mode actually
 				// requires it. Calling SetWindowLongPtr / SetWindowPos on a freshly

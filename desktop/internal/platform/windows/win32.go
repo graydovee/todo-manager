@@ -3,13 +3,16 @@
 package windows
 
 import (
+	"runtime"
+	"sync"
 	"syscall"
 	"unsafe"
 )
 
 // Win32 constants used for top-most and click-through layered windows.
 const (
-	GWL_EXSTYLE        = -20
+	GWL_EXSTYLE        = int32(-20)
+	GWLP_HWNDPARENT    = int32(-8)
 	WS_EX_LAYERED      = 0x00080000
 	WS_EX_TRANSPARENT  = 0x00000020
 	WS_EX_NOACTIVATE   = 0x08000000
@@ -30,9 +33,34 @@ var (
 	procGetWindowLongPtrW   = modUser32.NewProc("GetWindowLongPtrW")
 	procSetWindowPos        = modUser32.NewProc("SetWindowPos")
 	procSetLayeredWindowAtt = modUser32.NewProc("SetLayeredWindowAttributes")
+	procBringWindowToTop    = modUser32.NewProc("BringWindowToTop")
+	procSetForegroundWindow = modUser32.NewProc("SetForegroundWindow")
 	// DWM blur-behind gives a translucent frosted look; optional and may fail.
 	procDwmEnableBlurBehindWindow = modDwmapi.NewProc("DwmEnableBlurBehindWindow")
+
+	// osThread serialises Win32 window mutations that synchronously deliver
+	// window messages (SetWindowLongPtrW, MoveWindow, ...). Calling those from
+	// Gio's FrameEvent goroutine deadlocks against Gio's window message pump, so
+	// they are routed to this dedicated thread instead.
+	osThreadOnce sync.Once
+	osThreadCh   chan func()
 )
+
+// RunOnOSThread executes fn on the dedicated OS thread (which has
+// LockOSThread). Win32 windows are thread-affine and several APIs send
+// synchronous messages, so they must run off Gio's goroutines.
+func RunOnOSThread(fn func()) {
+	osThreadOnce.Do(func() {
+		osThreadCh = make(chan func(), 64)
+		go func() {
+			runtime.LockOSThread()
+			for f := range osThreadCh {
+				f()
+			}
+		}()
+	})
+	osThreadCh <- fn
+}
 
 // GetWindowLongPtr retrieves a window attribute.
 func GetWindowLongPtr(hwnd syscall.Handle, index int32) uintptr {
@@ -88,3 +116,26 @@ func EnableBlurBehind(hwnd syscall.Handle, enable bool) error {
 	_, _, err := procDwmEnableBlurBehindWindow.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&bb)))
 	return err
 }
+
+// SetWindowOwner establishes an owner-owned relationship: the dialog (child)
+// will always render above its owner regardless of either window's TOPMOST
+// state. This is the reliable way to keep a dialog above a top-most main window.
+// It sets GWLP_HWNDPARENT via SetWindowLongPtrW.
+func SetWindowOwner(child, owner syscall.Handle) {
+	if child == 0 || owner == 0 {
+		return
+	}
+	SetWindowLongPtr(child, GWLP_HWNDPARENT, uintptr(owner))
+}
+
+// ActivateWindow brings the window to the top of the z-order within its
+// (top-most/non-top-most) band and attempts to set it as the foreground window.
+// Used for dialogs so they receive keyboard focus.
+func ActivateWindow(hwnd syscall.Handle) {
+	if hwnd == 0 {
+		return
+	}
+	procSetForegroundWindow.Call(uintptr(hwnd))
+	procBringWindowToTop.Call(uintptr(hwnd))
+}
+
