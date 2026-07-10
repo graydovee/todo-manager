@@ -5,7 +5,6 @@ package windows
 import (
 	"fmt"
 	"os"
-	"runtime"
 	"sync"
 	"syscall"
 )
@@ -35,20 +34,14 @@ func logf(format string, args ...any) {
 	}
 }
 
-// winTask is a window-style mutation to run on the dedicated win thread.
-type winTask struct {
-	fn      func() error
-	summary string
-}
-
 // Controller implements platform.Controller for Windows using Win32 calls.
-// All Win32 mutations run on a dedicated OS thread (Win32 windows and their
-// styles are thread-affine, and several calls synchronously deliver window
-// messages such as WM_STYLECHANGED that must not run on Gio's window thread).
+// All Win32 mutations are routed through the single package-level OS thread
+// (RunOnOSThread) because Win32 windows are thread-affine and several APIs
+// synchronously deliver window messages that must not run on Gio's window
+// goroutine. Reads (geometry, work area, cursor) are direct calls that do not
+// deliver messages and are safe on the caller's goroutine.
 type Controller struct {
 	hwnd syscall.Handle
-
-	tasks chan winTask
 
 	mu        sync.Mutex
 	curLocked bool
@@ -56,34 +49,9 @@ type Controller struct {
 }
 
 // New returns a Controller bound to the given HWND (from app.Win32ViewEvent).
-// It launches a dedicated thread to serialise all Win32 style mutations.
 func New(hwnd syscall.Handle) *Controller {
 	logf("windows.New(hwnd=%v)", hwnd)
-	c := &Controller{
-		hwnd:  hwnd,
-		tasks: make(chan winTask, 16),
-	}
-	go c.winThread()
-	return c
-}
-
-// winThread owns a dedicated OS thread for running Win32 window mutations.
-func (c *Controller) winThread() {
-	runtime.LockOSThread()
-	for t := range c.tasks {
-		err := t.fn()
-		logf("%s done err=%v", t.summary, err)
-	}
-}
-
-// exec submits a task and returns immediately. Mutations are fire-and-forget;
-// the UI repaints via Invalidate once the caller returns.
-func (c *Controller) exec(summary string, fn func() error) {
-	select {
-	case c.tasks <- winTask{fn: fn, summary: summary}:
-	default:
-		logf("%s dropped (queue full)", summary)
-	}
+	return &Controller{hwnd: hwnd}
 }
 
 // SetTopMost places the window at the top of the z-order.
@@ -95,8 +63,10 @@ func (c *Controller) SetTopMost(topmost bool) {
 	if topmost {
 		insertAfter = HWND_TOPMOST
 	}
-	c.exec(fmt.Sprintf("SetTopMost(%v)", topmost), func() error {
-		return SetWindowPos(c.hwnd, insertAfter, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)
+	hwnd := c.hwnd
+	RunOnOSThread(func() {
+		err := SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)
+		logf("SetTopMost(%v) done err=%v", topmost, err)
 	})
 }
 
@@ -106,15 +76,17 @@ func (c *Controller) HideFromTaskbar() {
 	if c.hwnd == 0 {
 		return
 	}
-	c.exec("HideFromTaskbar", func() error {
-		style := GetWindowLongPtr(c.hwnd, GWL_EXSTYLE)
-		SetWindowLongPtr(c.hwnd, GWL_EXSTYLE, style|WS_EX_TOOLWINDOW)
-		return nil
+	hwnd := c.hwnd
+	RunOnOSThread(func() {
+		style := GetWindowLongPtr(hwnd, GWL_EXSTYLE)
+		SetWindowLongPtr(hwnd, GWL_EXSTYLE, style|WS_EX_TOOLWINDOW)
+		logf("HideFromTaskbar done")
 	})
 }
 
-// WindowGeometry returns the current position and size synchronously. It reads
-// directly (not via the task queue) because callers need an immediate value.
+// WindowGeometry returns the current position and size synchronously. This
+// reads directly (GetWindowRect does not deliver messages) so it is safe to
+// call from any goroutine and returns an immediate value.
 func (c *Controller) WindowGeometry() (x, y, w, h int) {
 	if c.hwnd == 0 {
 		return 0, 0, 0, 0
@@ -122,10 +94,7 @@ func (c *Controller) WindowGeometry() (x, y, w, h int) {
 	return GetWindowRect(c.hwnd)
 }
 
-// MoveWindow repositions the window asynchronously via the win thread. Calling
-// user32!MoveWindow synchronously on the UI goroutine deadlocks against Gio's
-// window thread (MoveWindow sends WM_WINDOWPOSCHANGING/WM_PAINT synchronously).
-// The async queue is drained fast enough for smooth dragging.
+// MoveWindow repositions the window asynchronously via the OS thread.
 func (c *Controller) MoveWindow(x, y, w, h int) {
 	if c.hwnd == 0 {
 		return
@@ -140,17 +109,16 @@ func (c *Controller) MoveWindow(x, y, w, h int) {
 		}
 	}
 	finalW, finalH := w, h
-	c.exec("MoveWindow", func() error {
-		MoveWindow(c.hwnd, x, y, finalW, finalH)
-		return nil
+	hwnd := c.hwnd
+	RunOnOSThread(func() {
+		MoveWindowFn(hwnd, x, y, finalW, finalH)
 	})
 }
 
 // MoveWindowSync repositions the window synchronously on the calling goroutine.
-// It bypasses the win-thread queue so the position is applied immediately —
-// necessary for smooth animation where each frame must land before the next.
-// Safe to call from the dock poll goroutine (which does not hold Gio's render
-// context, so there is no deadlock risk).
+// MoveWindow (user32) sends WM_WINDOWPOSCHANGING/WM_PAINT synchronously; this
+// is only safe from goroutines that do NOT hold Gio's render context (e.g. the
+// dock-poll/animation goroutine). Used per animation frame for smooth slides.
 func (c *Controller) MoveWindowSync(x, y, w, h int) {
 	if c.hwnd == 0 {
 		return
@@ -164,7 +132,7 @@ func (c *Controller) MoveWindowSync(x, y, w, h int) {
 			h = ch
 		}
 	}
-	MoveWindow(c.hwnd, x, y, w, h)
+	MoveWindowFn(c.hwnd, x, y, w, h)
 }
 
 // WorkArea returns the work area of the monitor nearest the window.
@@ -180,14 +148,14 @@ func (c *Controller) CursorPos() (x, y int) {
 	return CursorPos()
 }
 
-// Minimize minimises the window asynchronously via the win thread.
+// Minimize minimises the window asynchronously via the OS thread.
 func (c *Controller) Minimize() {
 	if c.hwnd == 0 {
 		return
 	}
-	c.exec("Minimize", func() error {
-		Minimize(c.hwnd)
-		return nil
+	hwnd := c.hwnd
+	RunOnOSThread(func() {
+		Minimize(hwnd)
 	})
 }
 
@@ -207,24 +175,25 @@ func (c *Controller) SetLock(locked bool) {
 	c.applied = true
 	c.mu.Unlock()
 
-	c.exec(fmt.Sprintf("SetLock(%v)", locked), func() error {
-		style := GetWindowLongPtr(c.hwnd, GWL_EXSTYLE)
+	hwnd := c.hwnd
+	RunOnOSThread(func() {
+		style := GetWindowLongPtr(hwnd, GWL_EXSTYLE)
 		logf("SetLock exStyle=0x%x", style)
 		if locked {
 			style |= WS_EX_LAYERED | WS_EX_TRANSPARENT
-			SetWindowLongPtr(c.hwnd, GWL_EXSTYLE, style)
-			_ = SetLayeredWindowAttributes(c.hwnd, 0xC7)
-			_ = EnableBlurBehind(c.hwnd, true)
+			SetWindowLongPtr(hwnd, GWL_EXSTYLE, style)
+			_ = SetLayeredWindowAttributes(hwnd, 0xC7)
+			_ = EnableBlurBehind(hwnd, true)
 			// Locking implies top-most.
-			_ = SetWindowPos(c.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)
+			_ = SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)
 		} else {
 			if style&(WS_EX_LAYERED|WS_EX_TRANSPARENT) != 0 {
 				style &^= WS_EX_TRANSPARENT
-				SetWindowLongPtr(c.hwnd, GWL_EXSTYLE, style)
-				_ = SetLayeredWindowAttributes(c.hwnd, 0xFF)
-				_ = EnableBlurBehind(c.hwnd, false)
+				SetWindowLongPtr(hwnd, GWL_EXSTYLE, style)
+				_ = SetLayeredWindowAttributes(hwnd, 0xFF)
+				_ = EnableBlurBehind(hwnd, false)
 			}
 		}
-		return nil
+		logf("SetLock(%v) done", locked)
 	})
 }

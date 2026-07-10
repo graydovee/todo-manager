@@ -14,36 +14,45 @@ func NewController(handle Handle) Controller {
 	return win.New(syscall.Handle(handle))
 }
 
-// CenterAndTopMost centres the window on the primary monitor and makes it
-// top-most. Calls Win32 directly (no queue).
-func CenterAndTopMost(h Handle) {
-	win.CenterAndTopMost(syscall.Handle(h))
+// SetupChildWindow is the standard one-shot initialisation for a secondary
+// (child) window such as a dialog. It establishes the Win32 owner-owned
+// relationship (so the child always renders above its owner regardless of
+// either window's TOPMOST state), centres the child on the monitor's work
+// area, and brings it to the foreground for keyboard focus — all as a single
+// atomic operation on the dedicated OS thread. No-op if either handle is 0.
+func SetupChildWindow(child, owner Handle) {
+	c, o := syscall.Handle(child), syscall.Handle(owner)
+	win.RunOnOSThread(func() {
+		win.SetWindowOwner(c, o)
+		win.CenterWindow(c)
+		win.ActivateWindow(c)
+	})
 }
 
-// CenterWindow centres the window on its monitor's work area (no top-most).
-// Run on the dedicated OS thread because MoveWindow synchronously delivers
-// window messages that would deadlock Gio's window goroutine.
+// CenterWindow centres a window on its monitor's work area. Exposed for
+// non-standard callers; prefer SetupChildWindow for dialogs.
 func CenterWindow(h Handle) {
+	hwnd := syscall.Handle(h)
 	win.RunOnOSThread(func() {
-		win.CenterWindow(syscall.Handle(h))
+		win.CenterWindow(hwnd)
 	})
 }
 
-// SetDialogOwner makes child an owned window of owner, so child always renders
-// above owner regardless of either window's TOPMOST state. No-op if either is 0.
-// Run on the dedicated OS thread because SetWindowLongPtrW synchronously
-// delivers window messages that would deadlock Gio's window goroutine.
+// SetDialogOwner establishes an owner-owned relationship. Exposed for
+// non-standard callers; prefer SetupChildWindow.
 func SetDialogOwner(child, owner Handle) {
+	c, o := syscall.Handle(child), syscall.Handle(owner)
 	win.RunOnOSThread(func() {
-		win.SetWindowOwner(syscall.Handle(child), syscall.Handle(owner))
+		win.SetWindowOwner(c, o)
 	})
 }
 
-// ActivateWindow brings the window to the front and sets it as foreground.
-// Run on the dedicated OS thread for the same reason as SetDialogOwner.
+// ActivateWindow brings a window to the front and sets it as foreground.
+// Exposed for non-standard callers; prefer SetupChildWindow.
 func ActivateWindow(h Handle) {
+	hwnd := syscall.Handle(h)
 	win.RunOnOSThread(func() {
-		win.ActivateWindow(syscall.Handle(h))
+		win.ActivateWindow(hwnd)
 	})
 }
 

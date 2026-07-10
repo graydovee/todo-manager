@@ -28,11 +28,10 @@ const (
 // top-most item) and the command channel. It is read from the tray's window
 // procedure and written from other goroutines, hence the mutex.
 type trayState struct {
-	mu       sync.Mutex
-	topMost  bool
-	cmds     chan TrayCmd
-	hwnd     syscall.Handle
-	menuTop  bool // tracks the checkbox state
+	mu      sync.Mutex
+	topMost bool
+	cmds    chan TrayCmd
+	hwnd    syscall.Handle
 }
 
 var (
@@ -193,10 +192,10 @@ func showTrayMenu(hwnd syscall.Handle) {
 
 	// TrackPopupMenu must be preceded by SetForegroundWindow on the owner,
 	// otherwise the menu won't dismiss when clicking elsewhere.
-	_, _, _ = procSetForeground.Call(uintptr(hwnd))
+	_, _, _ = procSetForegroundWindow.Call(uintptr(hwnd))
 
 	var pt POINT
-	_, _, _ = procGetCursor.Call(uintptr(unsafe.Pointer(&pt)))
+	_, _, _ = procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
 
 	cmd, _, _ := procTrackPopupMenu.Call(
 		menu,

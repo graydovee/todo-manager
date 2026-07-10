@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"sync"
 
 	"gioui.org/app"
 	"gioui.org/layout"
@@ -29,11 +30,50 @@ type App struct {
 	// Invalidate triggers a repaint (passed in from main).
 	Invalidate func()
 
+	// modalMu guards modalCount. While > 0 a dialog is open and all main-window
+	// interaction should be blocked (modal behaviour). A count (rather than a
+	// bool) supports nested dialogs correctly.
+	modalMu    sync.Mutex
+	modalCount int
+
 	// Page sub-controllers, created once and reused across frames.
 	Login  *LoginUI
 	List   *ListUI
 	Detail *DetailUI
 	Manage *ManageUI
+}
+
+// IsModal reports whether any modal dialog is currently open. While true, the
+// main window's interactive handlers (toolbar, row clicks, drag) skip
+// processing so the user must dismiss the dialog first.
+func (a *App) IsModal() bool {
+	a.modalMu.Lock()
+	defer a.modalMu.Unlock()
+	return a.modalCount > 0
+}
+
+// enterModal increments the modal dialog count and requests a repaint. Called
+// when a dialog opens.
+func (a *App) enterModal() {
+	a.modalMu.Lock()
+	a.modalCount++
+	a.modalMu.Unlock()
+	if a.Invalidate != nil {
+		a.Invalidate()
+	}
+}
+
+// exitModal decrements the modal dialog count and requests a repaint. Called
+// when a dialog closes.
+func (a *App) exitModal() {
+	a.modalMu.Lock()
+	if a.modalCount > 0 {
+		a.modalCount--
+	}
+	a.modalMu.Unlock()
+	if a.Invalidate != nil {
+		a.Invalidate()
+	}
 }
 
 // NewApp constructs the UI controller with all sub-pages wired to the stores.
