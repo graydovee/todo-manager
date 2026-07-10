@@ -37,6 +37,11 @@ const iconButtonSize = 30
 // iconDesignSize is the side of the local coordinate box each glyph is drawn in.
 const iconDesignSize = 16.0
 
+// strokeWidth is the unified stroke width for all line-art icons (in design
+// units). 1.5 gives a crisp, modern Feather/Lucide-style line at the icon's
+// rendered scale.
+const strokeWidth = 1.5
+
 // iconColor is the greyscale used for icon strokes.
 var iconColor = color.NRGBA{R: 0x33, G: 0x33, B: 0x33, A: 0xFF}
 
@@ -78,8 +83,7 @@ func iconButton(gtx layout.Context, th *material.Theme, c *widget.Clickable, kin
 	})
 }
 
-// iconButtonLabel is kept for callers that still render plain text (back buttons
-// in detail/manage reuse it). It draws the icon kind with no toggle state.
+// iconButtonSimple draws an icon button with no toggle state.
 func iconButtonSimple(gtx layout.Context, th *material.Theme, c *widget.Clickable, kind IconKind) layout.Dimensions {
 	return iconButton(gtx, th, c, kind, false)
 }
@@ -90,206 +94,407 @@ func fillRectSize(gtx layout.Context, c color.NRGBA, px int) {
 	paint.Fill(gtx.Ops, c)
 }
 
-// drawIcon renders the given glyph in a 16x16 local coordinate box. Strokes use
-// a 1.6-unit width. Circles/arcs are approximated by polylines for predictable,
-// symmetric shapes (Gio's Arc params are fiddly).
-func drawIcon(ops *op.Ops, kind IconKind, c color.NRGBA) {
-	const sw = 1.6 // stroke width
-	stroke := func(path clip.PathSpec) {
-		defer clip.Stroke{Path: path, Width: sw}.Op().Push(ops).Pop()
-		paint.ColorOp{Color: c}.Add(ops)
-		paint.PaintOp{}.Add(ops)
-	}
-	fill := func(path clip.PathSpec) {
-		defer clip.Outline{Path: path}.Op().Push(ops).Pop()
-		paint.ColorOp{Color: c}.Add(ops)
-		paint.PaintOp{}.Add(ops)
-	}
+// -----------------------------------------------------------------------
+// Drawing primitives
+// -----------------------------------------------------------------------
 
-	// circleStroke appends a polyline circle outline of the given radius centred
-	// at (cx,cy) to a fresh path and strokes it.
-	circleStroke := func(cx, cy, r float32) {
-		var pc clip.Path
-		pc.Begin(ops)
-		polylineCircle(&pc, cx, cy, r, 0, math.Pi*2)
-		stroke(pc.End())
-	}
-
-	switch kind {
-	case IconRefresh:
-		// A 3/4 open circle with an arrowhead at the top-right end.
-		var pc clip.Path
-		pc.Begin(ops)
-		// Start the arc at top (12 o'clock) going clockwise ~300°.
-		const cx, cy, r = 8, 8, 4.2
-		start := float32(-math.Pi / 2) // top
-		polylineCircle(&pc, cx, cy, r, start, start+float32(math.Pi)*1.65)
-		stroke(pc.End())
-		// Arrowhead chevron at the open end (top-right area).
-		var ah clip.Path
-		ah.Begin(ops)
-		ah.MoveTo(f32.Pt(11.8, 2.2))
-		ah.LineTo(f32.Pt(11.8, 5.6))
-		ah.LineTo(f32.Pt(8.4, 5.6))
-		stroke(ah.End())
-	case IconPin:
-		// Classic pushpin: teardrop head pointing down, with a shaft + tip.
-		var pc clip.Path
-		pc.Begin(ops)
-		// Head: a downward teardrop (wide top, narrowing to shaft).
-		pc.MoveTo(f32.Pt(8, 2.5))
-		pc.LineTo(f32.Pt(11, 5.5))
-		pc.LineTo(f32.Pt(8, 8.5))
-		pc.LineTo(f32.Pt(5, 5.5))
-		pc.Close()
-		fill(pc.End())
-		// Shaft + tip.
-		var sh clip.Path
-		sh.Begin(ops)
-		sh.MoveTo(f32.Pt(8, 8.5))
-		sh.LineTo(f32.Pt(8, 13.5))
-		stroke(sh.End())
-	case IconUnpin:
-		// Same pin, outlined (not filled) to read as "inactive/off".
-		var pc clip.Path
-		pc.Begin(ops)
-		pc.MoveTo(f32.Pt(8, 2.5))
-		pc.LineTo(f32.Pt(11, 5.5))
-		pc.LineTo(f32.Pt(8, 8.5))
-		pc.LineTo(f32.Pt(5, 5.5))
-		pc.Close()
-		stroke(pc.End())
-		var sh clip.Path
-		sh.Begin(ops)
-		sh.MoveTo(f32.Pt(8, 8.5))
-		sh.LineTo(f32.Pt(8, 13.5))
-		stroke(sh.End())
-	case IconLock:
-		// Padlock: filled rounded body + closed shackle arc on top.
-		var body clip.Path
-		body.Begin(ops)
-		roundRect(&body, 3.5, 7, 9, 6, 1.4)
-		fill(body.End())
-		// Shackle: a half-ring above the body.
-		var sh clip.Path
-		sh.Begin(ops)
-		polylineCircle(&sh, 8, 7, 2.4, math.Pi, 0) // upper half
-		stroke(sh.End())
-	case IconUnlock:
-		// Padlock with an open shackle (raised right side).
-		var body clip.Path
-		body.Begin(ops)
-		roundRect(&body, 3.5, 7, 9, 6, 1.4)
-		fill(body.End())
-		var sh clip.Path
-		sh.Begin(ops)
-		// Left side up + partial arc.
-		sh.MoveTo(f32.Pt(5.6, 7))
-		sh.LineTo(f32.Pt(5.6, 4.6))
-		polylineCircle(&sh, 8, 4.6, 2.4, math.Pi, math.Pi*1.45)
-		stroke(sh.End())
-	case IconSettings:
-		// Gear: two concentric circles (ring + hole).
-		circleStroke(8, 8, 4.6)
-		circleStroke(8, 8, 1.8)
-		// Four small "teeth" ticks at N/E/S/W for a gear read.
-		var t clip.Path
-		t.Begin(ops)
-		teeth := []f32.Point{
-			f32.Pt(8, 1.4), f32.Pt(14.6, 8), f32.Pt(8, 14.6), f32.Pt(1.4, 8),
-		}
-		for _, pt := range teeth {
-			t.MoveTo(pt)
-			// short tick toward centre
-			dx := (8 - pt.X) * 0.18
-			dy := (8 - pt.Y) * 0.18
-			t.LineTo(f32.Pt(pt.X+dx, pt.Y+dy))
-		}
-		stroke(t.End())
-	case IconClose:
-		// Bold X.
-		var pc clip.Path
-		pc.Begin(ops)
-		pc.MoveTo(f32.Pt(4, 4))
-		pc.LineTo(f32.Pt(12, 12))
-		pc.MoveTo(f32.Pt(12, 4))
-		pc.LineTo(f32.Pt(4, 12))
-		stroke(pc.End())
-	case IconPlay:
-		// Filled triangle pointing right.
-		var pc clip.Path
-		pc.Begin(ops)
-		pc.MoveTo(f32.Pt(5, 3))
-		pc.LineTo(f32.Pt(13, 8))
-		pc.LineTo(f32.Pt(5, 13))
-		pc.Close()
-		fill(pc.End())
-	case IconCheck:
-		// Check mark.
-		var pc clip.Path
-		pc.Begin(ops)
-		pc.MoveTo(f32.Pt(3, 8.5))
-		pc.LineTo(f32.Pt(6.5, 12))
-		pc.LineTo(f32.Pt(13, 4.5))
-		stroke(pc.End())
-	case IconBack:
-		// Left-pointing arrow.
-		var pc clip.Path
-		pc.Begin(ops)
-		pc.MoveTo(f32.Pt(13, 8))
-		pc.LineTo(f32.Pt(3, 8))
-		pc.MoveTo(f32.Pt(7, 4))
-		pc.LineTo(f32.Pt(3, 8))
-		pc.LineTo(f32.Pt(7, 12))
-		stroke(pc.End())
-	}
+// strokePath strokes a completed PathSpec with the icon colour.
+func strokePath(ops *op.Ops, spec clip.PathSpec) {
+	defer clip.Stroke{Path: spec, Width: strokeWidth}.Op().Push(ops).Pop()
+	paint.ColorOp{Color: iconColor}.Add(ops)
+	paint.PaintOp{}.Add(ops)
 }
 
-// polylineCircle appends a circular arc (polyline approximation) to p, centred at
-// (cx,cy) with radius r, from angle a0 to a1 (radians, counter-clockwise).
-func polylineCircle(p *clip.Path, cx, cy, r, a0, a1 float32) {
-	const seg = 48.0
-	steps := int(math.Ceil(math.Abs(float64(a1-a0)) / (2 * math.Pi) * seg))
-	if steps < 2 {
-		steps = 2
-	}
-	for i := 0; i <= steps; i++ {
-		a := a0 + (a1-a0)*float32(i)/float32(steps)
-		x := cx + r*float32(math.Cos(float64(a)))
-		y := cy + r*float32(math.Sin(float64(a)))
-		if i == 0 {
-			p.MoveTo(f32.Pt(x, y))
-		} else {
-			p.LineTo(f32.Pt(x, y))
-		}
-	}
+// strokePathCol strokes a completed PathSpec with a specific colour.
+func strokePathCol(ops *op.Ops, spec clip.PathSpec, c color.NRGBA) {
+	defer clip.Stroke{Path: spec, Width: strokeWidth}.Op().Push(ops).Pop()
+	paint.ColorOp{Color: c}.Add(ops)
+	paint.PaintOp{}.Add(ops)
 }
 
-// roundRect appends a rounded rectangle (radius rr at every corner) to p as a
-// closed contour, starting a fresh sub-path via MoveTo.
-func roundRect(p *clip.Path, x, y, w, h, rr float32) {
-	// Clamp radius.
+// fillPath fills the interior of a completed PathSpec with a specific colour.
+func fillPath(ops *op.Ops, spec clip.PathSpec, c color.NRGBA) {
+	defer clip.Outline{Path: spec}.Op().Push(ops).Pop()
+	paint.ColorOp{Color: c}.Add(ops)
+	paint.PaintOp{}.Add(ops)
+}
+
+// arcTo appends a circular arc to the path. cx/cy is the centre, r the radius,
+// a0 the start angle and sweep the angular extent (both in radians). Positive
+// sweep goes counter-clockwise in screen space (y-down).
+func arcTo(p *clip.Path, cx, cy, r, a0, sweep float32) {
+	// Move pen to the arc start.
+	sx := cx + r*float32(math.Cos(float64(a0)))
+	sy := cy + r*float32(math.Sin(float64(a0)))
+	p.MoveTo(f32.Pt(sx, sy))
+	// ArcTo with coincident foci draws a circular arc.
+	p.ArcTo(f32.Pt(cx, cy), f32.Pt(cx, cy), sweep)
+}
+
+// roundRect appends a rounded rectangle to p as a closed contour, using cubic
+// Bézier corners (the standard circle approximation, same formula as Gio's own
+// clip.RRect). This avoids ArcTo angle-sign pitfalls entirely.
+func roundRect(p *clip.Path, ops *op.Ops, x, y, w, h, rr float32) {
 	if rr > w/2 {
 		rr = w / 2
 	}
 	if rr > h/2 {
 		rr = h / 2
 	}
+	// q is the standard Bézier circle-approximation constant.
+	const q = 4 * (math.Sqrt2 - 1) / 3
+	iq := rr * (1 - q)
+
+	// Start at top-left corner end of the top edge.
 	p.MoveTo(f32.Pt(x+rr, y))
+	// Top edge → NE corner.
 	p.LineTo(f32.Pt(x+w-rr, y))
-	arcCorner(p, x+w-rr, y+rr, rr, -math.Pi/2, 0)
+	p.CubeTo(
+		f32.Pt(x+w-rr*iq, y),
+		f32.Pt(x+w, y+rr*iq),
+		f32.Pt(x+w, y+rr),
+	)
+	// Right edge → SE corner.
 	p.LineTo(f32.Pt(x+w, y+h-rr))
-	arcCorner(p, x+w-rr, y+h-rr, rr, 0, math.Pi/2)
+	p.CubeTo(
+		f32.Pt(x+w, y+h-rr*iq),
+		f32.Pt(x+w-rr*iq, y+h),
+		f32.Pt(x+w-rr, y+h),
+	)
+	// Bottom edge → SW corner.
 	p.LineTo(f32.Pt(x+rr, y+h))
-	arcCorner(p, x+rr, y+h-rr, rr, math.Pi/2, math.Pi)
+	p.CubeTo(
+		f32.Pt(x+rr*iq, y+h),
+		f32.Pt(x, y+h-rr*iq),
+		f32.Pt(x, y+h-rr),
+	)
+	// Left edge → NW corner.
 	p.LineTo(f32.Pt(x, y+rr))
-	arcCorner(p, x+rr, y+rr, rr, math.Pi, math.Pi*1.5)
+	p.CubeTo(
+		f32.Pt(x, y+rr*iq),
+		f32.Pt(x+rr*iq, y),
+		f32.Pt(x+rr, y),
+	)
 	p.Close()
 }
 
-// arcCorner appends a quarter-circle polyline at corner (cx,cy).
-func arcCorner(p *clip.Path, cx, cy, r, a0, a1 float32) {
-	polylineCircle(p, cx, cy, r, a0, a1)
+// -----------------------------------------------------------------------
+// Icons — drawn in a 16×16 design grid, centred at (8,8).
+// -----------------------------------------------------------------------
+
+// drawIcon renders the given glyph using the supplied colour.
+func drawIcon(ops *op.Ops, kind IconKind, c color.NRGBA) {
+	switch kind {
+	case IconRefresh:
+		drawRefresh(ops, c)
+	case IconPin:
+		drawPin(ops, c, false)
+	case IconUnpin:
+		drawPin(ops, c, true)
+	case IconLock:
+		drawLock(ops, c, false)
+	case IconUnlock:
+		drawLock(ops, c, true)
+	case IconSettings:
+		drawSettings(ops, c)
+	case IconClose:
+		drawClose(ops, c)
+	case IconPlay:
+		drawPlay(ops, c)
+	case IconCheck:
+		drawCheck(ops, c)
+	case IconBack:
+		drawBack(ops, c)
+	}
+}
+
+// drawRefresh: a clockwise circular arrow. The arc spans ~270° starting from
+// the upper-right and the arrowhead sits exactly at the arc's end. Built as a
+// single polyline path so the arrowhead endpoint is guaranteed to match the arc.
+func drawRefresh(ops *op.Ops, c color.NRGBA) {
+	const (
+		cx = 8.0
+		cy = 8.0
+		r  = 4.5
+	)
+	// The arc goes clockwise from the top (-90°) around to ~+200° (lower-left).
+	// In y-down screen coords, increasing angle = clockwise.
+	const (
+		aStart = float32(-math.Pi / 2)              // top
+		aEnd   = float32(math.Pi * 1.1)             // ~198° (lower-left area)
+	)
+	const segs = 64
+
+	// Build the arc polyline.
+	var pc clip.Path
+	pc.Begin(ops)
+	for i := 0; i <= segs; i++ {
+		t := float32(i) / float32(segs)
+		a := aStart + (aEnd-aStart)*t
+		pt := f32.Pt(cx+r*float32(math.Cos(float64(a))), cy+r*float32(math.Sin(float64(a))))
+		if i == 0 {
+			pc.MoveTo(pt)
+		} else {
+			pc.LineTo(pt)
+		}
+	}
+
+	// Arrowhead at the END of the arc. The tip is the last arc point.
+	// Tangent direction = derivative w.r.t. angle, which for clockwise travel
+	// (increasing angle) is (-sin(a), cos(a)).
+	tipX := cx + r*float32(math.Cos(float64(aEnd)))
+	tipY := cy + r*float32(math.Sin(float64(aEnd)))
+	tangX := -float32(math.Sin(float64(aEnd)))
+	tangY := float32(math.Cos(float64(aEnd)))
+	// Normal (perpendicular).
+	normX := -tangY
+	normY := tangX
+
+	// Arrowhead: two arms going backward from the tip.
+	const (
+		armLen  = 2.5
+		splayAng = 0.5 // radians, ~28° each side
+	)
+	// Left arm: rotate tangent backward by +splayAng.
+	c1 := float32(math.Cos(float64(splayAng)))
+	s1 := float32(math.Sin(float64(splayAng)))
+	// Backward tangent.
+	btx, bty := -tangX, -tangY
+	// Rotate backward tangent by ±splayAng.
+	for _, sign := range []float32{1, -1} {
+		rx := btx*c1 - bty*s1*sign
+		ry := bty*c1 + btx*s1*sign
+		armX := tipX + armLen*rx
+		armY := tipY + armLen*ry
+		pc.MoveTo(f32.Pt(tipX, tipY))
+		pc.LineTo(f32.Pt(armX, armY))
+	}
+	_ = normX
+	_ = normY
+	strokePathCol(ops, pc.End(), c)
+}
+
+// drawPin: a classic thumbtack/pushpin — the icon for "pin to top". It has a
+// round flat head at the top and a pointed shaft below. Drawn with explicit
+// bezier control points for a clean, symmetric shape. When slashed, a diagonal
+// line crosses it (unpin).
+func drawPin(ops *op.Ops, c color.NRGBA, slashed bool) {
+	// The pin head is a horizontal capsule (rounded rectangle) at the top, and
+	// the shaft is a triangle tapering to a point below.
+	//
+	//   Head:  rounded bar from (5,3) to (11,3), 2.5 tall, rounded ends
+	//   Shaft: triangle from the head bottom narrowing to tip at (8,14)
+
+	// Head as a rounded horizontal bar (capsule).
+	var head clip.Path
+	head.Begin(ops)
+	roundRect(&head, ops, 4.8, 2.8, 6.4, 2.6, 1.3)
+	strokePathCol(ops, head.End(), c)
+
+	// Shaft: two lines from the head bottom converging to the tip.
+	var shaft clip.Path
+	shaft.Begin(ops)
+	shaft.MoveTo(f32.Pt(6.2, 5.6))
+	shaft.LineTo(f32.Pt(8, 14))
+	shaft.LineTo(f32.Pt(9.8, 5.6))
+	strokePathCol(ops, shaft.End(), c)
+
+	// A small crossbar where the shaft meets the head.
+	var bar clip.Path
+	bar.Begin(ops)
+	bar.MoveTo(f32.Pt(6, 5.4))
+	bar.LineTo(f32.Pt(10, 5.4))
+	strokePathCol(ops, bar.End(), c)
+
+	if slashed {
+		var slash clip.Path
+		slash.Begin(ops)
+		slash.MoveTo(f32.Pt(3, 3))
+		slash.LineTo(f32.Pt(13, 13))
+		strokePathCol(ops, slash.End(), c)
+	}
+}
+
+// drawLock: a padlock — rounded body + shackle arc. When open is true the
+// shackle is broken (right side lifted), indicating unlocked.
+func drawLock(ops *op.Ops, c color.NRGBA, open bool) {
+	// Body: rounded rectangle.
+	var body clip.Path
+	body.Begin(ops)
+	roundRect(&body, ops, 4, 7.5, 8, 5.5, 1.3)
+	strokePathCol(ops, body.End(), c)
+
+	// Keyhole dot.
+	const q = 4 * (math.Sqrt2 - 1) / 3
+	var dot clip.Path
+	dot.Begin(ops)
+	drawCircleBezier(&dot, ops, 8, 10.2, 0.85, q)
+	dot.Close()
+	fillPath(ops, dot.End(), c)
+
+	// Shackle: a half-ring above the body, drawn as a semicircle via cubic
+	// Bézier (avoids ArcTo angle-sign ambiguity). The shackle spans from
+	// (sx-sr, top) over the top to (sx+sr, top), where top is the apex.
+	const (
+		sx  float32 = 8.0
+		sy  float32 = 7.5 // shackle base (sits on the lock body top edge)
+		sr  float32 = 2.3 // shackle radius
+	)
+	iqv := sr * (1 - q)
+	top := sy - sr           // y-coordinate of the horizontal centre line of the arc
+	arcApexY := top - sr     // topmost point of the shackle arc
+
+	if open {
+		// Left leg up + partial arc ending early (right side lifted free).
+		var sh clip.Path
+		sh.Begin(ops)
+		sh.MoveTo(f32.Pt(sx-sr, sy))
+		sh.LineTo(f32.Pt(sx-sr, top))
+		// Left quarter: (sx-sr, top) → (sx, arcApexY).
+		sh.CubeTo(
+			f32.Pt(sx-sr, top-iqv),
+			f32.Pt(sx-sr+iqv, arcApexY),
+			f32.Pt(sx, arcApexY),
+		)
+		// Right quarter: (sx, arcApexY) → (sx+sr, top).
+		sh.CubeTo(
+			f32.Pt(sx+iqv, arcApexY),
+			f32.Pt(sx+sr, top-iqv),
+			f32.Pt(sx+sr, top),
+		)
+		// Right side lifted up and away (unlocked = open shackle).
+		sh.LineTo(f32.Pt(sx+sr, top-1.5))
+		strokePathCol(ops, sh.End(), c)
+	} else {
+		// Full closed shackle: left leg up, half-circle over, right leg down.
+		var sh clip.Path
+		sh.Begin(ops)
+		sh.MoveTo(f32.Pt(sx-sr, sy))
+		sh.LineTo(f32.Pt(sx-sr, top))
+		// Left quarter: (sx-sr, top) → (sx, arcApexY).
+		sh.CubeTo(
+			f32.Pt(sx-sr, top-iqv),
+			f32.Pt(sx-sr+iqv, arcApexY),
+			f32.Pt(sx, arcApexY),
+		)
+		// Right quarter: (sx, arcApexY) → (sx+sr, top).
+		sh.CubeTo(
+			f32.Pt(sx+iqv, arcApexY),
+			f32.Pt(sx+sr, top-iqv),
+			f32.Pt(sx+sr, top),
+		)
+		sh.LineTo(f32.Pt(sx+sr, sy))
+		strokePathCol(ops, sh.End(), c)
+	}
+}
+
+// drawCircleBezier appends a full circle to p using 4 cubic Béziers (the
+// standard circle approximation with q = 4*(√2-1)/3).
+func drawCircleBezier(p *clip.Path, ops *op.Ops, cx, cy, r, q float32) {
+	// q is the tangent handle fraction; the inner handle is at (1-q)*r from
+	// the axis. Start at the top point (cx, cy-r), go clockwise.
+	p.MoveTo(f32.Pt(cx, cy-r))
+	// Top → right quarter.
+	p.CubeTo(f32.Pt(cx+r*q, cy-r), f32.Pt(cx+r, cy-r*q), f32.Pt(cx+r, cy))
+	// Right → bottom quarter.
+	p.CubeTo(f32.Pt(cx+r, cy+r*q), f32.Pt(cx+r*q, cy+r), f32.Pt(cx, cy+r))
+	// Bottom → left quarter.
+	p.CubeTo(f32.Pt(cx-r*q, cy+r), f32.Pt(cx-r, cy+r*q), f32.Pt(cx-r, cy))
+	// Left → top quarter.
+	p.CubeTo(f32.Pt(cx-r, cy-r*q), f32.Pt(cx-r*q, cy-r), f32.Pt(cx, cy-r))
+}
+
+// drawSettings: three horizontal sliders with circular handles at different
+// positions — the modern Feather/Lucide-style settings icon. Clean and
+// unambiguous at small sizes (a gear rendered at 16px often looks like a
+// flower/sun, whereas sliders are instantly readable).
+func drawSettings(ops *op.Ops, c color.NRGBA) {
+	const (
+		lineY1, dotX1 = 4.0, 11.0  // top slider: handle on the right
+		lineY2, dotX2 = 8.0, 5.0   // middle slider: handle on the left
+		lineY3, dotX3 = 12.0, 9.0  // bottom slider: handle on the right
+	)
+	const dotR = 1.5
+	const q = 4 * (math.Sqrt2 - 1) / 3
+
+	// Draw a slider: a horizontal line from x=3 to x=13, with a filled circle
+	// (handle) at dotX.
+	slider := func(y, dotX float32) {
+		var line clip.Path
+		line.Begin(ops)
+		line.MoveTo(f32.Pt(3, y))
+		line.LineTo(f32.Pt(13, y))
+		strokePathCol(ops, line.End(), c)
+
+		var dot clip.Path
+		dot.Begin(ops)
+		drawCircleBezier(&dot, ops, dotX, y, dotR, q)
+		dot.Close()
+		fillPath(ops, dot.End(), c)
+		// Re-stroke the line segment hidden behind the dot for a clean look.
+		var over clip.Path
+		over.Begin(ops)
+		over.MoveTo(f32.Pt(dotX-dotR, y))
+		over.LineTo(f32.Pt(dotX+dotR, y))
+		strokePathCol(ops, over.End(), c)
+	}
+
+	slider(lineY1, dotX1)
+	slider(lineY2, dotX2)
+	slider(lineY3, dotX3)
+}
+
+// drawClose: a bold X — two diagonal strokes.
+func drawClose(ops *op.Ops, c color.NRGBA) {
+	var pc clip.Path
+	pc.Begin(ops)
+	pc.MoveTo(f32.Pt(4.5, 4.5))
+	pc.LineTo(f32.Pt(11.5, 11.5))
+	pc.MoveTo(f32.Pt(11.5, 4.5))
+	pc.LineTo(f32.Pt(4.5, 11.5))
+	strokePathCol(ops, pc.End(), c)
+}
+
+// drawPlay: a filled right-pointing triangle with slightly rounded corners.
+func drawPlay(ops *op.Ops, c color.NRGBA) {
+	var pc clip.Path
+	pc.Begin(ops)
+	pc.MoveTo(f32.Pt(5.5, 3.5))
+	pc.LineTo(f32.Pt(12.5, 8))
+	pc.LineTo(f32.Pt(5.5, 12.5))
+	pc.Close()
+	fillPath(ops, pc.End(), c)
+}
+
+// drawCheck: a check mark with a rounded corner at the elbow.
+func drawCheck(ops *op.Ops, c color.NRGBA) {
+	var pc clip.Path
+	pc.Begin(ops)
+	pc.MoveTo(f32.Pt(3, 8))
+	// Straight line to near the elbow.
+	pc.LineTo(f32.Pt(6.2, 11))
+	// Rounded transition then up to the top-right tip.
+	pc.QuadTo(f32.Pt(7.0, 10.0), f32.Pt(7.5, 9.2))
+	pc.LineTo(f32.Pt(13, 4.5))
+	strokePathCol(ops, pc.End(), c)
+}
+
+// drawBack: a left-pointing arrow — horizontal line + chevron head.
+func drawBack(ops *op.Ops, c color.NRGBA) {
+	var pc clip.Path
+	pc.Begin(ops)
+	// Chevron head.
+	pc.MoveTo(f32.Pt(7, 4))
+	pc.LineTo(f32.Pt(4, 8))
+	pc.LineTo(f32.Pt(7, 12))
+	strokePathCol(ops, pc.End(), c)
+
+	// Shaft.
+	var sh clip.Path
+	sh.Begin(ops)
+	sh.MoveTo(f32.Pt(4, 8))
+	sh.LineTo(f32.Pt(13, 8))
+	strokePathCol(ops, sh.End(), c)
 }
 
 // smallIconButton lays out a labelled action button that pairs an icon with a

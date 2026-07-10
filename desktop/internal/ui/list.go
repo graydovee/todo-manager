@@ -46,10 +46,6 @@ type ListUI struct {
 
 	// firstLoad tracks whether the initial fetch has been triggered.
 	firstLoad bool
-
-	// closeDialogActive blocks all main-window interaction while the close
-	// confirmation dialog is open (modal behaviour).
-	closeDialogActive bool
 }
 
 type rowWidgets struct {
@@ -153,7 +149,7 @@ func (u *ListUI) topBar(gtx layout.Context) layout.Dimensions {
 // by the delta (constrained to the edge if docked); on Release it checks for
 // edge snapping.
 func (u *ListUI) handleDrag(gtx layout.Context) {
-	if u.closeDialogActive {
+	if u.app.IsModal() {
 		return
 	}
 	u.drag.Add(gtx.Ops)
@@ -421,7 +417,7 @@ func (u *ListUI) footer(gtx layout.Context, total int64, shown int, loading bool
 // --- click handling --------------------------------------------------------
 
 func (u *ListUI) handleTopBarClicks(gtx layout.Context, w *app.Window) {
-	if u.closeDialogActive {
+	if u.app.IsModal() {
 		return
 	}
 	for u.headerTitle.Clicked(gtx) {
@@ -444,36 +440,29 @@ func (u *ListUI) handleTopBarClicks(gtx layout.Context, w *app.Window) {
 	}
 }
 
-// promptCloseAction opens a separate window asking the user to minimize or
-// close. It blocks until the user picks an option (or closes the dialog
-// window), then performs the chosen action on the main window. While the dialog
-// is open, all main-window interaction is blocked (modal).
+// promptCloseAction opens the close-confirmation dialog (minimize / close /
+// cancel). It runs the dialog's event loop on a dedicated goroutine and waits
+// for the user's choice on a channel. While the dialog is open the main window
+// is modal (interaction blocked via app.IsModal).
 func (u *ListUI) promptCloseAction(mainWin *app.Window) {
-	u.closeDialogActive = true
-	if u.app.Invalidate != nil {
-		u.app.Invalidate()
-	}
-	result := showChoiceDialog(u.app.Theme, u.app.OwnerHandle, i18n.T("list.closeTitle"), i18n.T("list.closeHint"), []choiceOption{
-		{Label: i18n.T("list.minimize"), Value: "minimize"},
-		{Label: i18n.T("list.close"), Value: "close"},
-		{Label: i18n.T("common.cancel"), Value: "cancel"},
-	})
-	u.closeDialogActive = false
-	if u.app.Invalidate != nil {
-		u.app.Invalidate()
-	}
-	switch result {
-	case "minimize":
-		if u.app.Platform != nil {
-			u.app.Platform.Minimize()
+	u.app.enterModal()
+	resultCh := ConfirmCloseDialog(u.app)
+	go func() {
+		result := <-resultCh
+		u.app.exitModal()
+		switch result {
+		case "minimize":
+			if u.app.Platform != nil {
+				u.app.Platform.Minimize()
+			}
+		case "close":
+			mainWin.Perform(system.ActionClose)
 		}
-	case "close":
-		mainWin.Perform(system.ActionClose)
-	}
+	}()
 }
 
 func (u *ListUI) handleRowClicks(gtx layout.Context, items []client.Todo) {
-	if u.closeDialogActive {
+	if u.app.IsModal() {
 		return
 	}
 	for i := range items {

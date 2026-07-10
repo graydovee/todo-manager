@@ -11,8 +11,8 @@ func NewController(_ Handle) Controller {
 	return Noop{}
 }
 
-// CenterAndTopMost is a no-op on unsupported platforms.
-func CenterAndTopMost(_ Handle) {}
+// SetupChildWindow is a no-op on unsupported platforms.
+func SetupChildWindow(_, _ Handle) {}
 
 // CenterWindow is a no-op on unsupported platforms.
 func CenterWindow(_ Handle) {}
