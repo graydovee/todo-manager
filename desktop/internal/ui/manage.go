@@ -49,6 +49,12 @@ type ManageUI struct {
 	// Dock settings editors.
 	animEditor   widget.Editor
 	hideEditor   widget.Editor
+
+	// hideHeader, when true, suppresses the header row (back button + title +
+	// logout). The side window draws its own top bar instead.
+	hideHeader bool
+	// onBack, if set, overrides the default back-button behaviour.
+	onBack func()
 }
 
 var (
@@ -108,13 +114,17 @@ func (m *ManageUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 		body = m.createForm
 	}
 
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(m.header),
-		layout.Rigid(separator),
-		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(unit.Dp(12)).Layout(gtx, body)
-		}),
-	)
+	children := make([]layout.FlexChild, 0, 3)
+	if !m.hideHeader {
+		children = append(children,
+			layout.Rigid(m.header),
+			layout.Rigid(separator),
+		)
+	}
+	children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+		return layout.UniformInset(unit.Dp(12)).Layout(gtx, body)
+	}))
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 }
 
 func (m *ManageUI) header(gtx layout.Context) layout.Dimensions {
@@ -292,7 +302,11 @@ func (m *ManageUI) createForm(gtx layout.Context) layout.Dimensions {
 
 func (m *ManageUI) handleClicks(gtx layout.Context) {
 	for m.backBtn.Clicked(gtx) {
-		m.app.nav().goTo(store.PageList)
+		if m.onBack != nil {
+			m.onBack()
+		} else {
+			m.app.nav().goTo(store.PageList)
+		}
 	}
 	for m.logoutBtn.Clicked(gtx) {
 		m.doLogout()
@@ -370,7 +384,11 @@ func (m *ManageUI) applyFilters() {
 	m.app.State.Unlock()
 	homePersist(m.app.State.Config)
 	m.app.List.RequestRefresh()
-	m.app.nav().goTo(store.PageList)
+	if m.onBack != nil {
+		m.onBack()
+	} else {
+		m.app.nav().goTo(store.PageList)
+	}
 }
 
 func (m *ManageUI) doLogout() {
@@ -432,7 +450,11 @@ func (m *ManageUI) createTodo() {
 		m.resetNewForm()
 		m.app.State.SetMessage(i18n.T("manage.created"))
 		m.app.List.RequestRefresh()
-		m.app.nav().goTo(store.PageList)
+		if m.onBack != nil {
+			m.onBack()
+		} else {
+			m.app.nav().goTo(store.PageList)
+		}
 	}()
 }
 

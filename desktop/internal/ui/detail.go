@@ -49,6 +49,14 @@ type DetailUI struct {
 	editing bool
 	// Pending conflict after a complete/reopen 409.
 	pendingConflict *client.ConflictResponse
+
+	// onBack, if set, overrides the default back-button behaviour (navigate to
+	// PageList). The detail side window sets this to close itself instead.
+	onBack func()
+
+	// hideHeader, when true, suppresses the header row (back button + title +
+	// edit/save). Used by the detail side window which draws its own top bar.
+	hideHeader bool
 }
 
 type commentRow struct {
@@ -96,27 +104,31 @@ func (d *DetailUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 		return d.conflictModal(gtx)
 	}
 
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(d.header),
-		layout.Rigid(separator),
-		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			if err != nil {
-				return centeredText(gtx, d.app.Theme, i18n.T("common.error")+err.Error(), textMuted)
-			}
-			if loading || detail == nil {
-				return centeredText(gtx, d.app.Theme, i18n.T("common.loading"), textMuted)
-			}
-			list := &layout.List{Axis: layout.Vertical}
-			return list.Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
-				return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					if d.editing {
-						return d.editForm(gtx, detail)
-					}
-					return d.viewBody(gtx, detail)
-				})
+	children := make([]layout.FlexChild, 0, 3)
+	if !d.hideHeader {
+		children = append(children,
+			layout.Rigid(d.header),
+			layout.Rigid(separator),
+		)
+	}
+	children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+		if err != nil {
+			return centeredText(gtx, d.app.Theme, i18n.T("common.error")+err.Error(), textMuted)
+		}
+		if loading || detail == nil {
+			return centeredText(gtx, d.app.Theme, i18n.T("common.loading"), textMuted)
+		}
+		list := &layout.List{Axis: layout.Vertical}
+		return list.Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
+			return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				if d.editing {
+					return d.editForm(gtx, detail)
+				}
+				return d.viewBody(gtx, detail)
 			})
-		}),
-	)
+		})
+	}))
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 }
 
 func (d *DetailUI) header(gtx layout.Context) layout.Dimensions {
@@ -364,7 +376,7 @@ func (d *DetailUI) editForm(gtx layout.Context, detail *client.TodoDetail) layou
 		}
 		d.edTags.SetText(strings.Join(todo.Tags, ","))
 	}
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+	children := []layout.FlexChild{
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return labeledEditor(gtx, d.app.Theme, &d.edTitle, i18n.T("list.colTitle"), "")
 		}),
@@ -391,7 +403,12 @@ func (d *DetailUI) editForm(gtx layout.Context, detail *client.TodoDetail) layou
 			return c.Layout(gtx)
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+	}
+	// Save/Cancel buttons — only in standalone (non-side-window) mode. The side
+	// window renders these in its top bar; rendering the same Clickable twice in
+	// one frame breaks click detection.
+	if !d.hideHeader {
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return smallButton(gtx, d.app.Theme, &d.saveBtn, i18n.T("common.save"))
@@ -401,8 +418,9 @@ func (d *DetailUI) editForm(gtx layout.Context, detail *client.TodoDetail) layou
 					return smallButton(gtx, d.app.Theme, &d.cancelBtn, i18n.T("common.cancel"))
 				}),
 			)
-		}),
-	)
+		}))
+	}
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 }
 
 // conflictModal shows pending dependency blockers and offers a cascade.
@@ -451,7 +469,11 @@ func (d *DetailUI) conflictModal(gtx layout.Context) layout.Dimensions {
 
 func (d *DetailUI) handleClicks(gtx layout.Context) {
 	for d.backBtn.Clicked(gtx) {
-		d.app.nav().goTo(store.PageList)
+		if d.onBack != nil {
+			d.onBack()
+		} else {
+			d.app.nav().goTo(store.PageList)
+		}
 	}
 	for d.editBtn.Clicked(gtx) {
 		d.editing = true

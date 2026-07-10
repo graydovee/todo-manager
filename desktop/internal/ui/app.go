@@ -41,6 +41,9 @@ type App struct {
 	List   *ListUI
 	Detail *DetailUI
 	Manage *ManageUI
+
+	// SideWin manages the reusable side window (detail / manage / create).
+	SideWin *SideWindow
 }
 
 // IsModal reports whether any modal dialog is currently open. While true, the
@@ -83,7 +86,31 @@ func NewApp(th *material.Theme, state *store.AppState, todos *store.TodoStore) *
 	a.List = NewListUI(a)
 	a.Detail = NewDetailUI(a)
 	a.Manage = NewManageUI(a)
+	a.SideWin = NewSideWindow(a)
 	return a
+}
+
+// OpenDetail opens the side window in detail mode for the given todo ID.
+func (a *App) OpenDetail(id uint) {
+	a.SideWin.OpenDetail(id)
+}
+
+// OpenManage opens the side window in management mode.
+func (a *App) OpenManage() {
+	a.SideWin.OpenManage()
+}
+
+// OpenCreate opens the side window in create-todo mode.
+func (a *App) OpenCreate() {
+	a.SideWin.OpenCreate()
+}
+
+// isSelected reports whether the given todo ID matches the currently selected
+// todo (the one whose detail is open).
+func (a *App) isSelected(id uint) bool {
+	a.State.Lock()
+	defer a.State.Unlock()
+	return a.State.SelectedID == id
 }
 
 // Layout is called on every FrameEvent. It fills the background and routes to

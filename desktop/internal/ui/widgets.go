@@ -19,6 +19,13 @@ func separator(gtx layout.Context) layout.Dimensions {
 	return layout.Dimensions{Size: image.Pt(gtx.Constraints.Max.X, 1)}
 }
 
+// fillRectMax paints the full available area (Constraints.Max) with c.
+func fillRectMax(gtx layout.Context, c color.NRGBA) {
+	rect := image.Rect(0, 0, gtx.Constraints.Max.X, gtx.Constraints.Max.Y)
+	defer clip.Rect(rect).Push(gtx.Ops).Pop()
+	paint.Fill(gtx.Ops, c)
+}
+
 // centeredText lays out a label centred in the available area.
 func centeredText(gtx layout.Context, th *material.Theme, msg string, c color.NRGBA) layout.Dimensions {
 	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
