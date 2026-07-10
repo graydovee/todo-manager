@@ -94,7 +94,7 @@ func runWindow(state *store.AppState, todos *store.TodoStore, theme *material.Th
 	// are drained between Gio events. invalidate wakes the blocking w.Event() so
 	// the loop can process tray commands promptly even without window input.
 	trayCmds := make(chan platform.TrayCmd, 8)
-	go platform.RunTray(cfg.Window.TopMost, trayCmds, func() { w.Invalidate() })
+	go platform.RunTray(cfg.Window.TopMost, state.Locked, trayCmds, func() { w.Invalidate() })
 
 	// Dock poll goroutine: when the window is docked to an edge and unlocked,
 	// auto-hide it (slide off-screen) and slide it back out when the cursor
@@ -170,8 +170,9 @@ func handleTray(gui *ui.App, w *app.Window, cmds <-chan platform.TrayCmd, home s
 				return true
 			}
 			switch c {
-			case platform.TrayUnlock:
-				gui.SetLock(false)
+			case platform.TrayToggleLock:
+				gui.SetLock(!gui.IsLocked())
+				platform.SetTrayLock(gui.IsLocked())
 				platform.SetTrayTopMost(gui.IsTopMost())
 				w.Invalidate()
 			case platform.TrayToggleTopMost:

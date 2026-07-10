@@ -19,17 +19,18 @@ var appIconICO []byte
 type TrayCmd int
 
 const (
-	TrayUnlock TrayCmd = iota
+	TrayToggleLock TrayCmd = iota
 	TrayToggleTopMost
 	TrayQuit
 )
 
 // trayState carries the shared flags the menu reflects (checked state of the
-// top-most item) and the command channel. It is read from the tray's window
-// procedure and written from other goroutines, hence the mutex.
+// lock and top-most items) and the command channel. It is read from the tray's
+// window procedure and written from other goroutines, hence the mutex.
 type trayState struct {
 	mu      sync.Mutex
 	topMost bool
+	locked  bool
 	cmds    chan TrayCmd
 	hwnd    syscall.Handle
 }
@@ -45,13 +46,14 @@ var (
 // thread). It blocks until the icon is removed.
 //
 // topMost is the initial checked state of the "Always on top" item.
-func RunTray(topMost bool, cmds chan TrayCmd) {
+func RunTray(topMost, locked bool, cmds chan TrayCmd) {
 	// Pin this goroutine to its OS thread: the message window is thread-affine.
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
 	s := &trayState{
 		topMost: topMost,
+		locked:  locked,
 		cmds:    cmds,
 	}
 	globalTray = s
@@ -134,9 +136,9 @@ func trayWndProc(hwnd syscall.Handle, msg uint32, wparam, lparam uintptr) uintpt
 			return 0
 		}
 		switch cmd {
-		case trayMenuUnlock:
+		case trayMenuLock:
 			select {
-			case s.cmds <- TrayUnlock:
+			case s.cmds <- TrayToggleLock:
 			default:
 			}
 		case trayMenuTopMost:
@@ -177,6 +179,7 @@ func showTrayMenu(hwnd syscall.Handle) {
 	}
 	s.mu.Lock()
 	topMost := s.topMost
+	locked := s.locked
 	s.mu.Unlock()
 
 	menu, _, _ := procCreateMenu.Call()
@@ -185,7 +188,7 @@ func showTrayMenu(hwnd syscall.Handle) {
 	}
 	defer procDestroyMenu.Call(menu)
 
-	menuAddItem(menu, trayMenuUnlock, i18n.T("tray.unlock"), false, false)
+	menuAddItem(menu, trayMenuLock, i18n.T("tray.lock"), true, locked)
 	menuAddItem(menu, trayMenuTopMost, i18n.T("tray.topMost"), true, topMost)
 	menuAddSeparator(menu)
 	menuAddItem(menu, trayMenuQuit, i18n.T("tray.quit"), false, false)
@@ -228,4 +231,14 @@ func SetTrayTopMost(on bool) {
 	globalTray.mu.Lock()
 	defer globalTray.mu.Unlock()
 	globalTray.topMost = on
+}
+
+// SetTrayLock updates the lock checkbox state shown on the next menu open.
+func SetTrayLock(on bool) {
+	if globalTray == nil {
+		return
+	}
+	globalTray.mu.Lock()
+	defer globalTray.mu.Unlock()
+	globalTray.locked = on
 }

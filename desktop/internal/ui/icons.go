@@ -512,14 +512,3 @@ func drawPlus(ops *op.Ops, c color.NRGBA) {
 	pc.LineTo(f32.Pt(8, 12))
 	strokePathCol(ops, pc.End(), c)
 }
-
-// smallIconButton lays out a labelled action button that pairs an icon with a
-// short text label (e.g. "Start" with a play glyph).
-func smallIconButton(gtx layout.Context, th *material.Theme, c *widget.Clickable, kind IconKind, label string) layout.Dimensions {
-	btn := material.Button(th, c, label)
-	btn.TextSize = unit.Sp(11)
-	btn.Inset = layout.Inset{Top: unit.Dp(3), Bottom: unit.Dp(3), Left: unit.Dp(6), Right: unit.Dp(6)}
-	btn.Background = textPrimary
-	btn.Color = bgPage
-	return btn.Layout(gtx)
-}

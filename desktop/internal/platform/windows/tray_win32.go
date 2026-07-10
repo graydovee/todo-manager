@@ -32,7 +32,7 @@ const (
 	WM_TRAYICON = WM_APP + 1
 
 	// Menu item ids.
-	trayMenuUnlock  = 1001
+	trayMenuLock    = 1001
 	trayMenuTopMost = 1002
 	trayMenuQuit    = 1005
 )
