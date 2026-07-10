@@ -108,7 +108,7 @@ var zh = map[string]string{
 	"manage.hideDelay":     "隐藏延迟 (毫秒)",
 
 	// tray
-	"tray.unlock":  "解锁",
-	"tray.topMost": "始终置顶",
+	"tray.lock":    "锁定",
+	"tray.topMost": "置顶",
 	"tray.quit":    "退出",
 }

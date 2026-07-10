@@ -235,6 +235,9 @@ func (a *App) SetLock(locked bool) {
 	}
 	a.State.Unlock()
 	a.applyWindowMode()
+	// Sync tray menu checkboxes.
+	platform.SetTrayLock(locked)
+	platform.SetTrayTopMost(a.isTopMost())
 }
 
 // SetTopMost toggles the always-on-top state. It is a no-op to disable top-most
@@ -248,6 +251,8 @@ func (a *App) SetTopMost(topmost bool) {
 	a.State.Config.Window.TopMost = a.State.TopMost
 	a.State.Unlock()
 	a.applyWindowMode()
+	// Sync tray menu checkbox.
+	platform.SetTrayTopMost(a.isTopMost())
 }
 
 // applyWindowMode pushes the current lock/top-most state to the platform

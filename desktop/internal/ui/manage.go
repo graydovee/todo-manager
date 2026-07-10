@@ -24,7 +24,6 @@ type ManageUI struct {
 	backBtn    widget.Clickable
 	logoutBtn  widget.Clickable
 	applyBtn   widget.Clickable
-	newBtn     widget.Clickable
 	createBtn  widget.Clickable
 	cancelBtn  widget.Clickable
 	langEnBtn  widget.Clickable
@@ -55,6 +54,9 @@ type ManageUI struct {
 	hideHeader bool
 	// onBack, if set, overrides the default back-button behaviour.
 	onBack func()
+
+	// scroll persists the scroll position of the body content across frames.
+	scroll layout.List
 }
 
 var (
@@ -103,6 +105,7 @@ func NewManageUI(a *App) *ManageUI {
 	}
 	m.animEditor.SetText(strconv.Itoa(animMs))
 	m.hideEditor.SetText(strconv.Itoa(hideMs))
+	m.scroll.Axis = layout.Vertical
 	return m
 }
 
@@ -122,7 +125,11 @@ func (m *ManageUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 		)
 	}
 	children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-		return layout.UniformInset(unit.Dp(12)).Layout(gtx, body)
+		return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return m.scroll.Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
+				return body(gtx)
+			})
+		})
 	}))
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 }
@@ -220,11 +227,7 @@ func (m *ManageUI) filtersView(gtx layout.Context) layout.Dimensions {
 		layout.Rigid(layout.Spacer{Height: unit.Dp(18)}.Layout),
 
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return smallButton(gtx, m.app.Theme, &m.applyBtn, i18n.T("manage.apply")) }),
-				layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return smallButton(gtx, m.app.Theme, &m.newBtn, i18n.T("manage.new")) }),
-			)
+			return smallButton(gtx, m.app.Theme, &m.applyBtn, i18n.T("manage.apply"))
 		}),
 	)
 }
@@ -319,9 +322,6 @@ func (m *ManageUI) handleClicks(gtx layout.Context) {
 	}
 	for m.applyBtn.Clicked(gtx) {
 		m.applyFilters()
-	}
-	for m.newBtn.Clicked(gtx) {
-		m.creating = true
 	}
 	for m.cancelBtn.Clicked(gtx) {
 		m.creating = false
@@ -476,16 +476,8 @@ func labelForOption(opt string) string {
 
 func chipButton(gtx layout.Context, th *material.Theme, c *widget.Clickable, label string, active bool) layout.Dimensions {
 	btn := material.Button(th, c, label)
-	btn.TextSize = unit.Sp(11)
-	btn.Inset = layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(4), Left: unit.Dp(8), Right: unit.Dp(8)}
-	if active {
-		btn.Background = textPrimary
-		btn.Color = bgPage
-	} else {
-		btn.Background = bgPanel
-		btn.Color = textSecondary
-	}
-	return btn.Layout(gtx)
+	styleChipButton(&btn, active)
+	return uniformButton(gtx, &btn)
 }
 
 // ensure fmt stays used if labelForOption ever returns formatted strings.

@@ -102,9 +102,6 @@ func ConfirmCloseDialog(a *App) <-chan string {
 // choiceButton renders a uniformly-styled dialog button.
 func choiceButton(gtx layout.Context, th *material.Theme, c *widget.Clickable, label string) layout.Dimensions {
 	btn := material.Button(th, c, label)
-	btn.TextSize = unit.Sp(13)
-	btn.Inset = layout.Inset{Top: unit.Dp(6), Bottom: unit.Dp(6), Left: unit.Dp(12), Right: unit.Dp(12)}
-	btn.Background = textPrimary
-	btn.Color = bgPage
-	return btn.Layout(gtx)
+	styleButton(&btn)
+	return uniformButton(gtx, &btn)
 }

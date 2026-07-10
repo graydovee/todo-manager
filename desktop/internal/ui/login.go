@@ -83,6 +83,7 @@ func (u *LoginUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 			// Connect button.
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				btn := material.Button(u.app.Theme, &u.testBtn, i18n.T("login.connect"))
+				styleButton(&btn)
 				if u.testing {
 					btn.Text = i18n.T("login.connecting")
 					btn.Background = textDisabled

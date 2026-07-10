@@ -578,11 +578,8 @@ func (u *ListUI) RequestRefresh() {
 
 func smallButton(gtx layout.Context, th *material.Theme, c *widget.Clickable, label string) layout.Dimensions {
 	btn := material.Button(th, c, label)
-	btn.TextSize = unit.Sp(11)
-	btn.Inset = layout.Inset{Top: unit.Dp(3), Bottom: unit.Dp(3), Left: unit.Dp(6), Right: unit.Dp(6)}
-	btn.Background = textPrimary
-	btn.Color = bgPage
-	return btn.Layout(gtx)
+	styleButton(&btn)
+	return uniformButton(gtx, &btn)
 }
 
 func titleCell(gtx layout.Context, th *material.Theme, todo client.Todo) layout.Dimensions {

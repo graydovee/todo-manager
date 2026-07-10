@@ -108,7 +108,7 @@ var en = map[string]string{
 	"manage.hideDelay":     "Hide delay (ms)",
 
 	// tray
-	"tray.unlock":  "Unlock",
-	"tray.topMost": "Always on top",
+	"tray.lock":    "Lock",
+	"tray.topMost": "Pin on top",
 	"tray.quit":    "Quit",
 }

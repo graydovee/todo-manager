@@ -4,7 +4,7 @@ package platform
 type TrayCmd int
 
 const (
-	TrayUnlock TrayCmd = iota
+	TrayToggleLock TrayCmd = iota
 	TrayToggleTopMost
 	TrayQuit
 )
