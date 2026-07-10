@@ -30,6 +30,7 @@ type ListUI struct {
 	lockBtn    widget.Clickable
 	manageBtn  widget.Clickable
 	refreshBtn widget.Clickable
+	createBtn  widget.Clickable
 	closeBtn   widget.Clickable
 
 	list layout.List
@@ -130,6 +131,8 @@ func (u *ListUI) topBar(gtx layout.Context) layout.Dimensions {
 					u.handleDrag(gtx)
 					return dims
 				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, u.app.Theme, &u.createBtn, IconPlus, false) }),
+				layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, u.app.Theme, &u.refreshBtn, IconRefresh, false) }),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, u.app.Theme, &u.topMostBtn, IconPin, u.app.isTopMost()) }),
@@ -358,7 +361,12 @@ func (u *ListUI) headerRow(gtx layout.Context) layout.Dimensions {
 
 // row renders one todo line, wrapped in a clickable for opening the detail.
 func (u *ListUI) row(gtx layout.Context, todo client.Todo, row *rowWidgets) layout.Dimensions {
+	// Highlight the row if its detail is currently open in the side window.
+	selected := u.app.SideWin.IsDetailMode() && u.app.isSelected(todo.ID)
 	return material.Clickable(gtx, &row.row, func(gtx layout.Context) layout.Dimensions {
+		if selected {
+			fillRectMax(gtx, bgRowSelect)
+		}
 		return insetRow(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 				// Title + code.
@@ -423,6 +431,9 @@ func (u *ListUI) handleTopBarClicks(gtx layout.Context, w *app.Window) {
 	for u.headerTitle.Clicked(gtx) {
 		u.toggleSort("title")
 	}
+	for u.createBtn.Clicked(gtx) {
+		u.app.OpenCreate()
+	}
 	for u.refreshBtn.Clicked(gtx) {
 		u.RequestRefresh()
 	}
@@ -433,7 +444,7 @@ func (u *ListUI) handleTopBarClicks(gtx layout.Context, w *app.Window) {
 		u.app.SetLock(!u.app.isLocked())
 	}
 	for u.manageBtn.Clicked(gtx) {
-		u.app.nav().goTo(store.PageManage)
+		u.app.OpenManage()
 	}
 	for u.closeBtn.Clicked(gtx) {
 		go u.promptCloseAction(w)
@@ -486,15 +497,7 @@ func (u *ListUI) handleRowClicks(gtx layout.Context, items []client.Todo) {
 }
 
 func (u *ListUI) openDetail(id uint) {
-	u.app.State.Lock()
-	u.app.State.SelectedID = id
-	u.app.State.Page = store.PageDetail
-	u.app.State.Unlock()
-	u.app.Todos.ResetDetail()
-	u.app.Detail.Load()
-	if u.app.Invalidate != nil {
-		u.app.Invalidate()
-	}
+	u.app.OpenDetail(id)
 }
 
 // doStatusAction advances the todo to the next status.

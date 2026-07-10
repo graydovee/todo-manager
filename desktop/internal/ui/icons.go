@@ -29,6 +29,7 @@ const (
 	IconPlay
 	IconCheck
 	IconBack
+	IconPlus
 )
 
 // iconButtonSize is the square hit area for icon buttons.
@@ -205,6 +206,8 @@ func drawIcon(ops *op.Ops, kind IconKind, c color.NRGBA) {
 		drawCheck(ops, c)
 	case IconBack:
 		drawBack(ops, c)
+	case IconPlus:
+		drawPlus(ops, c)
 	}
 }
 
@@ -495,6 +498,19 @@ func drawBack(ops *op.Ops, c color.NRGBA) {
 	sh.MoveTo(f32.Pt(4, 8))
 	sh.LineTo(f32.Pt(13, 8))
 	strokePathCol(ops, sh.End(), c)
+}
+
+// drawPlus: a plus sign — horizontal + vertical line crossing at centre.
+func drawPlus(ops *op.Ops, c color.NRGBA) {
+	var pc clip.Path
+	pc.Begin(ops)
+	// Horizontal line.
+	pc.MoveTo(f32.Pt(4, 8))
+	pc.LineTo(f32.Pt(12, 8))
+	// Vertical line.
+	pc.MoveTo(f32.Pt(8, 4))
+	pc.LineTo(f32.Pt(8, 12))
+	strokePathCol(ops, pc.End(), c)
 }
 
 // smallIconButton lays out a labelled action button that pairs an icon with a
