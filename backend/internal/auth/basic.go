@@ -34,6 +34,12 @@ func (p *BasicAuthProvider) Authenticate(username, password string) (*model.User
 
 var ErrInvalidCredentials = &AuthError{Message: "invalid username or password"}
 
+// ErrOIDCNotConfigured is returned when an OIDC auth flow is invoked but the
+// provider is not initialized (e.g. auth.mode != "oidc", or provider discovery
+// failed at startup). It lets handlers return a clean error instead of
+// nil-deref panicking inside the provider.
+var ErrOIDCNotConfigured = &AuthError{Message: "OIDC is not configured"}
+
 type AuthError struct {
 	Message string
 }
