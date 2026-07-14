@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
+	"github.com/graydovee/todo-manager/internal/auth"
 	"github.com/graydovee/todo-manager/internal/middleware"
 	"github.com/graydovee/todo-manager/internal/service"
 	"github.com/labstack/echo/v4"
@@ -68,6 +70,9 @@ func (h *AuthHandler) Login(c echo.Context) error {
 func (h *AuthHandler) LoginOIDC(c echo.Context) error {
 	authURL, err := h.authService.InitOIDCLogin(c.Response(), c.Request())
 	if err != nil {
+		if errors.Is(err, auth.ErrOIDCNotConfigured) {
+			return c.JSON(http.StatusServiceUnavailable, ErrorResponse{Error: err.Error()})
+		}
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "failed to init OIDC login"})
 	}
 	return c.Redirect(http.StatusFound, authURL)

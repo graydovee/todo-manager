@@ -65,7 +65,11 @@ func New(cfg *config.Config, db *gorm.DB) *echo.Echo {
 		var err error
 		oidcAuthProvider, err = auth.NewOIDCAuthProvider(context.Background(), &cfg.Auth.OIDC)
 		if err != nil {
+			// Fatal: a nil provider would panic on every login attempt. Crash so
+			// the scheduler restarts the pod and retries provider discovery,
+			// instead of serving with a permanently broken auth path.
 			slog.Error("failed to initialize OIDC provider", "error", err)
+			os.Exit(1)
 		}
 	}
 

@@ -55,6 +55,9 @@ func (s *AuthService) LoginBasic(w http.ResponseWriter, r *http.Request, usernam
 }
 
 func (s *AuthService) InitOIDCLogin(w http.ResponseWriter, r *http.Request) (string, error) {
+	if s.oidcAuth == nil {
+		return "", auth.ErrOIDCNotConfigured
+	}
 	state, err := s.oidcAuth.GenerateState()
 	if err != nil {
 		return "", err
@@ -74,6 +77,9 @@ func (s *AuthService) InitOIDCLogin(w http.ResponseWriter, r *http.Request) (str
 }
 
 func (s *AuthService) HandleOIDCCallback(ctx context.Context, w http.ResponseWriter, r *http.Request, code, state string) (*model.User, error) {
+	if s.oidcAuth == nil {
+		return nil, auth.ErrOIDCNotConfigured
+	}
 	// Retrieve state cookie
 	cookie, err := r.Cookie("oidc_state_" + state)
 	if err != nil {
