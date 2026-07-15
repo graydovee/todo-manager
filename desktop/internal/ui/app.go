@@ -19,8 +19,17 @@ import (
 // the current page based on store.AppState. It is rebuilt every frame by Layout.
 type App struct {
 	Theme *material.Theme
-	State *store.AppState
-	Todos *store.TodoStore
+	// SideTheme is a separate *material.Theme for the side window. It mirrors
+	// Theme's configuration but owns an independent text.Shaper. This is
+	// essential: the main window and the side window run on separate goroutines
+	// (each *app.Window has its own event-loop goroutine), and text.Shaper is
+	// NOT safe for concurrent use — its LayoutString/NextGlyph mutate shared
+	// iterator state. Sharing one Shaper across both windows corrupts that state
+	// and panics with "index out of range" when both windows repaint at once
+	// (e.g. opening the side window while the list redraws).
+	SideTheme *material.Theme
+	State     *store.AppState
+	Todos     *store.TodoStore
 
 	// Platform window controller; nil until the native handle arrives.
 	Platform platform.Controller
@@ -81,7 +90,7 @@ func (a *App) exitModal() {
 
 // NewApp constructs the UI controller with all sub-pages wired to the stores.
 func NewApp(th *material.Theme, state *store.AppState, todos *store.TodoStore) *App {
-	a := &App{Theme: th, State: state, Todos: todos}
+	a := &App{Theme: th, SideTheme: newThemeLike(), State: state, Todos: todos}
 	a.Login = NewLoginUI(a)
 	a.List = NewListUI(a)
 	a.Detail = NewDetailUI(a)

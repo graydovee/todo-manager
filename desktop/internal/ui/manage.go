@@ -20,19 +20,23 @@ import (
 // ManageUI is the filter + create + logout screen.
 type ManageUI struct {
 	app *App
+	// th is the theme used to render this instance. It is normally the app's
+	// main theme, but the side window injects the side theme so the two
+	// windows don't share a text.Shaper (which is not concurrency-safe).
+	th *material.Theme
 
-	backBtn    widget.Clickable
-	logoutBtn  widget.Clickable
-	applyBtn   widget.Clickable
-	createBtn  widget.Clickable
-	cancelBtn  widget.Clickable
-	langEnBtn  widget.Clickable
-	langZhBtn  widget.Clickable
+	backBtn   widget.Clickable
+	logoutBtn widget.Clickable
+	applyBtn  widget.Clickable
+	createBtn widget.Clickable
+	cancelBtn widget.Clickable
+	langEnBtn widget.Clickable
+	langZhBtn widget.Clickable
 
 	// Filters (text editors / simple multi-toggle chips).
-	qEditor      widget.Editor
-	codeEditor   widget.Editor
-	statusToggles map[string]*widget.Clickable
+	qEditor         widget.Editor
+	codeEditor      widget.Editor
+	statusToggles   map[string]*widget.Clickable
 	categoryToggles map[string]*widget.Clickable
 	priorityToggles map[string]*widget.Clickable
 
@@ -46,8 +50,8 @@ type ManageUI struct {
 	newDue   widget.Editor
 
 	// Dock settings editors.
-	animEditor   widget.Editor
-	hideEditor   widget.Editor
+	animEditor widget.Editor
+	hideEditor widget.Editor
 
 	// hideHeader, when true, suppresses the header row (back button + title +
 	// logout). The side window draws its own top bar instead.
@@ -60,13 +64,13 @@ type ManageUI struct {
 }
 
 var (
-	statusOptions    = []string{"open", "in_progress", "completed", "duplicate"}
-	categoryOptions  = []string{"bug", "feature", "task"}
-	priorityOptions  = []string{"p0", "p1", "p2", "p3"}
+	statusOptions   = []string{"open", "in_progress", "completed", "duplicate"}
+	categoryOptions = []string{"bug", "feature", "task"}
+	priorityOptions = []string{"p0", "p1", "p2", "p3"}
 )
 
 func NewManageUI(a *App) *ManageUI {
-	m := &ManageUI{app: a}
+	m := &ManageUI{app: a, th: a.Theme}
 	m.qEditor.SingleLine = true
 	m.codeEditor.SingleLine = true
 	m.newTitle.SingleLine = true
@@ -138,15 +142,17 @@ func (m *ManageUI) header(gtx layout.Context) layout.Dimensions {
 	return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(8), Right: unit.Dp(8)}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, m.app.Theme, &m.backBtn, IconBack, false) }),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, m.th, &m.backBtn, IconBack, false) }),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					t := material.Body1(m.app.Theme, i18n.T("manage.title"))
+					t := material.Body1(m.th, i18n.T("manage.title"))
 					t.Font.Weight = font.SemiBold
 					t.Color = textPrimary
 					return t.Layout(gtx)
 				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return smallButton(gtx, m.app.Theme, &m.logoutBtn, i18n.T("manage.logout")) }),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return smallButton(gtx, m.th, &m.logoutBtn, i18n.T("manage.logout"))
+				}),
 			)
 		},
 	)
@@ -157,11 +163,11 @@ func (m *ManageUI) langRow(gtx layout.Context) layout.Dimensions {
 	cur := i18n.Default.Lang()
 	return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return chipButton(gtx, m.app.Theme, &m.langZhBtn, "中文", cur == i18n.Zh)
+			return chipButton(gtx, m.th, &m.langZhBtn, "中文", cur == i18n.Zh)
 		}),
 		layout.Rigid(layout.Spacer{Width: unit.Dp(6)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return chipButton(gtx, m.app.Theme, &m.langEnBtn, "English", cur == i18n.En)
+			return chipButton(gtx, m.th, &m.langEnBtn, "English", cur == i18n.En)
 		}),
 	)
 }
@@ -181,53 +187,53 @@ func (m *ManageUI) switchLanguage(l i18n.Lang) {
 func (m *ManageUI) filtersView(gtx layout.Context) layout.Dimensions {
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		// Language switcher.
-		layout.Rigid(sectionLabel(m.app.Theme, i18n.T("manage.language"))),
+		layout.Rigid(sectionLabel(m.th, i18n.T("manage.language"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 		layout.Rigid(m.langRow),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
 
 		// Dock timing settings.
-		layout.Rigid(sectionLabel(m.app.Theme, i18n.T("manage.animDuration"))),
+		layout.Rigid(sectionLabel(m.th, i18n.T("manage.animDuration"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.app.Theme, &m.animEditor, i18n.T("manage.animDuration"), "500")
+			return labeledEditor(gtx, m.th, &m.animEditor, i18n.T("manage.animDuration"), "500")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(sectionLabel(m.app.Theme, i18n.T("manage.hideDelay"))),
+		layout.Rigid(sectionLabel(m.th, i18n.T("manage.hideDelay"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.app.Theme, &m.hideEditor, i18n.T("manage.hideDelay"), "600")
+			return labeledEditor(gtx, m.th, &m.hideEditor, i18n.T("manage.hideDelay"), "600")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
 
-		layout.Rigid(sectionLabel(m.app.Theme, i18n.T("manage.search"))),
+		layout.Rigid(sectionLabel(m.th, i18n.T("manage.search"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.app.Theme, &m.qEditor, i18n.T("manage.titleSearch"), "")
+			return labeledEditor(gtx, m.th, &m.qEditor, i18n.T("manage.titleSearch"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.app.Theme, &m.codeEditor, i18n.T("manage.codeExact"), "")
+			return labeledEditor(gtx, m.th, &m.codeEditor, i18n.T("manage.codeExact"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
 
-		layout.Rigid(sectionLabel(m.app.Theme, i18n.T("manage.status"))),
+		layout.Rigid(sectionLabel(m.th, i18n.T("manage.status"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 		layout.Rigid(m.toggleRow(statusOptions, m.statusToggles)),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
 
-		layout.Rigid(sectionLabel(m.app.Theme, i18n.T("manage.category"))),
+		layout.Rigid(sectionLabel(m.th, i18n.T("manage.category"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 		layout.Rigid(m.toggleRow(categoryOptions, m.categoryToggles)),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
 
-		layout.Rigid(sectionLabel(m.app.Theme, i18n.T("manage.priority"))),
+		layout.Rigid(sectionLabel(m.th, i18n.T("manage.priority"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 		layout.Rigid(m.toggleRow(priorityOptions, m.priorityToggles)),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(18)}.Layout),
 
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return smallButton(gtx, m.app.Theme, &m.applyBtn, i18n.T("manage.apply"))
+			return smallButton(gtx, m.th, &m.applyBtn, i18n.T("manage.apply"))
 		}),
 	)
 }
@@ -241,7 +247,7 @@ func (m *ManageUI) toggleRow(options []string, toggles map[string]*widget.Clicka
 		for _, opt := range options {
 			opt := opt
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return chipButton(gtx, m.app.Theme, toggles[opt], labelForOption(opt), active[opt])
+				return chipButton(gtx, m.th, toggles[opt], labelForOption(opt), active[opt])
 			}))
 			children = append(children, layout.Rigid(layout.Spacer{Width: unit.Dp(6)}.Layout))
 		}
@@ -277,25 +283,41 @@ func (m *ManageUI) createForm(gtx layout.Context) layout.Dimensions {
 		m.newPri.SetText("p2")
 	}
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(sectionLabel(m.app.Theme, i18n.T("manage.newTodo"))),
+		layout.Rigid(sectionLabel(m.th, i18n.T("manage.newTodo"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return labeledEditor(gtx, m.app.Theme, &m.newTitle, i18n.T("manage.titleLabel"), "") }),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return labeledEditor(gtx, m.th, &m.newTitle, i18n.T("manage.titleLabel"), "")
+		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return labeledEditor(gtx, m.app.Theme, &m.newDesc, i18n.T("manage.descLabel"), "") }),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return labeledEditor(gtx, m.th, &m.newDesc, i18n.T("manage.descLabel"), "")
+		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return labeledEditor(gtx, m.app.Theme, &m.newCat, i18n.T("manage.catLabel"), "") }),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return labeledEditor(gtx, m.th, &m.newCat, i18n.T("manage.catLabel"), "")
+		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return labeledEditor(gtx, m.app.Theme, &m.newPri, i18n.T("manage.priLabel"), "") }),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return labeledEditor(gtx, m.th, &m.newPri, i18n.T("manage.priLabel"), "")
+		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return labeledEditor(gtx, m.app.Theme, &m.newTags, i18n.T("manage.tagsLabel"), "") }),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return labeledEditor(gtx, m.th, &m.newTags, i18n.T("manage.tagsLabel"), "")
+		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return labeledEditor(gtx, m.app.Theme, &m.newDue, i18n.T("manage.dueLabel"), "") }),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return labeledEditor(gtx, m.th, &m.newDue, i18n.T("manage.dueLabel"), "")
+		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return smallButton(gtx, m.app.Theme, &m.createBtn, i18n.T("manage.create")) }),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return smallButton(gtx, m.th, &m.createBtn, i18n.T("manage.create"))
+				}),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return smallButton(gtx, m.app.Theme, &m.cancelBtn, i18n.T("common.cancel")) }),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return smallButton(gtx, m.th, &m.cancelBtn, i18n.T("common.cancel"))
+				}),
 			)
 		}),
 	)

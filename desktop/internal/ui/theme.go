@@ -55,6 +55,14 @@ func NewTheme() *material.Theme {
 	return th
 }
 
+// newThemeLike returns a theme with the same configuration as NewTheme but a
+// fresh text.Shaper. Each window event loop runs on its own goroutine and
+// text.Shaper is not concurrency-safe, so every window that may repaint
+// concurrently must have its own shaper.
+func newThemeLike() *material.Theme {
+	return NewTheme()
+}
+
 // PriorityColor maps a priority string (p0..p3) to a greyscale. Unknown values
 // fall back to the lightest shade.
 func PriorityColor(priority string) color.NRGBA {

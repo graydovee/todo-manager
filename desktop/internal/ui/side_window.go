@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"runtime/debug"
+
 	"gioui.org/app"
 	"gioui.org/font"
 	"gioui.org/gesture"
@@ -51,18 +53,22 @@ type SideWindow struct {
 	dragStart struct{ cursorX, cursorY, winX, winY int }
 
 	// Sub-controllers reused across frames.
-	detail  *DetailUI
-	manage  *ManageUI
+	detail *DetailUI
+	manage *ManageUI
 }
 
 // NewSideWindow constructs the side window manager.
 func NewSideWindow(a *App) *SideWindow {
 	sw := &SideWindow{app: a}
+	// The side window's sub-UIs use the side theme (its own text.Shaper) so
+	// they don't race the main window's shaper on concurrent repaints.
 	sw.detail = NewDetailUI(a)
+	sw.detail.th = a.SideTheme
 	sw.detail.hideHeader = true
 	sw.detail.onBack = sw.Close
 
 	sw.manage = NewManageUI(a)
+	sw.manage.th = a.SideTheme
 	sw.manage.hideHeader = true
 	sw.manage.onBack = sw.Close
 	return sw
@@ -133,8 +139,21 @@ func (sw *SideWindow) ensureOpen() {
 	sw.win.Invalidate()
 }
 
-// run creates and drives the side window's event loop until destruction.
+// run creates and drives the side window's event loop until destruction. It
+// runs on its own goroutine (launched by ensureOpen). Because this is a separate
+// goroutine, a panic here is NOT caught by the main-goroutine recover in
+// main.go and would terminate the whole process with no diagnostic trail. The
+// deferred recover below captures it, records the stack to the diagnostic log,
+// and tears down the shared state so the main window doesn't dereference a
+// half-dead window/controller. The window itself is best-effort closed.
 func (sw *SideWindow) run() {
+	defer func() {
+		if r := recover(); r != nil {
+			Logf("PANIC in side window goroutine: %v\n%s", r, debug.Stack())
+			sw.teardown()
+		}
+	}()
+
 	w := &app.Window{}
 	w.Option(app.Size(unit.Dp(sideWidth), unit.Dp(560)))
 	w.Option(app.Decorated(false))
@@ -146,12 +165,14 @@ func (sw *SideWindow) run() {
 		e := w.Event()
 		switch e := e.(type) {
 		case app.ViewEvent:
+			Logf("side window: ViewEvent")
 			h := platform.ExtractHandle(e)
 			if h != 0 && sw.ctrl == nil {
 				sw.ctrl = platform.NewController(platform.Handle(h))
 				platform.SetDialogOwner(platform.Handle(h), sw.app.OwnerHandle)
 				sw.positionRightOfMain()
 				sw.ctrl.HideFromTaskbar()
+				Logf("side window: setup complete hwnd=%v", h)
 			}
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
@@ -168,16 +189,24 @@ func (sw *SideWindow) run() {
 			e.Frame(gtx.Ops)
 
 		case app.DestroyEvent:
-			sw.win = nil
-			sw.ctrl = nil
-			sw.app.State.Lock()
-			sw.app.State.SelectedID = 0
-			sw.app.State.Unlock()
-			if sw.app.Invalidate != nil {
-				sw.app.Invalidate()
-			}
+			Logf("side window: DestroyEvent err=%v", e.Err)
+			sw.teardown()
 			return
 		}
+	}
+}
+
+// teardown clears the shared side-window state so the main window no longer
+// references the (possibly dead) window/controller. Shared by the normal
+// DestroyEvent path and the panic-recovery path.
+func (sw *SideWindow) teardown() {
+	sw.win = nil
+	sw.ctrl = nil
+	sw.app.State.Lock()
+	sw.app.State.SelectedID = 0
+	sw.app.State.Unlock()
+	if sw.app.Invalidate != nil {
+		sw.app.Invalidate()
 	}
 }
 
@@ -270,7 +299,7 @@ func (sw *SideWindow) topBar(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 				// Draggable title.
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					t := material.Body1(sw.app.Theme, sw.title())
+					t := material.Body1(sw.app.SideTheme, sw.title())
 					t.TextSize = unit.Sp(16)
 					t.Font.Weight = font.SemiBold
 					t.Color = textPrimary
@@ -285,7 +314,7 @@ func (sw *SideWindow) topBar(gtx layout.Context) layout.Dimensions {
 				layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
 				// Close button.
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return iconButton(gtx, sw.app.Theme, &sw.closeBtn, IconClose, false)
+					return iconButton(gtx, sw.app.SideTheme, &sw.closeBtn, IconClose, false)
 				}),
 			)
 		},
@@ -299,16 +328,16 @@ func (sw *SideWindow) actionButtons(gtx layout.Context) layout.Dimensions {
 	if sw.mode == SideDetail && sw.detail.editing {
 		return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return smallButton(gtx, sw.app.Theme, &sw.detail.saveBtn, i18n.T("common.save"))
+				return smallButton(gtx, sw.app.SideTheme, &sw.detail.saveBtn, i18n.T("common.save"))
 			}),
 			layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return smallButton(gtx, sw.app.Theme, &sw.detail.cancelBtn, i18n.T("common.cancel"))
+				return smallButton(gtx, sw.app.SideTheme, &sw.detail.cancelBtn, i18n.T("common.cancel"))
 			}),
 		)
 	}
 	if sw.mode == SideDetail && !sw.detail.editing {
-		return smallButton(gtx, sw.app.Theme, &sw.detail.editBtn, i18n.T("common.edit"))
+		return smallButton(gtx, sw.app.SideTheme, &sw.detail.editBtn, i18n.T("common.edit"))
 	}
 	return layout.Dimensions{}
 }
