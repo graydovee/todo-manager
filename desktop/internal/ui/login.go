@@ -43,7 +43,7 @@ func NewLoginUI(a *App) *LoginUI {
 	return u
 }
 
-func (u *LoginUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
+func (u *LoginUI) Layout(gtx layout.Context, w *app.Window, th *material.Theme) layout.Dimensions {
 	// Process clicks every frame (Gio immediate-mode pattern).
 	for u.testBtn.Clicked(gtx) {
 		u.tryConnect()
@@ -56,13 +56,13 @@ func (u *LoginUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			// Title.
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				title := material.H5(u.app.Theme, i18n.T("login.title"))
+				title := material.H5(th, i18n.T("login.title"))
 				title.Color = textPrimary
 				return title.Layout(gtx)
 			}),
 			layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				sub := material.Body2(u.app.Theme, i18n.T("login.subtitle"))
+				sub := material.Body2(th, i18n.T("login.subtitle"))
 				sub.Color = textSecondary
 				return sub.Layout(gtx)
 			}),
@@ -70,19 +70,19 @@ func (u *LoginUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 
 			// Base URL.
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return labeledEditor(gtx, u.app.Theme, &u.baseURL, i18n.T("login.baseURL"), config.DefaultBaseURL)
+				return labeledEditor(gtx, th, &u.baseURL, i18n.T("login.baseURL"), config.DefaultBaseURL)
 			}),
 			layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
 
 			// API key.
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return labeledEditor(gtx, u.app.Theme, &u.apiKey, i18n.T("login.apiKey"), "")
+				return labeledEditor(gtx, th, &u.apiKey, i18n.T("login.apiKey"), "")
 			}),
 			layout.Rigid(layout.Spacer{Height: unit.Dp(20)}.Layout),
 
 			// Connect button.
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				btn := material.Button(u.app.Theme, &u.testBtn, i18n.T("login.connect"))
+				btn := material.Button(th, &u.testBtn, i18n.T("login.connect"))
 				styleButton(&btn)
 				if u.testing {
 					btn.Text = i18n.T("login.connecting")
@@ -101,7 +101,7 @@ func (u *LoginUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 				if msg == "" {
 					msg = i18n.T("login.tip")
 				}
-				lbl := material.Body2(u.app.Theme, msg)
+				lbl := material.Body2(th, msg)
 				lbl.Color = textMuted
 				return lbl.Layout(gtx)
 			}),
@@ -159,16 +159,20 @@ func (u *LoginUI) tryConnect() {
 	}()
 }
 
+// finish applies the connection-test result. It mutates widget state, so it is
+// marshalled onto the main window's goroutine.
 func (u *LoginUI) finish(ok bool, msg string) {
-	u.testing = false
-	u.result = msg
-	if u.app.Invalidate != nil {
-		u.app.Invalidate()
-	}
-	// On success, trigger an initial list load.
-	if ok {
-		u.app.List.RequestRefresh()
-	}
+	u.app.PostOnMain(func() {
+		u.testing = false
+		u.result = msg
+		if u.app.Invalidate != nil {
+			u.app.Invalidate()
+		}
+		// On success, trigger an initial list load.
+		if ok {
+			u.app.List.RequestRefresh()
+		}
+	})
 }
 
 func labeledEditor(gtx layout.Context, th *material.Theme, ed *widget.Editor, label, hint string) layout.Dimensions {
@@ -193,7 +197,7 @@ func labeledEditor(gtx layout.Context, th *material.Theme, ed *widget.Editor, la
 			}
 			defer op.Offset(image.Pt(0, dims.Size.Y)).Push(gtx.Ops).Pop()
 			paint.FillShape(gtx.Ops, lineColor, clip.Rect{Max: image.Pt(dims.Size.X, 1)}.Op())
-			return layout.Dimensions{Size: image.Pt(dims.Size.X, dims.Size.Y + 1)}
+			return layout.Dimensions{Size: image.Pt(dims.Size.X, dims.Size.Y+1)}
 		}),
 	)
 }

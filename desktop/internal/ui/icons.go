@@ -223,8 +223,8 @@ func drawRefresh(ops *op.Ops, c color.NRGBA) {
 	// The arc goes clockwise from the top (-90°) around to ~+200° (lower-left).
 	// In y-down screen coords, increasing angle = clockwise.
 	const (
-		aStart = float32(-math.Pi / 2)              // top
-		aEnd   = float32(math.Pi * 1.1)             // ~198° (lower-left area)
+		aStart = float32(-math.Pi / 2)  // top
+		aEnd   = float32(math.Pi * 1.1) // ~198° (lower-left area)
 	)
 	const segs = 64
 
@@ -255,7 +255,7 @@ func drawRefresh(ops *op.Ops, c color.NRGBA) {
 
 	// Arrowhead: two arms going backward from the tip.
 	const (
-		armLen  = 2.5
+		armLen   = 2.5
 		splayAng = 0.5 // radians, ~28° each side
 	)
 	// Left arm: rotate tangent backward by +splayAng.
@@ -339,13 +339,13 @@ func drawLock(ops *op.Ops, c color.NRGBA, open bool) {
 	// Bézier (avoids ArcTo angle-sign ambiguity). The shackle spans from
 	// (sx-sr, top) over the top to (sx+sr, top), where top is the apex.
 	const (
-		sx  float32 = 8.0
-		sy  float32 = 7.5 // shackle base (sits on the lock body top edge)
-		sr  float32 = 2.3 // shackle radius
+		sx float32 = 8.0
+		sy float32 = 7.5 // shackle base (sits on the lock body top edge)
+		sr float32 = 2.3 // shackle radius
 	)
 	iqv := sr * (1 - q)
-	top := sy - sr           // y-coordinate of the horizontal centre line of the arc
-	arcApexY := top - sr     // topmost point of the shackle arc
+	top := sy - sr       // y-coordinate of the horizontal centre line of the arc
+	arcApexY := top - sr // topmost point of the shackle arc
 
 	if open {
 		// Left leg up + partial arc ending early (right side lifted free).
@@ -413,9 +413,9 @@ func drawCircleBezier(p *clip.Path, ops *op.Ops, cx, cy, r, q float32) {
 // flower/sun, whereas sliders are instantly readable).
 func drawSettings(ops *op.Ops, c color.NRGBA) {
 	const (
-		lineY1, dotX1 = 4.0, 11.0  // top slider: handle on the right
-		lineY2, dotX2 = 8.0, 5.0   // middle slider: handle on the left
-		lineY3, dotX3 = 12.0, 9.0  // bottom slider: handle on the right
+		lineY1, dotX1 = 4.0, 11.0 // top slider: handle on the right
+		lineY2, dotX2 = 8.0, 5.0  // middle slider: handle on the left
+		lineY3, dotX3 = 12.0, 9.0 // bottom slider: handle on the right
 	)
 	const dotR = 1.5
 	const q = 4 * (math.Sqrt2 - 1) / 3

@@ -11,14 +11,13 @@ import (
 	"github.com/graydovee/todo-manager/desktop/internal/i18n"
 )
 
-// Page is the current top-level screen.
+// Page is the current top-level screen. Only Login and List exist as
+// full-screen pages; detail and manage are shown in the side window.
 type Page int
 
 const (
 	PageLogin Page = iota
 	PageList
-	PageDetail
-	PageManage
 )
 
 // AppState is the single source of truth for navigation, auth and window mode.

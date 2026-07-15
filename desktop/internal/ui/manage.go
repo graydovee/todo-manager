@@ -20,10 +20,6 @@ import (
 // ManageUI is the filter + create + logout screen.
 type ManageUI struct {
 	app *App
-	// th is the theme used to render this instance. It is normally the app's
-	// main theme, but the side window injects the side theme so the two
-	// windows don't share a text.Shaper (which is not concurrency-safe).
-	th *material.Theme
 
 	backBtn   widget.Clickable
 	logoutBtn widget.Clickable
@@ -70,7 +66,7 @@ var (
 )
 
 func NewManageUI(a *App) *ManageUI {
-	m := &ManageUI{app: a, th: a.Theme}
+	m := &ManageUI{app: a}
 	m.qEditor.SingleLine = true
 	m.codeEditor.SingleLine = true
 	m.newTitle.SingleLine = true
@@ -113,18 +109,18 @@ func NewManageUI(a *App) *ManageUI {
 	return m
 }
 
-func (m *ManageUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
+func (m *ManageUI) Layout(gtx layout.Context, w *app.Window, th *material.Theme) layout.Dimensions {
 	m.handleClicks(gtx)
 
-	body := m.filtersView
+	body := func(gtx layout.Context) layout.Dimensions { return m.filtersView(gtx, th) }
 	if m.creating {
-		body = m.createForm
+		body = func(gtx layout.Context) layout.Dimensions { return m.createForm(gtx, th) }
 	}
 
 	children := make([]layout.FlexChild, 0, 3)
 	if !m.hideHeader {
 		children = append(children,
-			layout.Rigid(m.header),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions { return m.header(gtx, th) }),
 			layout.Rigid(separator),
 		)
 	}
@@ -138,20 +134,20 @@ func (m *ManageUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 }
 
-func (m *ManageUI) header(gtx layout.Context) layout.Dimensions {
+func (m *ManageUI) header(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(8), Right: unit.Dp(8)}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, m.th, &m.backBtn, IconBack, false) }),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, th, &m.backBtn, IconBack, false) }),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					t := material.Body1(m.th, i18n.T("manage.title"))
+					t := material.Body1(th, i18n.T("manage.title"))
 					t.Font.Weight = font.SemiBold
 					t.Color = textPrimary
 					return t.Layout(gtx)
 				}),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return smallButton(gtx, m.th, &m.logoutBtn, i18n.T("manage.logout"))
+					return smallButton(gtx, th, &m.logoutBtn, i18n.T("manage.logout"))
 				}),
 			)
 		},
@@ -159,15 +155,15 @@ func (m *ManageUI) header(gtx layout.Context) layout.Dimensions {
 }
 
 // langRow renders two chip buttons (中文 / English); the active one is filled.
-func (m *ManageUI) langRow(gtx layout.Context) layout.Dimensions {
+func (m *ManageUI) langRow(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	cur := i18n.Default.Lang()
 	return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return chipButton(gtx, m.th, &m.langZhBtn, "中文", cur == i18n.Zh)
+			return chipButton(gtx, th, &m.langZhBtn, "中文", cur == i18n.Zh)
 		}),
 		layout.Rigid(layout.Spacer{Width: unit.Dp(6)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return chipButton(gtx, m.th, &m.langEnBtn, "English", cur == i18n.En)
+			return chipButton(gtx, th, &m.langEnBtn, "English", cur == i18n.En)
 		}),
 	)
 }
@@ -184,62 +180,68 @@ func (m *ManageUI) switchLanguage(l i18n.Lang) {
 	}
 }
 
-func (m *ManageUI) filtersView(gtx layout.Context) layout.Dimensions {
+func (m *ManageUI) filtersView(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		// Language switcher.
-		layout.Rigid(sectionLabel(m.th, i18n.T("manage.language"))),
+		layout.Rigid(sectionLabel(th, i18n.T("manage.language"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-		layout.Rigid(m.langRow),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return m.langRow(gtx, th) }),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
 
 		// Dock timing settings.
-		layout.Rigid(sectionLabel(m.th, i18n.T("manage.animDuration"))),
+		layout.Rigid(sectionLabel(th, i18n.T("manage.animDuration"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.th, &m.animEditor, i18n.T("manage.animDuration"), "500")
+			return labeledEditor(gtx, th, &m.animEditor, i18n.T("manage.animDuration"), "500")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(sectionLabel(m.th, i18n.T("manage.hideDelay"))),
+		layout.Rigid(sectionLabel(th, i18n.T("manage.hideDelay"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.th, &m.hideEditor, i18n.T("manage.hideDelay"), "600")
+			return labeledEditor(gtx, th, &m.hideEditor, i18n.T("manage.hideDelay"), "600")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
 
-		layout.Rigid(sectionLabel(m.th, i18n.T("manage.search"))),
+		layout.Rigid(sectionLabel(th, i18n.T("manage.search"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.th, &m.qEditor, i18n.T("manage.titleSearch"), "")
+			return labeledEditor(gtx, th, &m.qEditor, i18n.T("manage.titleSearch"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.th, &m.codeEditor, i18n.T("manage.codeExact"), "")
+			return labeledEditor(gtx, th, &m.codeEditor, i18n.T("manage.codeExact"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
 
-		layout.Rigid(sectionLabel(m.th, i18n.T("manage.status"))),
+		layout.Rigid(sectionLabel(th, i18n.T("manage.status"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-		layout.Rigid(m.toggleRow(statusOptions, m.statusToggles)),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return m.toggleRow(statusOptions, m.statusToggles, th)(gtx)
+		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
 
-		layout.Rigid(sectionLabel(m.th, i18n.T("manage.category"))),
+		layout.Rigid(sectionLabel(th, i18n.T("manage.category"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-		layout.Rigid(m.toggleRow(categoryOptions, m.categoryToggles)),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return m.toggleRow(categoryOptions, m.categoryToggles, th)(gtx)
+		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
 
-		layout.Rigid(sectionLabel(m.th, i18n.T("manage.priority"))),
+		layout.Rigid(sectionLabel(th, i18n.T("manage.priority"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-		layout.Rigid(m.toggleRow(priorityOptions, m.priorityToggles)),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return m.toggleRow(priorityOptions, m.priorityToggles, th)(gtx)
+		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(18)}.Layout),
 
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return smallButton(gtx, m.th, &m.applyBtn, i18n.T("manage.apply"))
+			return smallButton(gtx, th, &m.applyBtn, i18n.T("manage.apply"))
 		}),
 	)
 }
 
 // toggleRow renders a horizontal row of on/off chip buttons.
-func (m *ManageUI) toggleRow(options []string, toggles map[string]*widget.Clickable) layout.Widget {
+func (m *ManageUI) toggleRow(options []string, toggles map[string]*widget.Clickable, th *material.Theme) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
 		flex := layout.Flex{Axis: layout.Horizontal}
 		children := make([]layout.FlexChild, 0, len(options))
@@ -247,7 +249,7 @@ func (m *ManageUI) toggleRow(options []string, toggles map[string]*widget.Clicka
 		for _, opt := range options {
 			opt := opt
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return chipButton(gtx, m.th, toggles[opt], labelForOption(opt), active[opt])
+				return chipButton(gtx, th, toggles[opt], labelForOption(opt), active[opt])
 			}))
 			children = append(children, layout.Rigid(layout.Spacer{Width: unit.Dp(6)}.Layout))
 		}
@@ -277,46 +279,46 @@ func (m *ManageUI) activeSet(toggles map[string]*widget.Clickable) map[string]bo
 	return out
 }
 
-func (m *ManageUI) createForm(gtx layout.Context) layout.Dimensions {
+func (m *ManageUI) createForm(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	if m.newCat.Text() == "" {
 		m.newCat.SetText("task")
 		m.newPri.SetText("p2")
 	}
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(sectionLabel(m.th, i18n.T("manage.newTodo"))),
+		layout.Rigid(sectionLabel(th, i18n.T("manage.newTodo"))),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.th, &m.newTitle, i18n.T("manage.titleLabel"), "")
+			return labeledEditor(gtx, th, &m.newTitle, i18n.T("manage.titleLabel"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.th, &m.newDesc, i18n.T("manage.descLabel"), "")
+			return labeledEditor(gtx, th, &m.newDesc, i18n.T("manage.descLabel"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.th, &m.newCat, i18n.T("manage.catLabel"), "")
+			return labeledEditor(gtx, th, &m.newCat, i18n.T("manage.catLabel"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.th, &m.newPri, i18n.T("manage.priLabel"), "")
+			return labeledEditor(gtx, th, &m.newPri, i18n.T("manage.priLabel"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.th, &m.newTags, i18n.T("manage.tagsLabel"), "")
+			return labeledEditor(gtx, th, &m.newTags, i18n.T("manage.tagsLabel"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, m.th, &m.newDue, i18n.T("manage.dueLabel"), "")
+			return labeledEditor(gtx, th, &m.newDue, i18n.T("manage.dueLabel"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return smallButton(gtx, m.th, &m.createBtn, i18n.T("manage.create"))
+					return smallButton(gtx, th, &m.createBtn, i18n.T("manage.create"))
 				}),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return smallButton(gtx, m.th, &m.cancelBtn, i18n.T("common.cancel"))
+					return smallButton(gtx, th, &m.cancelBtn, i18n.T("common.cancel"))
 				}),
 			)
 		}),
@@ -468,15 +470,18 @@ func (m *ManageUI) createTodo() {
 			m.app.State.SetMessage(i18n.T("manage.createFailed") + err.Error())
 			return
 		}
-		m.creating = false
-		m.resetNewForm()
 		m.app.State.SetMessage(i18n.T("manage.created"))
-		m.app.List.RequestRefresh()
-		if m.onBack != nil {
-			m.onBack()
-		} else {
-			m.app.nav().goTo(store.PageList)
-		}
+		// Marshal UI-state mutation onto the side window's goroutine.
+		m.app.SideWin.Post(func() {
+			m.creating = false
+			m.resetNewForm()
+			m.app.List.RequestRefresh()
+			if m.onBack != nil {
+				m.onBack()
+			} else {
+				m.app.nav().goTo(store.PageList)
+			}
+		})
 	}()
 }
 

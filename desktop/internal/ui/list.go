@@ -65,7 +65,7 @@ func NewListUI(a *App) *ListUI {
 	return &ListUI{app: a, list: layout.List{Axis: layout.Vertical}}
 }
 
-func (u *ListUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
+func (u *ListUI) Layout(gtx layout.Context, w *app.Window, th *material.Theme) layout.Dimensions {
 	// Trigger the initial fetch the first time the list page renders.
 	if !u.firstLoad {
 		u.firstLoad = true
@@ -87,22 +87,22 @@ func (u *ListUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 
 	// Build the main content, then overlay the close dialog if active.
 	content := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(u.topBar),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return u.topBar(gtx, th) }),
 		layout.Rigid(separator),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			switch {
 			case err != nil:
-				return centeredText(gtx, u.app.Theme, i18n.T("common.error")+err.Error(), textMuted)
+				return centeredText(gtx, th, i18n.T("common.error")+err.Error(), textMuted)
 			case loading && len(items) == 0:
-				return centeredText(gtx, u.app.Theme, i18n.T("common.loading"), textMuted)
+				return centeredText(gtx, th, i18n.T("common.loading"), textMuted)
 			case len(items) == 0:
-				return centeredText(gtx, u.app.Theme, i18n.T("list.noTodos"), textMuted)
+				return centeredText(gtx, th, i18n.T("list.noTodos"), textMuted)
 			default:
-				return u.table(gtx, items)
+				return u.table(gtx, items, th)
 			}
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return u.footer(gtx, total, len(items), loading)
+			return u.footer(gtx, th, total, len(items), loading)
 		}),
 	)
 
@@ -113,7 +113,7 @@ func (u *ListUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 // is a custom drag handle (gesture.Drag) that moves the native window via Win32
 // SetWindowPos — this avoids registering system.ActionMove, which would make
 // Gio return HTCAPTION and trigger Windows 11 Snap on edge drag.
-func (u *ListUI) topBar(gtx layout.Context) layout.Dimensions {
+func (u *ListUI) topBar(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(12), Right: unit.Dp(8)}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
@@ -121,7 +121,7 @@ func (u *ListUI) topBar(gtx layout.Context) layout.Dimensions {
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					dims := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							t := material.Body1(u.app.Theme, i18n.T("list.title"))
+							t := material.Body1(th, i18n.T("list.title"))
 							t.TextSize = unit.Sp(16)
 							t.Font.Weight = font.SemiBold
 							t.Color = textPrimary
@@ -131,17 +131,25 @@ func (u *ListUI) topBar(gtx layout.Context) layout.Dimensions {
 					u.handleDrag(gtx)
 					return dims
 				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, u.app.Theme, &u.createBtn, IconPlus, false) }),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, th, &u.createBtn, IconPlus, false) }),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, u.app.Theme, &u.refreshBtn, IconRefresh, false) }),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return iconButton(gtx, th, &u.refreshBtn, IconRefresh, false)
+				}),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, u.app.Theme, &u.topMostBtn, IconPin, u.app.isTopMost()) }),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return iconButton(gtx, th, &u.topMostBtn, IconPin, u.app.isTopMost())
+				}),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, u.app.Theme, &u.lockBtn, IconLock, u.app.isLocked()) }),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return iconButton(gtx, th, &u.lockBtn, IconLock, u.app.isLocked())
+				}),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, u.app.Theme, &u.manageBtn, IconSettings, false) }),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return iconButton(gtx, th, &u.manageBtn, IconSettings, false)
+				}),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, u.app.Theme, &u.closeBtn, IconClose, false) }),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, th, &u.closeBtn, IconClose, false) }),
 			)
 		},
 	)
@@ -244,10 +252,10 @@ func (u *ListUI) tryDock(ctrl platformCtrl) {
 	}
 
 	// Distance from each edge of the work area.
-	nearTop := abs(wy - workY) < threshold
-	nearBottom := abs((wy + wh) - (workY + workH)) < threshold
-	nearLeft := abs(wx - workX) < threshold
-	nearRight := abs((wx + ww) - (workX + workW)) < threshold
+	nearTop := abs(wy-workY) < threshold
+	nearBottom := abs((wy+wh)-(workY+workH)) < threshold
+	nearLeft := abs(wx-workX) < threshold
+	nearRight := abs((wx+ww)-(workX+workW)) < threshold
 
 	var edge store.Edge
 	switch {
@@ -303,29 +311,29 @@ type platformCtrl interface {
 }
 
 // table renders the header row plus all item rows in a scrollable list.
-func (u *ListUI) table(gtx layout.Context, items []client.Todo) layout.Dimensions {
+func (u *ListUI) table(gtx layout.Context, items []client.Todo, th *material.Theme) layout.Dimensions {
 	return u.list.Layout(gtx, len(items)+1, func(gtx layout.Context, index int) layout.Dimensions {
 		// Each list element is the row body stacked over a 1dp separator, so the
 		// separator's height is counted and doesn't overlap the next row.
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				if index == 0 {
-					return u.headerRow(gtx)
+					return u.headerRow(gtx, th)
 				}
 				todo := items[index-1]
-				return u.row(gtx, todo, &u.rows[index-1])
+				return u.row(gtx, todo, &u.rows[index-1], th)
 			}),
 			layout.Rigid(separator),
 		)
 	})
 }
 
-func (u *ListUI) headerRow(gtx layout.Context) layout.Dimensions {
+func (u *ListUI) headerRow(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	return insetRow(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 				return material.Clickable(gtx, &u.headerTitle, func(gtx layout.Context) layout.Dimensions {
-					lbl := material.Label(u.app.Theme, unit.Sp(11), i18n.T("list.colTitle")+u.sortMarker("title"))
+					lbl := material.Label(th, unit.Sp(11), i18n.T("list.colTitle")+u.sortMarker("title"))
 					lbl.Font.Weight = font.SemiBold
 					lbl.Color = textSecondary
 					return lbl.Layout(gtx)
@@ -333,7 +341,7 @@ func (u *ListUI) headerRow(gtx layout.Context) layout.Dimensions {
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return colWidth(gtx, colPriorityW, func(gtx layout.Context) layout.Dimensions {
-					lbl := material.Label(u.app.Theme, unit.Sp(11), i18n.T("list.colPriority"))
+					lbl := material.Label(th, unit.Sp(11), i18n.T("list.colPriority"))
 					lbl.Font.Weight = font.SemiBold
 					lbl.Color = textSecondary
 					return lbl.Layout(gtx)
@@ -341,7 +349,7 @@ func (u *ListUI) headerRow(gtx layout.Context) layout.Dimensions {
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return colWidth(gtx, colStatusW, func(gtx layout.Context) layout.Dimensions {
-					lbl := material.Label(u.app.Theme, unit.Sp(11), i18n.T("list.colStatus"))
+					lbl := material.Label(th, unit.Sp(11), i18n.T("list.colStatus"))
 					lbl.Font.Weight = font.SemiBold
 					lbl.Color = textSecondary
 					return lbl.Layout(gtx)
@@ -349,7 +357,7 @@ func (u *ListUI) headerRow(gtx layout.Context) layout.Dimensions {
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return colWidth(gtx, colActionW, func(gtx layout.Context) layout.Dimensions {
-					lbl := material.Label(u.app.Theme, unit.Sp(11), i18n.T("list.colAction"))
+					lbl := material.Label(th, unit.Sp(11), i18n.T("list.colAction"))
 					lbl.Font.Weight = font.SemiBold
 					lbl.Color = textSecondary
 					return lbl.Layout(gtx)
@@ -360,7 +368,7 @@ func (u *ListUI) headerRow(gtx layout.Context) layout.Dimensions {
 }
 
 // row renders one todo line, wrapped in a clickable for opening the detail.
-func (u *ListUI) row(gtx layout.Context, todo client.Todo, row *rowWidgets) layout.Dimensions {
+func (u *ListUI) row(gtx layout.Context, todo client.Todo, row *rowWidgets, th *material.Theme) layout.Dimensions {
 	// Highlight the row if its detail is currently open in the side window.
 	selected := u.app.SideWin.IsDetailMode() && u.app.isSelected(todo.ID)
 	return material.Clickable(gtx, &row.row, func(gtx layout.Context) layout.Dimensions {
@@ -371,18 +379,18 @@ func (u *ListUI) row(gtx layout.Context, todo client.Todo, row *rowWidgets) layo
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 				// Title + code.
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					return titleCell(gtx, u.app.Theme, todo)
+					return titleCell(gtx, th, todo)
 				}),
 				// Priority.
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return colWidth(gtx, colPriorityW, func(gtx layout.Context) layout.Dimensions {
-						return priorityCell(gtx, u.app.Theme, todo.Priority)
+						return priorityCell(gtx, th, todo.Priority)
 					})
 				}),
 				// Status.
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return colWidth(gtx, colStatusW, func(gtx layout.Context) layout.Dimensions {
-						s := material.Label(u.app.Theme, unit.Sp(12), StatusLabel(todo.Status))
+						s := material.Label(th, unit.Sp(12), StatusLabel(todo.Status))
 						s.Color = statusColor(todo.Status)
 						return s.Layout(gtx)
 					})
@@ -390,7 +398,7 @@ func (u *ListUI) row(gtx layout.Context, todo client.Todo, row *rowWidgets) layo
 				// Action button.
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return colWidth(gtx, colActionW, func(gtx layout.Context) layout.Dimensions {
-						return u.actionButton(gtx, todo, row)
+						return u.actionButton(gtx, todo, row, th)
 					})
 				}),
 			)
@@ -399,24 +407,24 @@ func (u *ListUI) row(gtx layout.Context, todo client.Todo, row *rowWidgets) layo
 }
 
 // actionButton renders the start/complete icon button, or nothing for completed.
-func (u *ListUI) actionButton(gtx layout.Context, todo client.Todo, row *rowWidgets) layout.Dimensions {
+func (u *ListUI) actionButton(gtx layout.Context, todo client.Todo, row *rowWidgets, th *material.Theme) layout.Dimensions {
 	switch todo.Status {
 	case "open":
-		return iconButton(gtx, u.app.Theme, &row.action, IconPlay, false)
+		return iconButton(gtx, th, &row.action, IconPlay, false)
 	case "in_progress":
-		return iconButton(gtx, u.app.Theme, &row.action, IconCheck, false)
+		return iconButton(gtx, th, &row.action, IconCheck, false)
 	default:
 		return layout.Dimensions{}
 	}
 }
 
-func (u *ListUI) footer(gtx layout.Context, total int64, shown int, loading bool) layout.Dimensions {
+func (u *ListUI) footer(gtx layout.Context, th *material.Theme, total int64, shown int, loading bool) layout.Dimensions {
 	label := i18n.T("common.items", "count", total)
 	if loading {
 		label += i18n.T("list.refreshing")
 	}
 	return layout.Inset{Top: unit.Dp(6), Bottom: unit.Dp(8), Left: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		c := material.Caption(u.app.Theme, label)
+		c := material.Caption(th, label)
 		c.Color = textMuted
 		return c.Layout(gtx)
 	})
