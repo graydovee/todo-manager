@@ -48,6 +48,11 @@ func main() {
 		defer logFile.Close()
 		platform.SetLogFile(f)
 	}
+	// Route ui-package diagnostics (notably the side window goroutine's
+	// panic recovery) into the same log file, since panics on non-main
+	// goroutines are otherwise lost entirely. The ui sink delivers a
+	// pre-formatted message, so pass it straight to logf.
+	ui.SetLogger(func(msg string) { logf("%s", msg) })
 	logf("todo-desktop starting; home=%q", home)
 
 	cfg, err := config.Load(home)
