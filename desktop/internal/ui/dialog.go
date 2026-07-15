@@ -28,7 +28,11 @@ type ChoiceOption struct {
 // the main window (via platform.SetupChildWindow) so Win32 guarantees it stays
 // above the main window even when that window is top-most.
 func ShowChoiceDialog(a *App, title, hint string, options []ChoiceOption) <-chan string {
-	th := a.Theme
+	// A dialog renders on its own goroutine (RunWindow blocks) while the main
+	// window keeps repainting. Give the dialog its own theme (and therefore its
+	// own text.Shaper) so they don't race the shaper's non-concurrent iterator
+	// state.
+	th := NewTheme()
 	buttons := make([]widget.Clickable, len(options))
 
 	spec := WindowSpec{

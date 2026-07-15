@@ -18,18 +18,20 @@ import (
 // App owns the per-frame UI state (input fields, scroll positions) and renders
 // the current page based on store.AppState. It is rebuilt every frame by Layout.
 type App struct {
+	// Theme is the main window's theme. It owns a text.Shaper that is NOT
+	// concurrency-safe, so it must only be used to render the main window (the
+	// side window keeps its own theme in SideWindow). Theme is set once in
+	// NewApp and never mutated.
 	Theme *material.Theme
-	// SideTheme is a separate *material.Theme for the side window. It mirrors
-	// Theme's configuration but owns an independent text.Shaper. This is
-	// essential: the main window and the side window run on separate goroutines
-	// (each *app.Window has its own event-loop goroutine), and text.Shaper is
-	// NOT safe for concurrent use — its LayoutString/NextGlyph mutate shared
-	// iterator state. Sharing one Shaper across both windows corrupts that state
-	// and panics with "index out of range" when both windows repaint at once
-	// (e.g. opening the side window while the list redraws).
-	SideTheme *material.Theme
-	State     *store.AppState
-	Todos     *store.TodoStore
+	State *store.AppState
+	Todos *store.TodoStore
+
+	// mainCmds marshals deferred work onto the main window's event-loop
+	// goroutine. Background goroutines (network callbacks, tray, dock) call
+	// PostOnMain to schedule UI-affecting work there instead of mutating widget
+	// state directly from their own goroutine. runWindow drains this channel at
+	// the top of every event-loop iteration.
+	mainCmds chan func()
 
 	// Platform window controller; nil until the native handle arrives.
 	Platform platform.Controller
@@ -46,10 +48,8 @@ type App struct {
 	modalCount int
 
 	// Page sub-controllers, created once and reused across frames.
-	Login  *LoginUI
-	List   *ListUI
-	Detail *DetailUI
-	Manage *ManageUI
+	Login *LoginUI
+	List  *ListUI
 
 	// SideWin manages the reusable side window (detail / manage / create).
 	SideWin *SideWindow
@@ -90,13 +90,42 @@ func (a *App) exitModal() {
 
 // NewApp constructs the UI controller with all sub-pages wired to the stores.
 func NewApp(th *material.Theme, state *store.AppState, todos *store.TodoStore) *App {
-	a := &App{Theme: th, SideTheme: newThemeLike(), State: state, Todos: todos}
+	a := &App{
+		Theme:    th,
+		State:    state,
+		Todos:    todos,
+		mainCmds: make(chan func(), 64),
+	}
 	a.Login = NewLoginUI(a)
 	a.List = NewListUI(a)
-	a.Detail = NewDetailUI(a)
-	a.Manage = NewManageUI(a)
 	a.SideWin = NewSideWindow(a)
 	return a
+}
+
+// PostOnMain schedules f to run on the main window's event-loop goroutine. Use
+// this from background goroutines (network callbacks) that need to mutate UI
+// widget state — Gio widgets are not concurrency-safe. Safe to call from any
+// goroutine.
+func (a *App) PostOnMain(f func()) {
+	select {
+	case a.mainCmds <- f:
+	default:
+		// Channel full: drop to avoid blocking the caller. UI state updates are
+		// best-effort; a dropped callback just delays a repaint.
+	}
+}
+
+// DrainMainCmds runs all queued callbacks on the (main) event-loop goroutine.
+// Called by runWindow at the top of each iteration.
+func (a *App) DrainMainCmds() {
+	for {
+		select {
+		case f := <-a.mainCmds:
+			f()
+		default:
+			return
+		}
+	}
 }
 
 // OpenDetail opens the side window in detail mode for the given todo ID.
@@ -136,13 +165,9 @@ func (a *App) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
 	var dims layout.Dimensions
 	switch page {
 	case store.PageLogin:
-		dims = a.Login.Layout(gtx, w)
+		dims = a.Login.Layout(gtx, w, a.Theme)
 	case store.PageList:
-		dims = a.List.Layout(gtx, w)
-	case store.PageDetail:
-		dims = a.Detail.Layout(gtx, w)
-	case store.PageManage:
-		dims = a.Manage.Layout(gtx, w)
+		dims = a.List.Layout(gtx, w, a.Theme)
 	default:
 		dims = layout.Dimensions{Size: gtx.Constraints.Max}
 	}

@@ -22,10 +22,6 @@ import (
 // editing and status transitions.
 type DetailUI struct {
 	app *App
-	// th is the theme used to render this instance. It is normally the app's
-	// main theme, but the side window injects the side theme so the two
-	// windows don't share a text.Shaper (which is not concurrency-safe).
-	th *material.Theme
 
 	backBtn     widget.Clickable
 	editBtn     widget.Clickable
@@ -68,7 +64,7 @@ type commentRow struct {
 }
 
 func NewDetailUI(a *App) *DetailUI {
-	d := &DetailUI{app: a, th: a.Theme}
+	d := &DetailUI{app: a}
 	d.edTitle.SingleLine = true
 	d.edTitle.Submit = true
 	d.edPriority.SingleLine = true
@@ -92,134 +88,136 @@ func (d *DetailUI) Load() {
 		return
 	}
 	d.app.Todos.LoadDetail(context.Background(), cl, fmt.Sprintf("%d", id), func() {
+		// The data lives in TodoStore (locked); wake both windows to repaint.
+		d.app.SideWin.wake()
 		if d.app.Invalidate != nil {
 			d.app.Invalidate()
 		}
 	})
 }
 
-func (d *DetailUI) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
+func (d *DetailUI) Layout(gtx layout.Context, w *app.Window, th *material.Theme) layout.Dimensions {
 	d.handleClicks(gtx)
 
 	detail, loading, err := d.app.Todos.DetailSnapshot()
 
 	// Conflict modal takes over if present.
 	if d.pendingConflict != nil {
-		return d.conflictModal(gtx)
+		return d.conflictModal(gtx, th)
 	}
 
 	children := make([]layout.FlexChild, 0, 3)
 	if !d.hideHeader {
 		children = append(children,
-			layout.Rigid(d.header),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions { return d.header(gtx, th) }),
 			layout.Rigid(separator),
 		)
 	}
 	children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 		if err != nil {
-			return centeredText(gtx, d.th, i18n.T("common.error")+err.Error(), textMuted)
+			return centeredText(gtx, th, i18n.T("common.error")+err.Error(), textMuted)
 		}
 		if loading || detail == nil {
-			return centeredText(gtx, d.th, i18n.T("common.loading"), textMuted)
+			return centeredText(gtx, th, i18n.T("common.loading"), textMuted)
 		}
 		list := &layout.List{Axis: layout.Vertical}
 		return list.Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
 			return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				if d.editing {
-					return d.editForm(gtx, detail)
+					return d.editForm(gtx, detail, th)
 				}
-				return d.viewBody(gtx, detail)
+				return d.viewBody(gtx, detail, th)
 			})
 		})
 	}))
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 }
 
-func (d *DetailUI) header(gtx layout.Context) layout.Dimensions {
+func (d *DetailUI) header(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(8), Right: unit.Dp(8)}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, d.th, &d.backBtn, IconBack, false) }),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, th, &d.backBtn, IconBack, false) }),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					t := material.Body1(d.th, i18n.T("detail.title"))
+					t := material.Body1(th, i18n.T("detail.title"))
 					t.Font.Weight = font.SemiBold
 					t.Color = textPrimary
 					return t.Layout(gtx)
 				}),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					if d.editing {
-						return smallButton(gtx, d.th, &d.saveBtn, i18n.T("common.save"))
+						return smallButton(gtx, th, &d.saveBtn, i18n.T("common.save"))
 					}
-					return smallButton(gtx, d.th, &d.editBtn, i18n.T("common.edit"))
+					return smallButton(gtx, th, &d.editBtn, i18n.T("common.edit"))
 				}),
 			)
 		},
 	)
 }
 
-func (d *DetailUI) viewBody(gtx layout.Context, detail *client.TodoDetail) layout.Dimensions {
+func (d *DetailUI) viewBody(gtx layout.Context, detail *client.TodoDetail, th *material.Theme) layout.Dimensions {
 	todo := detail.Todo
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		// Code + title.
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return codeTitle(gtx, d.th, todo)
+			return codeTitle(gtx, th, todo)
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
 		// Action buttons row.
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return d.actionRow(gtx, todo)
+			return d.actionRow(gtx, todo, th)
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
 		// Description.
-		layout.Rigid(d.descriptionBlock(todo)),
+		layout.Rigid(d.descriptionBlock(todo, th)),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
 		// Metadata.
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return d.metaBlock(gtx, detail)
+			return d.metaBlock(gtx, detail, th)
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
 		// Relations.
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return d.relationsBlock(gtx, detail)
+			return d.relationsBlock(gtx, detail, th)
 		}),
 		// Comments.
 		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return d.commentsBlock(gtx, detail)
+			return d.commentsBlock(gtx, detail, th)
 		}),
 	)
 }
 
-func (d *DetailUI) actionRow(gtx layout.Context, todo client.Todo) layout.Dimensions {
+func (d *DetailUI) actionRow(gtx layout.Context, todo client.Todo, th *material.Theme) layout.Dimensions {
 	return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			switch todo.Status {
 			case "open":
-				return smallButton(gtx, d.th, &d.startBtn, i18n.T("detail.start"))
+				return smallButton(gtx, th, &d.startBtn, i18n.T("detail.start"))
 			case "in_progress":
-				return smallButton(gtx, d.th, &d.completeBtn, i18n.T("detail.complete"))
+				return smallButton(gtx, th, &d.completeBtn, i18n.T("detail.complete"))
 			case "completed":
-				return smallButton(gtx, d.th, &d.reopenBtn, i18n.T("detail.reopen"))
+				return smallButton(gtx, th, &d.reopenBtn, i18n.T("detail.reopen"))
 			}
 			return layout.Dimensions{}
 		}),
 		layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return smallButton(gtx, d.th, &d.deleteBtn, i18n.T("common.delete"))
+			return smallButton(gtx, th, &d.deleteBtn, i18n.T("common.delete"))
 		}),
 	)
 }
 
-func (d *DetailUI) descriptionBlock(todo client.Todo) layout.Widget {
+func (d *DetailUI) descriptionBlock(todo client.Todo, th *material.Theme) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
 		if strings.TrimSpace(todo.Description) == "" {
 			return layout.Dimensions{}
 		}
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(sectionLabel(d.th, i18n.T("detail.description"))),
+			layout.Rigid(sectionLabel(th, i18n.T("detail.description"))),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				body := material.Body2(d.th, todo.Description)
+				body := material.Body2(th, todo.Description)
 				body.Color = textPrimary
 				return body.Layout(gtx)
 			}),
@@ -227,7 +225,7 @@ func (d *DetailUI) descriptionBlock(todo client.Todo) layout.Widget {
 	}
 }
 
-func (d *DetailUI) metaBlock(gtx layout.Context, detail *client.TodoDetail) layout.Dimensions {
+func (d *DetailUI) metaBlock(gtx layout.Context, detail *client.TodoDetail, th *material.Theme) layout.Dimensions {
 	todo := detail.Todo
 	rows := [][2]string{
 		{i18n.T("detail.due"), dashIfEmpty(formatTimePtr(todo.DueAt))},
@@ -241,13 +239,13 @@ func (d *DetailUI) metaBlock(gtx layout.Context, detail *client.TodoDetail) layo
 		return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return colWidth(gtx, 70, func(gtx layout.Context) layout.Dimensions {
-					c := material.Caption(d.th, rows[i][0])
+					c := material.Caption(th, rows[i][0])
 					c.Color = textSecondary
 					return c.Layout(gtx)
 				})
 			}),
 			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				c := material.Caption(d.th, rows[i][1])
+				c := material.Caption(th, rows[i][1])
 				c.Color = textPrimary
 				return c.Layout(gtx)
 			}),
@@ -255,7 +253,7 @@ func (d *DetailUI) metaBlock(gtx layout.Context, detail *client.TodoDetail) layo
 	})
 }
 
-func (d *DetailUI) relationsBlock(gtx layout.Context, detail *client.TodoDetail) layout.Dimensions {
+func (d *DetailUI) relationsBlock(gtx layout.Context, detail *client.TodoDetail, th *material.Theme) layout.Dimensions {
 	hasDeps := len(detail.DependsOn) > 0 || len(detail.DependedBy) > 0
 	hasDups := detail.DuplicateOf != nil || len(detail.Duplicates) > 0
 	if !hasDeps && !hasDups {
@@ -263,15 +261,15 @@ func (d *DetailUI) relationsBlock(gtx layout.Context, detail *client.TodoDetail)
 	}
 	var sections []layout.Widget
 	if hasDeps {
-		sections = append(sections, d.summaryList(i18n.T("detail.prereq"), detail.DependsOn))
-		sections = append(sections, d.summaryList(i18n.T("detail.dependents"), detail.DependedBy))
+		sections = append(sections, d.summaryList(i18n.T("detail.prereq"), detail.DependsOn, th))
+		sections = append(sections, d.summaryList(i18n.T("detail.dependents"), detail.DependedBy, th))
 	}
 	if hasDups {
 		if detail.DuplicateOf != nil {
-			sections = append(sections, d.summaryList(i18n.T("detail.duplicateOf"), []client.TodoSummary{*detail.DuplicateOf}))
+			sections = append(sections, d.summaryList(i18n.T("detail.duplicateOf"), []client.TodoSummary{*detail.DuplicateOf}, th))
 		}
 		if len(detail.Duplicates) > 0 {
-			sections = append(sections, d.summaryList(i18n.T("detail.duplicates"), detail.Duplicates))
+			sections = append(sections, d.summaryList(i18n.T("detail.duplicates"), detail.Duplicates, th))
 		}
 	}
 	list := &layout.List{Axis: layout.Vertical}
@@ -280,23 +278,23 @@ func (d *DetailUI) relationsBlock(gtx layout.Context, detail *client.TodoDetail)
 	})
 }
 
-func (d *DetailUI) summaryList(label string, items []client.TodoSummary) layout.Widget {
+func (d *DetailUI) summaryList(label string, items []client.TodoSummary, th *material.Theme) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(sectionLabel(d.th, label)),
+			layout.Rigid(sectionLabel(th, label)),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				list := &layout.List{Axis: layout.Vertical}
 				return list.Layout(gtx, len(items), func(gtx layout.Context, i int) layout.Dimensions {
 					it := items[i]
 					return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							c := material.Caption(d.th, DisplayCode(it.Category, it.Code))
+							c := material.Caption(th, DisplayCode(it.Category, it.Code))
 							c.Color = textMuted
 							return c.Layout(gtx)
 						}),
 						layout.Rigid(layout.Spacer{Width: unit.Dp(6)}.Layout),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							c := material.Caption(d.th, it.Title)
+							c := material.Caption(th, it.Title)
 							c.Color = textPrimary
 							return c.Layout(gtx)
 						}),
@@ -307,7 +305,7 @@ func (d *DetailUI) summaryList(label string, items []client.TodoSummary) layout.
 	}
 }
 
-func (d *DetailUI) commentsBlock(gtx layout.Context, detail *client.TodoDetail) layout.Dimensions {
+func (d *DetailUI) commentsBlock(gtx layout.Context, detail *client.TodoDetail, th *material.Theme) layout.Dimensions {
 	comments := d.app.Todos.CommentsSnapshot()
 	// Keep the per-comment delete clickables sized to the comment count.
 	if cap(d.commentRows) < len(comments) {
@@ -316,10 +314,10 @@ func (d *DetailUI) commentsBlock(gtx layout.Context, detail *client.TodoDetail) 
 		d.commentRows = d.commentRows[:len(comments)]
 	}
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(sectionLabel(d.th, i18n.T("detail.comments"))),
+		layout.Rigid(sectionLabel(th, i18n.T("detail.comments"))),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			if len(comments) == 0 {
-				c := material.Caption(d.th, i18n.T("detail.noComments"))
+				c := material.Caption(th, i18n.T("detail.noComments"))
 				c.Color = textMuted
 				return c.Layout(gtx)
 			}
@@ -333,19 +331,19 @@ func (d *DetailUI) commentsBlock(gtx layout.Context, detail *client.TodoDetail) 
 					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								c := material.Caption(d.th, cm.Content)
+								c := material.Caption(th, cm.Content)
 								c.Color = textPrimary
 								return c.Layout(gtx)
 							}),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								c := material.Caption(d.th, formatTime(cm.CreatedAt))
+								c := material.Caption(th, formatTime(cm.CreatedAt))
 								c.Color = textMuted
 								return c.Layout(gtx)
 							}),
 						)
 					}),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return smallButton(gtx, d.th, &d.commentRows[i].del, i18n.T("detail.del"))
+						return smallButton(gtx, th, &d.commentRows[i].del, i18n.T("detail.del"))
 					}),
 				)
 			})
@@ -355,20 +353,20 @@ func (d *DetailUI) commentsBlock(gtx layout.Context, detail *client.TodoDetail) 
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					ed := material.Editor(d.th, &d.edComment, "Add a comment…")
+					ed := material.Editor(th, &d.edComment, "Add a comment…")
 					ed.Color = textPrimary
 					return ed.Layout(gtx)
 				}),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(6)}.Layout),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return smallButton(gtx, d.th, &d.commentBtn, i18n.T("detail.send"))
+					return smallButton(gtx, th, &d.commentBtn, i18n.T("detail.send"))
 				}),
 			)
 		}),
 	)
 }
 
-func (d *DetailUI) editForm(gtx layout.Context, detail *client.TodoDetail) layout.Dimensions {
+func (d *DetailUI) editForm(gtx layout.Context, detail *client.TodoDetail, th *material.Theme) layout.Dimensions {
 	todo := detail.Todo
 	// Initialise editors once when entering edit mode.
 	if d.edTitle.Text() == "" {
@@ -382,27 +380,27 @@ func (d *DetailUI) editForm(gtx layout.Context, detail *client.TodoDetail) layou
 	}
 	children := []layout.FlexChild{
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, d.th, &d.edTitle, i18n.T("list.colTitle"), "")
+			return labeledEditor(gtx, th, &d.edTitle, i18n.T("list.colTitle"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(10)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, d.th, &d.edDescription, i18n.T("detail.description"), "")
+			return labeledEditor(gtx, th, &d.edDescription, i18n.T("detail.description"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(10)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, d.th, &d.edPriority, i18n.T("detail.priorityHint"), "")
+			return labeledEditor(gtx, th, &d.edPriority, i18n.T("detail.priorityHint"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(10)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, d.th, &d.edDueAt, i18n.T("detail.dueHint"), "")
+			return labeledEditor(gtx, th, &d.edDueAt, i18n.T("detail.dueHint"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(10)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, d.th, &d.edTags, i18n.T("detail.tagsHint"), "")
+			return labeledEditor(gtx, th, &d.edTags, i18n.T("detail.tagsHint"), "")
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(6)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			c := material.Caption(d.th, i18n.T("detail.categoryNote", "category", todo.Category))
+			c := material.Caption(th, i18n.T("detail.categoryNote", "category", todo.Category))
 			c.Color = textMuted
 			return c.Layout(gtx)
 		}),
@@ -415,11 +413,11 @@ func (d *DetailUI) editForm(gtx layout.Context, detail *client.TodoDetail) layou
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return smallButton(gtx, d.th, &d.saveBtn, i18n.T("common.save"))
+					return smallButton(gtx, th, &d.saveBtn, i18n.T("common.save"))
 				}),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return smallButton(gtx, d.th, &d.cancelBtn, i18n.T("common.cancel"))
+					return smallButton(gtx, th, &d.cancelBtn, i18n.T("common.cancel"))
 				}),
 			)
 		}))
@@ -428,13 +426,13 @@ func (d *DetailUI) editForm(gtx layout.Context, detail *client.TodoDetail) layou
 }
 
 // conflictModal shows pending dependency blockers and offers a cascade.
-func (d *DetailUI) conflictModal(gtx layout.Context) layout.Dimensions {
+func (d *DetailUI) conflictModal(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	cf := d.pendingConflict
 	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					t := material.H6(d.th, i18n.T("detail.blocked"))
+					t := material.H6(th, i18n.T("detail.blocked"))
 					t.Color = textPrimary
 					return t.Layout(gtx)
 				}),
@@ -447,7 +445,7 @@ func (d *DetailUI) conflictModal(gtx layout.Context) layout.Dimensions {
 					list := &layout.List{Axis: layout.Vertical}
 					return list.Layout(gtx, len(blockers), func(gtx layout.Context, i int) layout.Dimensions {
 						b := blockers[i]
-						c := material.Body2(d.th, fmt.Sprintf("%s %s", DisplayCode(b.Category, b.Code), b.Title))
+						c := material.Body2(th, fmt.Sprintf("%s %s", DisplayCode(b.Category, b.Code), b.Title))
 						c.Color = textSecondary
 						return c.Layout(gtx)
 					})
@@ -456,11 +454,11 @@ func (d *DetailUI) conflictModal(gtx layout.Context) layout.Dimensions {
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return smallButton(gtx, d.th, &d.cascadeBtn, i18n.T("detail.cascade"))
+							return smallButton(gtx, th, &d.cascadeBtn, i18n.T("detail.cascade"))
 						}),
 						layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return smallButton(gtx, d.th, &d.cancelBtn, i18n.T("detail.dismiss"))
+							return smallButton(gtx, th, &d.cancelBtn, i18n.T("detail.dismiss"))
 						}),
 					)
 				}),
@@ -564,10 +562,14 @@ func (d *DetailUI) saveEdit() {
 		} else {
 			d.app.State.SetMessage(i18n.T("detail.saved"))
 		}
-		d.editing = false
-		d.resetEditors()
-		d.Load()
-		d.app.List.RequestRefresh()
+		// Marshal UI-state mutation onto the side window's goroutine: the
+		// editors are owned by it and not concurrency-safe.
+		d.app.SideWin.Post(func() {
+			d.editing = false
+			d.resetEditors()
+			d.Load()
+			d.app.List.RequestRefresh()
+		})
 	}()
 }
 
@@ -594,16 +596,24 @@ func (d *DetailUI) transition(action string, cascade bool) {
 			_, err = cl.ReopenTodo(ctx, id, cascade)
 		}
 		if err != nil {
+			msg := i18n.T("detail.failed") + err.Error()
 			if cf, ok := client.IsConflict(err); ok && !cascade {
-				d.pendingConflict = cf
+				d.app.SideWin.Post(func() {
+					d.pendingConflict = cf
+					if d.app.Invalidate != nil {
+						d.app.Invalidate()
+					}
+				})
 			} else {
-				d.app.State.SetMessage(i18n.T("detail.failed") + err.Error())
+				d.app.State.SetMessage(msg)
 			}
 		} else {
 			d.app.State.SetMessage("")
 		}
-		d.Load()
-		d.app.List.RequestRefresh()
+		d.app.SideWin.Post(func() {
+			d.Load()
+			d.app.List.RequestRefresh()
+		})
 	}()
 }
 
@@ -623,8 +633,15 @@ func (d *DetailUI) deleteTodo() {
 			d.app.State.SetMessage(i18n.T("detail.deleteFailed") + err.Error())
 			return
 		}
-		d.app.nav().goTo(store.PageList)
-		d.app.List.RequestRefresh()
+		d.app.SideWin.Post(func() {
+			// Close the side window (onBack == sw.Close); fall back to nav.
+			if d.onBack != nil {
+				d.onBack()
+			} else {
+				d.app.nav().goTo(store.PageList)
+			}
+			d.app.List.RequestRefresh()
+		})
 	}()
 }
 
@@ -648,7 +665,9 @@ func (d *DetailUI) addComment() {
 		if _, err := cl.CreateComment(ctx, id, content); err != nil {
 			d.app.State.SetMessage(i18n.T("detail.commentFailed") + err.Error())
 		}
-		d.Load()
+		d.app.SideWin.Post(func() {
+			d.Load()
+		})
 	}()
 }
 
@@ -667,7 +686,9 @@ func (d *DetailUI) deleteComment(commentID uint) {
 		if err := cl.DeleteComment(ctx, id, fmt.Sprintf("%d", commentID)); err != nil {
 			d.app.State.SetMessage(i18n.T("detail.delCommentFail") + err.Error())
 		}
-		d.Load()
+		d.app.SideWin.Post(func() {
+			d.Load()
+		})
 	}()
 }
 

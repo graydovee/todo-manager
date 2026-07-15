@@ -2,6 +2,7 @@ package ui
 
 import (
 	"runtime/debug"
+	"sync"
 
 	"gioui.org/app"
 	"gioui.org/font"
@@ -35,15 +36,34 @@ const (
 // the main list window. It can show a todo detail, the management panel, or the
 // create-todo form. At most one side window exists at a time — switching modes
 // reuses the live window.
+//
+// Concurrency model: the side window's event loop runs on its own goroutine
+// (launched by ensureOpen). All of its mutable UI state (mode, detail.*, manage.*)
+// is owned exclusively by that goroutine. The main-window goroutine (and network
+// goroutines) never touch that state directly; instead they call Post to enqueue
+// a function that the side goroutine drains at the top of each event-loop
+// iteration. The lifecycle fields (win, ctrl, opening, mode) are guarded by mu so
+// the main window can read IsOpen/IsDetailMode safely on every frame.
 type SideWindow struct {
 	app *App
 
-	// win is the live Gio window; nil when closed.
-	win  *app.Window
-	ctrl platform.Controller
+	// theme is this window's own material theme. It owns a text.Shaper that is
+	// NOT concurrency-safe, so the side window must never share a theme with the
+	// main window (each runs on a separate goroutine).
+	theme *material.Theme
 
-	// mode is the current content mode.
-	mode SideMode
+	// mu guards the lifecycle fields below. They are read from the main-window
+	// goroutine (IsOpen/IsDetailMode on every frame) and written from the side
+	// goroutine (run/teardown).
+	mu      sync.Mutex
+	win     *app.Window // the live Gio window; nil when closed
+	ctrl    platform.Controller
+	opening bool // true between ensureOpen launching run() and run() exiting
+	mode    SideMode
+
+	// cmds marshals work onto the side goroutine. OpenDetail/OpenManage/OpenCreate
+	// and network callbacks post closures here; run drains it before each frame.
+	cmds chan func()
 
 	// closeBtn is the custom close button in the top bar.
 	closeBtn widget.Clickable
@@ -52,100 +72,151 @@ type SideWindow struct {
 	drag      gesture.Drag
 	dragStart struct{ cursorX, cursorY, winX, winY int }
 
-	// Sub-controllers reused across frames.
+	// Sub-controllers, rendered only by this window's goroutine.
 	detail *DetailUI
 	manage *ManageUI
 }
 
 // NewSideWindow constructs the side window manager.
 func NewSideWindow(a *App) *SideWindow {
-	sw := &SideWindow{app: a}
-	// The side window's sub-UIs use the side theme (its own text.Shaper) so
-	// they don't race the main window's shaper on concurrent repaints.
+	sw := &SideWindow{
+		app:   a,
+		theme: NewTheme(),
+		cmds:  make(chan func(), 64),
+	}
 	sw.detail = NewDetailUI(a)
-	sw.detail.th = a.SideTheme
 	sw.detail.hideHeader = true
 	sw.detail.onBack = sw.Close
 
 	sw.manage = NewManageUI(a)
-	sw.manage.th = a.SideTheme
 	sw.manage.hideHeader = true
 	sw.manage.onBack = sw.Close
 	return sw
 }
 
-// IsOpen reports whether the side window is currently visible.
+// IsOpen reports whether the side window is currently visible. Safe to call from
+// any goroutine.
 func (sw *SideWindow) IsOpen() bool {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
 	return sw.win != nil
 }
 
-// IsDetailMode reports whether the side window is open AND showing a todo
-// detail (used for row highlighting in the main list).
+// IsDetailMode reports whether the side window is open AND showing a todo detail
+// (used for row highlighting in the main list). Safe to call from any goroutine.
 func (sw *SideWindow) IsDetailMode() bool {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
 	return sw.win != nil && sw.mode == SideDetail
 }
 
+// Post schedules f to run on the side window's event-loop goroutine and wakes
+// the window so the queued work is processed promptly. Use this from other
+// goroutines (main window clicks, network callbacks) instead of mutating the
+// side window's UI state directly. If the window is closed the callback is still
+// queued and runs when the window next opens (or is dropped if the channel
+// fills). Safe to call from any goroutine.
+func (sw *SideWindow) Post(f func()) {
+	select {
+	case sw.cmds <- f:
+	default:
+		// Channel full: drop to avoid blocking the caller.
+	}
+	sw.wake()
+}
+
+// wake requests a repaint of the side window (no-op if closed).
+// app.Window.Invalidate is documented as safe for concurrent use.
+func (sw *SideWindow) wake() {
+	sw.mu.Lock()
+	w := sw.win
+	sw.mu.Unlock()
+	if w != nil {
+		w.Invalidate()
+	}
+}
+
 // OpenDetail opens (or replaces) the side window in detail mode for the given
-// todo ID.
+// todo ID. Called from the main-window goroutine.
 func (sw *SideWindow) OpenDetail(todoID uint) {
 	sw.app.State.Lock()
 	sw.app.State.SelectedID = todoID
 	sw.app.State.Unlock()
 
-	sw.detail.editing = false
-	sw.detail.pendingConflict = nil
-	sw.detail.resetEditors()
-	sw.app.Todos.ResetDetail()
-	sw.detail.Load()
-
-	sw.mode = SideDetail
+	sw.Post(func() {
+		sw.detail.editing = false
+		sw.detail.pendingConflict = nil
+		sw.detail.resetEditors()
+		sw.app.Todos.ResetDetail()
+		sw.detail.Load()
+		sw.mu.Lock()
+		sw.mode = SideDetail
+		sw.mu.Unlock()
+	})
 	sw.ensureOpen()
 }
 
 // OpenManage opens (or switches) the side window to the management panel.
+// Called from the main-window goroutine.
 func (sw *SideWindow) OpenManage() {
-	sw.mode = SideManage
+	sw.Post(func() {
+		sw.mu.Lock()
+		sw.mode = SideManage
+		sw.mu.Unlock()
+	})
 	sw.ensureOpen()
 }
 
 // OpenCreate opens (or switches) the side window to the create-todo form.
+// Called from the main-window goroutine.
 func (sw *SideWindow) OpenCreate() {
-	sw.manage.creating = true
-	sw.mode = SideCreate
+	sw.Post(func() {
+		sw.manage.creating = true
+		sw.mu.Lock()
+		sw.mode = SideCreate
+		sw.mu.Unlock()
+	})
 	sw.ensureOpen()
 }
 
 // Close shuts the side window (async).
 func (sw *SideWindow) Close() {
-	if sw.win != nil {
-		go sw.win.Perform(system.ActionClose)
+	sw.mu.Lock()
+	w := sw.win
+	sw.mu.Unlock()
+	if w != nil {
+		go w.Perform(system.ActionClose)
 	}
 }
 
 // ensureOpen starts the window goroutine if it isn't already running, then
-// invalidates to refresh content. When the window is already open, it
-// invalidates the side window directly so mode switches are instant (calling
-// the main window's Invalidate would not wake this window's event loop).
+// invalidates to refresh content. When the window is already open, it invalidates
+// the side window directly so mode switches are instant.
 func (sw *SideWindow) ensureOpen() {
-	if sw.win == nil {
-		// Not open yet — refresh the main window (e.g. row highlight) then start.
-		if sw.app.Invalidate != nil {
-			sw.app.Invalidate()
+	sw.mu.Lock()
+	if sw.win != nil || sw.opening {
+		w := sw.win
+		sw.mu.Unlock()
+		// Already open (or opening) — wake THIS window so it repaints.
+		if w != nil {
+			w.Invalidate()
 		}
-		go sw.run()
 		return
 	}
-	// Already open — wake THIS window so it repaints with the new mode.
-	sw.win.Invalidate()
+	sw.opening = true
+	sw.mu.Unlock()
+
+	// Refresh the main window (e.g. row highlight) for the new selection.
+	if sw.app.Invalidate != nil {
+		sw.app.Invalidate()
+	}
+	go sw.run()
 }
 
-// run creates and drives the side window's event loop until destruction. It
-// runs on its own goroutine (launched by ensureOpen). Because this is a separate
-// goroutine, a panic here is NOT caught by the main-goroutine recover in
-// main.go and would terminate the whole process with no diagnostic trail. The
-// deferred recover below captures it, records the stack to the diagnostic log,
-// and tears down the shared state so the main window doesn't dereference a
-// half-dead window/controller. The window itself is best-effort closed.
+// run creates and drives the side window's event loop until destruction. It runs
+// on its own goroutine (launched by ensureOpen). Because this is a separate
+// goroutine, a panic here is NOT caught by the main-goroutine recover in main.go;
+// the deferred recover below records it and tears down shared state.
 func (sw *SideWindow) run() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -158,21 +229,34 @@ func (sw *SideWindow) run() {
 	w.Option(app.Size(unit.Dp(sideWidth), unit.Dp(560)))
 	w.Option(app.Decorated(false))
 	w.Option(app.Title(sw.title()))
+
+	sw.mu.Lock()
 	sw.win = w
+	sw.mu.Unlock()
 
 	var ops op.Ops
 	for {
+		// Run any work queued by other goroutines (mode switches, detail loads,
+		// network callbacks) before processing the next window event.
+		sw.drainCmds()
+
 		e := w.Event()
 		switch e := e.(type) {
 		case app.ViewEvent:
-			Logf("side window: ViewEvent")
 			h := platform.ExtractHandle(e)
-			if h != 0 && sw.ctrl == nil {
-				sw.ctrl = platform.NewController(platform.Handle(h))
-				platform.SetDialogOwner(platform.Handle(h), sw.app.OwnerHandle)
-				sw.positionRightOfMain()
-				sw.ctrl.HideFromTaskbar()
-				Logf("side window: setup complete hwnd=%v", h)
+			if h != 0 {
+				sw.mu.Lock()
+				ctrl := sw.ctrl
+				sw.mu.Unlock()
+				if ctrl == nil {
+					sw.mu.Lock()
+					sw.ctrl = platform.NewController(platform.Handle(h))
+					ctrl = sw.ctrl
+					sw.mu.Unlock()
+					platform.SetDialogOwner(platform.Handle(h), sw.app.OwnerHandle)
+					sw.positionRightOfMain(ctrl)
+					ctrl.HideFromTaskbar()
+				}
 			}
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
@@ -180,7 +264,7 @@ func (sw *SideWindow) run() {
 
 			paint.Fill(gtx.Ops, bgPage)
 			layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-				layout.Rigid(sw.topBar),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return sw.topBar(gtx) }),
 				layout.Rigid(separator),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					return sw.renderContent(gtx, w)
@@ -189,8 +273,19 @@ func (sw *SideWindow) run() {
 			e.Frame(gtx.Ops)
 
 		case app.DestroyEvent:
-			Logf("side window: DestroyEvent err=%v", e.Err)
 			sw.teardown()
+			return
+		}
+	}
+}
+
+// drainCmds runs all queued callbacks on the side goroutine.
+func (sw *SideWindow) drainCmds() {
+	for {
+		select {
+		case f := <-sw.cmds:
+			f()
+		default:
 			return
 		}
 	}
@@ -198,10 +293,13 @@ func (sw *SideWindow) run() {
 
 // teardown clears the shared side-window state so the main window no longer
 // references the (possibly dead) window/controller. Shared by the normal
-// DestroyEvent path and the panic-recovery path.
+// DestroyEvent path and the panic-recovery path. Runs on the side goroutine.
 func (sw *SideWindow) teardown() {
+	sw.mu.Lock()
 	sw.win = nil
 	sw.ctrl = nil
+	sw.opening = false
+	sw.mu.Unlock()
 	sw.app.State.Lock()
 	sw.app.State.SelectedID = 0
 	sw.app.State.Unlock()
@@ -212,7 +310,10 @@ func (sw *SideWindow) teardown() {
 
 // title returns the window title for the current mode.
 func (sw *SideWindow) title() string {
-	switch sw.mode {
+	sw.mu.Lock()
+	mode := sw.mode
+	sw.mu.Unlock()
+	switch mode {
 	case SideManage:
 		return i18n.T("manage.title")
 	case SideCreate:
@@ -224,38 +325,40 @@ func (sw *SideWindow) title() string {
 
 // renderContent renders the body for the current mode.
 func (sw *SideWindow) renderContent(gtx layout.Context, w *app.Window) layout.Dimensions {
-	switch sw.mode {
+	sw.mu.Lock()
+	mode := sw.mode
+	sw.mu.Unlock()
+	switch mode {
 	case SideManage:
 		sw.manage.creating = false
-		return sw.manage.Layout(gtx, w)
+		return sw.manage.Layout(gtx, w, sw.theme)
 	case SideCreate:
 		sw.manage.creating = true
-		return sw.manage.Layout(gtx, w)
+		return sw.manage.Layout(gtx, w, sw.theme)
 	default:
-		return sw.detail.Layout(gtx, w)
+		return sw.detail.Layout(gtx, w, sw.theme)
 	}
 }
 
-// positionRightOfMain places the side window immediately to the right of the
-// main window, matching its height.
-func (sw *SideWindow) positionRightOfMain() {
+// positionRightOfMain places the side window immediately to the right of the main
+// window, matching its height.
+func (sw *SideWindow) positionRightOfMain(ctrl platform.Controller) {
 	mainCtrl := sw.app.Platform
-	if mainCtrl == nil || sw.ctrl == nil {
+	if mainCtrl == nil || ctrl == nil {
 		return
 	}
 	mx, my, mw, mh := mainCtrl.WindowGeometry()
 	if mw == 0 {
 		return
 	}
-	_, _, dw, _ := sw.ctrl.WindowGeometry()
+	_, _, dw, _ := ctrl.WindowGeometry()
 	if dw == 0 {
 		dw = sideWidth
 	}
-	sw.ctrl.MoveWindow(mx+mw, my, dw, mh)
+	ctrl.MoveWindow(mx+mw, my, dw, mh)
 }
 
-// handleFrame processes the close button, top-bar action buttons, and custom
-// window drag.
+// handleFrame processes the close button and custom window drag.
 func (sw *SideWindow) handleFrame(gtx layout.Context, w *app.Window) {
 	for sw.closeBtn.Clicked(gtx) {
 		go w.Perform(system.ActionClose)
@@ -265,7 +368,10 @@ func (sw *SideWindow) handleFrame(gtx layout.Context, w *app.Window) {
 
 // handleDrag implements custom window dragging over the top bar.
 func (sw *SideWindow) handleDrag(gtx layout.Context) {
-	if sw.ctrl == nil {
+	sw.mu.Lock()
+	ctrl := sw.ctrl
+	sw.mu.Unlock()
+	if ctrl == nil {
 		return
 	}
 	sw.drag.Add(gtx.Ops)
@@ -276,17 +382,17 @@ func (sw *SideWindow) handleDrag(gtx layout.Context) {
 		}
 		switch {
 		case ev.Kind == pointer.Press && ev.Buttons == pointer.ButtonPrimary:
-			cx, cy := sw.ctrl.CursorPos()
-			wx, wy, _, _ := sw.ctrl.WindowGeometry()
+			cx, cy := ctrl.CursorPos()
+			wx, wy, _, _ := ctrl.WindowGeometry()
 			sw.dragStart.cursorX = cx
 			sw.dragStart.cursorY = cy
 			sw.dragStart.winX = wx
 			sw.dragStart.winY = wy
 		case ev.Kind == pointer.Drag:
-			cx, cy := sw.ctrl.CursorPos()
+			cx, cy := ctrl.CursorPos()
 			dx := cx - sw.dragStart.cursorX
 			dy := cy - sw.dragStart.cursorY
-			sw.ctrl.MoveWindow(sw.dragStart.winX+dx, sw.dragStart.winY+dy, 0, 0)
+			ctrl.MoveWindow(sw.dragStart.winX+dx, sw.dragStart.winY+dy, 0, 0)
 		}
 	}
 }
@@ -299,7 +405,7 @@ func (sw *SideWindow) topBar(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 				// Draggable title.
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					t := material.Body1(sw.app.SideTheme, sw.title())
+					t := material.Body1(sw.theme, sw.title())
 					t.TextSize = unit.Sp(16)
 					t.Font.Weight = font.SemiBold
 					t.Color = textPrimary
@@ -314,7 +420,7 @@ func (sw *SideWindow) topBar(gtx layout.Context) layout.Dimensions {
 				layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
 				// Close button.
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return iconButton(gtx, sw.app.SideTheme, &sw.closeBtn, IconClose, false)
+					return iconButton(gtx, sw.theme, &sw.closeBtn, IconClose, false)
 				}),
 			)
 		},
@@ -322,22 +428,22 @@ func (sw *SideWindow) topBar(gtx layout.Context) layout.Dimensions {
 }
 
 // actionButtons renders the context-appropriate buttons for the current mode.
-// In detail edit mode: Save + Cancel. Otherwise nothing (the manage/create
-// forms have their own buttons inside the body).
+// In detail edit mode: Save + Cancel. Otherwise nothing (the manage/create forms
+// have their own buttons inside the body).
 func (sw *SideWindow) actionButtons(gtx layout.Context) layout.Dimensions {
 	if sw.mode == SideDetail && sw.detail.editing {
 		return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return smallButton(gtx, sw.app.SideTheme, &sw.detail.saveBtn, i18n.T("common.save"))
+				return smallButton(gtx, sw.theme, &sw.detail.saveBtn, i18n.T("common.save"))
 			}),
 			layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return smallButton(gtx, sw.app.SideTheme, &sw.detail.cancelBtn, i18n.T("common.cancel"))
+				return smallButton(gtx, sw.theme, &sw.detail.cancelBtn, i18n.T("common.cancel"))
 			}),
 		)
 	}
 	if sw.mode == SideDetail && !sw.detail.editing {
-		return smallButton(gtx, sw.app.SideTheme, &sw.detail.editBtn, i18n.T("common.edit"))
+		return smallButton(gtx, sw.theme, &sw.detail.editBtn, i18n.T("common.edit"))
 	}
 	return layout.Dimensions{}
 }

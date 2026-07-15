@@ -68,11 +68,11 @@ func RunWindow(spec WindowSpec) <-chan string {
 	w.Option(app.Decorated(spec.Decorated))
 
 	var (
-		hwnd      platform.Handle
-		gotHwnd   bool
-		ready     bool
-		closing   bool
-		finalVal  string
+		hwnd     platform.Handle
+		gotHwnd  bool
+		ready    bool
+		closing  bool
+		finalVal string
 	)
 
 	var ops op.Ops

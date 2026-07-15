@@ -111,6 +111,10 @@ func runWindow(state *store.AppState, todos *store.TodoStore, theme *material.Th
 	var ops op.Ops
 	var frameCount int
 	for {
+		// Run deferred work (network callbacks, etc.) on this goroutine before
+		// handling tray actions or waiting for the next event.
+		gui.DrainMainCmds()
+
 		// Drain pending tray actions before waiting for the next window event.
 		if handleTray(gui, w, trayCmds, home) {
 			exitApp(home, gui.State.Config)
@@ -208,8 +212,8 @@ func dim(v, fallback int) int {
 // page. When hidden, the cursor approaching the docked edge slides it back out.
 func dockPollLoop(gui *ui.App, w *app.Window) {
 	const (
-		animInterval = 16  // ms between animation ticks (~60fps); only affects smoothness
-		nearEdge     = 6   // px from edge to trigger slide-out
+		animInterval = 16   // ms between animation ticks (~60fps); only affects smoothness
+		nearEdge     = 6    // px from edge to trigger slide-out
 		gracePeriod  = 1000 // ms after slide-out before hiding is allowed again
 	)
 	var (

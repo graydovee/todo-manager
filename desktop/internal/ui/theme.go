@@ -45,7 +45,9 @@ var (
 )
 
 // NewTheme returns a compact, monochrome Material theme tuned for a small
-// always-on-top desktop widget.
+// always-on-top desktop widget. Each *material.Theme owns a text.Shaper that is
+// NOT concurrency-safe, so every window that may repaint concurrently (the main
+// window, the side window, dialogs) must construct its own theme via NewTheme.
 func NewTheme() *material.Theme {
 	th := material.NewTheme()
 	th.Shaper = text.NewShaper(text.WithCollection(gofont.Collection()))
@@ -53,14 +55,6 @@ func NewTheme() *material.Theme {
 	// Compact sizing for a small window.
 	th.TextSize = 13 // sp
 	return th
-}
-
-// newThemeLike returns a theme with the same configuration as NewTheme but a
-// fresh text.Shaper. Each window event loop runs on its own goroutine and
-// text.Shaper is not concurrency-safe, so every window that may repaint
-// concurrently must have its own shaper.
-func newThemeLike() *material.Theme {
-	return NewTheme()
 }
 
 // PriorityColor maps a priority string (p0..p3) to a greyscale. Unknown values
