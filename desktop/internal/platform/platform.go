@@ -1,52 +1,35 @@
-// Package platform abstracts the small set of native window behaviours the app
-// needs: always-on-top and lock (top-most + click-through + glassy look). Each
-// platform implements Controller via build-tagged files.
+// Package platform abstracts the native window operations the desktop client
+// needs (always-on-top, click-through lock, positioning, work-area and cursor
+// queries). The primary target is Windows; non-Windows platforms link a stub
+// implementation so the rest of the app compiles.
 package platform
 
-// Controller mutates the OS window. Methods are idempotent. A no-op controller
-// is used on platforms without a native implementation yet.
-type Controller interface {
-	// SetTopMost places the window above all non-topmost windows (true) or
-	// restores normal z-order (false). The window still receives input.
-	SetTopMost(topmost bool)
-	// SetLock makes the window top-most, click-through (pointer events pass to
-	// whatever is behind it) and signals the UI to render the glass style.
-	// Locking implies top-most; unlocking restores the previous top-most state
-	// via a subsequent SetTopMost call from the caller.
-	SetLock(locked bool)
-	// HideFromTaskbar removes the window from the taskbar and Alt+Tab so the tray
-	// icon is the only taskbar presence.
-	HideFromTaskbar()
-
-	// WindowGeometry returns the window's position and size (screen coordinates).
+// Platform is the abstraction over native window control. All methods are safe
+// to call from any goroutine; implementations that require main-thread/HWND
+// affinity route the call through the Fyne native-window driver.
+type Platform interface {
+	// SetAlwaysOnTop pins the window above all others (or releases it).
+	SetAlwaysOnTop(top bool)
+	// MoveWindow repositions the window's top-left to (x, y) in screen coords.
+	MoveWindow(x, y int)
+	// WindowGeometry returns the current window's top-left and pixel size.
 	WindowGeometry() (x, y, w, h int)
-	// MoveWindow repositions the window to the given screen coordinates, keeping
-	// its current size when w/h are zero.
-	MoveWindow(x, y, w, h int)
-	// MoveWindowSync repositions the window synchronously (bypassing the async
-	// win-thread queue) for smooth animation. Only safe from non-UI goroutines.
-	MoveWindowSync(x, y, w, h int)
-	// WorkArea returns the work area (excluding taskbar) of the monitor nearest
-	// the window.
+	// WorkArea returns the work area of the monitor the window is on. The work
+	// area excludes the taskbar.
 	WorkArea() (x, y, w, h int)
-	// CursorPos returns the cursor position in screen coordinates.
+	// CursorPos returns the current cursor position in screen coords.
 	CursorPos() (x, y int)
-	// Minimize minimises the window to the taskbar.
+	// SetLock toggles click-through + translucent overlay mode (the app's
+	// "lock" feature). When locked, the window cannot receive pointer events.
+	SetLock(locked bool)
+	// Minimize hides the window to the taskbar.
 	Minimize()
 }
 
-// Handle carries the native window identifier once it becomes available.
-type Handle uintptr
-
-// Noop is a Controller that does nothing; used on unsupported platforms.
-type Noop struct{}
-
-func (Noop) SetTopMost(bool)       {}
-func (Noop) SetLock(bool)          {}
-func (Noop) HideFromTaskbar()      {}
-func (Noop) WindowGeometry() (int, int, int, int) { return 0, 0, 0, 0 }
-func (Noop) MoveWindow(int, int, int, int)        {}
-func (Noop) MoveWindowSync(int, int, int, int)    {}
-func (Noop) WorkArea() (int, int, int, int)       { return 0, 0, 0, 0 }
-func (Noop) CursorPos() (int, int)                 { return 0, 0 }
-func (Noop) Minimize()                             {}
+// New constructs the platform-specific Platform implementation. The window
+// argument is the fyne.Window being controlled; it is type-asserted to
+// driver.NativeWindow inside the Windows implementation to gain HWND access.
+// On unsupported platforms a no-op stub is returned.
+func New(window any) Platform {
+	return newPlatform(window)
+}

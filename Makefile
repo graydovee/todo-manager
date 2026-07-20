@@ -23,11 +23,12 @@ desktop-build:
 	mkdir -p bin
 	cd desktop && go build -o ../bin/todo-desktop .
 
-# Cross-compile a Windows binary with no console window.
+# Cross-compile a Windows binary (requires mingw-w64: x86_64-w64-mingw32-gcc).
 desktop-windows:
 	mkdir -p bin
-	cd desktop && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w -H windowsgui" -o ../bin/todo-desktop.exe .
+	cd desktop && GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags="-s -w -H windowsgui" -o ../bin/todo-desktop.exe .
 
+# Build for the current platform (Linux/macOS for development).
 desktop-run:
 	cd desktop && go run .
 

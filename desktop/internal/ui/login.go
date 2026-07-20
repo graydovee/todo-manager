@@ -2,202 +2,114 @@ package ui
 
 import (
 	"context"
-	"image"
 	"time"
 
-	"gioui.org/app"
-	"gioui.org/layout"
-	"gioui.org/op"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
-	"gioui.org/unit"
-	"gioui.org/widget"
-	"gioui.org/widget/material"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/graydovee/todo-manager/desktop/internal/client"
-	"github.com/graydovee/todo-manager/desktop/internal/config"
 	"github.com/graydovee/todo-manager/desktop/internal/i18n"
 	"github.com/graydovee/todo-manager/desktop/internal/store"
 )
 
-// LoginUI is the connection screen: backend URL + API key + test.
-type LoginUI struct {
-	app     *App
-	baseURL widget.Editor
-	apiKey  widget.Editor
-	testBtn widget.Clickable
+// LoginView renders the connect screen: backend URL + API key entries plus a
+// Connect button. Connect performs a two-step check (Ping then CheckAuth).
+type LoginView struct {
+	app *App
 
-	testing bool
-	result  string // status message
+	root       *fyne.Container
+	baseURL    *widget.Entry
+	apiKey     *widget.Entry
+	connectBtn *widget.Button
+	status     *widget.Label
 }
 
-func NewLoginUI(a *App) *LoginUI {
-	u := &LoginUI{app: a}
-	u.baseURL.SingleLine = true
-	u.baseURL.Submit = true
-	u.apiKey.SingleLine = true
-	u.apiKey.Submit = true
+func newLoginView(app *App) *LoginView {
+	v := &LoginView{app: app}
 
-	cfg := a.State.Config
-	u.baseURL.SetText(cfg.BaseURL)
-	return u
+	v.baseURL = widget.NewEntry()
+	v.baseURL.SetPlaceHolder(i18n.T("login.baseURL"))
+	v.baseURL.Text = app.State.Config.BaseURL
+
+	v.apiKey = widget.NewPasswordEntry()
+	v.apiKey.SetPlaceHolder(i18n.T("login.apiKey"))
+	v.apiKey.Text = app.State.Config.APIKey
+
+	v.status = widget.NewLabel("")
+	v.status.Wrapping = fyne.TextWrapWord
+
+	v.connectBtn = widget.NewButton(i18n.T("login.connect"), v.connect)
+
+	form := container.NewVBox(
+		widget.NewLabelWithStyle(i18n.T("login.title"), fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle(i18n.T("login.subtitle"), fyne.TextAlignCenter, fyne.TextStyle{}),
+		widget.NewLabel(i18n.T("login.baseURL")),
+		v.baseURL,
+		widget.NewLabel(i18n.T("login.apiKey")),
+		v.apiKey,
+		v.connectBtn,
+		widget.NewLabel(i18n.T("login.tip")),
+		v.status,
+	)
+	v.root = container.NewCenter(container.NewVBox(form))
+	return v
 }
 
-func (u *LoginUI) Layout(gtx layout.Context, w *app.Window, th *material.Theme) layout.Dimensions {
-	// Process clicks every frame (Gio immediate-mode pattern).
-	for u.testBtn.Clicked(gtx) {
-		u.tryConnect()
-	}
-	u.baseURL.Update(gtx)
-	u.apiKey.Update(gtx)
-
-	// Pad the whole window content.
-	return layout.UniformInset(unit.Dp(20)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			// Title.
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				title := material.H5(th, i18n.T("login.title"))
-				title.Color = textPrimary
-				return title.Layout(gtx)
-			}),
-			layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				sub := material.Body2(th, i18n.T("login.subtitle"))
-				sub.Color = textSecondary
-				return sub.Layout(gtx)
-			}),
-			layout.Rigid(layout.Spacer{Height: unit.Dp(24)}.Layout),
-
-			// Base URL.
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return labeledEditor(gtx, th, &u.baseURL, i18n.T("login.baseURL"), config.DefaultBaseURL)
-			}),
-			layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
-
-			// API key.
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return labeledEditor(gtx, th, &u.apiKey, i18n.T("login.apiKey"), "")
-			}),
-			layout.Rigid(layout.Spacer{Height: unit.Dp(20)}.Layout),
-
-			// Connect button.
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				btn := material.Button(th, &u.testBtn, i18n.T("login.connect"))
-				styleButton(&btn)
-				if u.testing {
-					btn.Text = i18n.T("login.connecting")
-					btn.Background = textDisabled
-				}
-				return btn.Layout(gtx)
-			}),
-
-			// Status / hint.
-			layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				msg := u.result
-				if u.testing {
-					msg = ""
-				}
-				if msg == "" {
-					msg = i18n.T("login.tip")
-				}
-				lbl := material.Body2(th, msg)
-				lbl.Color = textMuted
-				return lbl.Layout(gtx)
-			}),
-		)
-	})
+// Build returns the root canvas object for the login page.
+func (v *LoginView) Build() fyne.CanvasObject {
+	return v.root
 }
 
-// tryConnect runs the connectivity check in a goroutine.
-func (u *LoginUI) tryConnect() {
-	if u.testing {
-		return
-	}
-	base := u.baseURL.Text()
-	key := u.apiKey.Text()
+// connect performs the two-step connectivity check then switches to the list
+// page. All network work happens in a goroutine; UI updates are deferred to
+// fyne.Do.
+func (v *LoginView) connect() {
+	base := v.baseURL.Text
+	key := v.apiKey.Text
 	if base == "" || key == "" {
-		u.result = i18n.T("login.emptyFields")
-		if u.app.Invalidate != nil {
-			u.app.Invalidate()
-		}
+		v.status.SetText(i18n.T("login.emptyFields"))
 		return
 	}
 
-	u.testing = true
-	u.result = ""
-	if u.app.Invalidate != nil {
-		u.app.Invalidate()
-	}
+	v.connectBtn.Disable()
+	v.connectBtn.SetText(i18n.T("login.connecting"))
+	v.status.SetText("")
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-
 		c := client.New(base, key)
-		// First check reachability, then auth.
-		if err := c.Ping(ctx); err != nil {
-			u.finish(false, i18n.T("login.unreachable")+err.Error())
-			return
-		}
-		if err := c.CheckAuth(ctx); err != nil {
-			u.finish(false, i18n.T("login.authFailed")+err.Error())
+
+		// Step 1: ping (server reachable).
+		pingCtx, pingCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer pingCancel()
+		if err := c.Ping(pingCtx); err != nil {
+			fyne.Do(func() {
+				v.status.SetText(i18n.T("login.unreachable") + err.Error())
+				v.connectBtn.Enable()
+				v.connectBtn.SetText(i18n.T("login.connect"))
+			})
 			return
 		}
 
-		// Persist config + enter the app.
-		u.app.State.Lock()
-		cfg := u.app.State.Config
-		cfg.BaseURL = client.NormalizeBaseURL(base)
-		cfg.APIKey = key
-		u.app.State.Client = client.New(cfg.BaseURL, key)
-		u.app.State.Page = store.PageList
-		u.app.State.Unlock()
+		// Step 2: auth check (key valid).
+		authCtx, authCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer authCancel()
+		if err := c.CheckAuth(authCtx); err != nil {
+			fyne.Do(func() {
+				v.status.SetText(i18n.T("login.authFailed") + err.Error())
+				v.connectBtn.Enable()
+				v.connectBtn.SetText(i18n.T("login.connect"))
+			})
+			return
+		}
 
-		homePersist(cfg)
-		u.finish(true, "")
+		// Success: commit state + switch page on the UI goroutine.
+		fyne.Do(func() {
+			v.app.State.Login(base, key)
+			v.connectBtn.Enable()
+			v.connectBtn.SetText(i18n.T("login.connect"))
+			v.app.State.Page = store.PageList
+			v.app.showPage()
+		})
 	}()
-}
-
-// finish applies the connection-test result. It mutates widget state, so it is
-// marshalled onto the main window's goroutine.
-func (u *LoginUI) finish(ok bool, msg string) {
-	u.app.PostOnMain(func() {
-		u.testing = false
-		u.result = msg
-		if u.app.Invalidate != nil {
-			u.app.Invalidate()
-		}
-		// On success, trigger an initial list load.
-		if ok {
-			u.app.List.RequestRefresh()
-		}
-	})
-}
-
-func labeledEditor(gtx layout.Context, th *material.Theme, ed *widget.Editor, label, hint string) layout.Dimensions {
-	ed.Update(gtx)
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			lbl := material.Caption(th, label)
-			lbl.Color = textSecondary
-			return lbl.Layout(gtx)
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			// Lay out the editor, then draw an underline beneath it. Focused
-			// editors get a darker line.
-			de := material.Editor(th, ed, hint)
-			de.Color = textPrimary
-			de.HintColor = textMuted
-			dims := de.Layout(gtx)
-			// Underline: shift down by the editor height and fill a 1px line.
-			lineColor := border
-			if gtx.Source.Focused(ed) {
-				lineColor = textSecondary
-			}
-			defer op.Offset(image.Pt(0, dims.Size.Y)).Push(gtx.Ops).Pop()
-			paint.FillShape(gtx.Ops, lineColor, clip.Rect{Max: image.Pt(dims.Size.X, 1)}.Op())
-			return layout.Dimensions{Size: image.Pt(dims.Size.X, dims.Size.Y+1)}
-		}),
-	)
 }

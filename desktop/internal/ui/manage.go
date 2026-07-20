@@ -2,509 +2,367 @@ package ui
 
 import (
 	"context"
-	"strconv"
+	"fmt"
 	"strings"
 	"time"
 
-	"gioui.org/app"
-	"gioui.org/font"
-	"gioui.org/layout"
-	"gioui.org/unit"
-	"gioui.org/widget"
-	"gioui.org/widget/material"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/graydovee/todo-manager/desktop/internal/i18n"
-	"github.com/graydovee/todo-manager/desktop/internal/store"
 )
 
-// ManageUI is the filter + create + logout screen.
-type ManageUI struct {
+// ManageView renders the management side panel: language switch, dock settings,
+// filters (status/category/priority chips), title/code search, apply + logout.
+// It also renders the create-todo form via BuildCreate() when the user opens
+// the create side panel.
+type ManageView struct {
 	app *App
 
-	backBtn   widget.Clickable
-	logoutBtn widget.Clickable
-	applyBtn  widget.Clickable
-	createBtn widget.Clickable
-	cancelBtn widget.Clickable
-	langEnBtn widget.Clickable
-	langZhBtn widget.Clickable
+	root       fyne.CanvasObject
+	createRoot fyne.CanvasObject
 
-	// Filters (text editors / simple multi-toggle chips).
-	qEditor         widget.Editor
-	codeEditor      widget.Editor
-	statusToggles   map[string]*widget.Clickable
-	categoryToggles map[string]*widget.Clickable
-	priorityToggles map[string]*widget.Clickable
+	// Filters.
+	statusChips   *chipGroup
+	categoryChips *chipGroup
+	priorityChips *chipGroup
+	queryEntry    *widget.Entry
+	codeEntry     *widget.Entry
+	applyBtn      *widget.Button
 
-	// New todo form.
-	creating bool
-	newTitle widget.Editor
-	newDesc  widget.Editor
-	newCat   widget.Editor
-	newPri   widget.Editor
-	newTags  widget.Editor
-	newDue   widget.Editor
+	// Dock + language.
+	langSelect   *widget.Select
+	animEntry    *widget.Entry
+	hideDelayEnt *widget.Entry
 
-	// Dock settings editors.
-	animEditor widget.Editor
-	hideEditor widget.Editor
+	// Logout.
+	logoutBtn *widget.Button
 
-	// hideHeader, when true, suppresses the header row (back button + title +
-	// logout). The side window draws its own top bar instead.
-	hideHeader bool
-	// onBack, if set, overrides the default back-button behaviour.
-	onBack func()
-
-	// scroll persists the scroll position of the body content across frames.
-	scroll layout.List
+	// Create form.
+	titleEntry *widget.Entry
+	descEntry  *widget.Entry
+	catEntry   *widget.Entry
+	priEntry   *widget.Entry
+	tagsEntry  *widget.Entry
+	dueEntry   *widget.Entry
+	createBtn  *widget.Button
+	createMsg  *widget.Label
 }
 
-var (
-	statusOptions   = []string{"open", "in_progress", "completed", "duplicate"}
-	categoryOptions = []string{"bug", "feature", "task"}
-	priorityOptions = []string{"p0", "p1", "p2", "p3"}
-)
+func newManageView(app *App) *ManageView {
+	v := &ManageView{app: app}
 
-func NewManageUI(a *App) *ManageUI {
-	m := &ManageUI{app: a}
-	m.qEditor.SingleLine = true
-	m.codeEditor.SingleLine = true
-	m.newTitle.SingleLine = true
-	m.newCat.SingleLine = true
-	m.newPri.SingleLine = true
-	m.newTags.SingleLine = true
-	m.newDue.SingleLine = true
-	m.animEditor.SingleLine = true
-	m.hideEditor.SingleLine = true
+	// Filter chips.
+	v.statusChips = newChipGroup([]string{"open", "in_progress", "completed", "duplicate"},
+		labelsForStatuses, app.State.Config.Filters.Status)
+	v.categoryChips = newChipGroup([]string{"bug", "feature", "task"},
+		labelsForCategories, app.State.Config.Filters.Category)
+	v.priorityChips = newChipGroup([]string{"p0", "p1", "p2", "p3"},
+		identity, app.State.Config.Filters.Priority)
 
-	m.statusToggles = make(map[string]*widget.Clickable, len(statusOptions))
-	m.categoryToggles = make(map[string]*widget.Clickable, len(categoryOptions))
-	m.priorityToggles = make(map[string]*widget.Clickable, len(priorityOptions))
-	for _, s := range statusOptions {
-		m.statusToggles[s] = new(widget.Clickable)
-	}
-	for _, c := range categoryOptions {
-		m.categoryToggles[c] = new(widget.Clickable)
-	}
-	for _, p := range priorityOptions {
-		m.priorityToggles[p] = new(widget.Clickable)
-	}
+	v.queryEntry = widget.NewEntry()
+	v.queryEntry.SetPlaceHolder(i18n.T("manage.titleSearch"))
+	v.queryEntry.Text = app.State.Config.Filters.Query
 
-	// Seed filter editors from config.
-	f := a.State.Config.Filters
-	m.qEditor.SetText(f.Query)
-	m.codeEditor.SetText(f.Code)
-	// Seed dock timing editors from config (show default when unset).
-	animMs := a.State.Config.Dock.AnimMs
-	if animMs <= 0 {
-		animMs = 500
+	v.codeEntry = widget.NewEntry()
+	v.codeEntry.SetPlaceHolder(i18n.T("manage.codeExact"))
+	v.codeEntry.Text = app.State.Config.Filters.Code
+
+	v.applyBtn = widget.NewButton(i18n.T("manage.apply"), v.applyFilters)
+
+	// Language + dock settings.
+	v.langSelect = widget.NewSelect([]string{"English", "简体中文"}, v.onLanguageChange)
+	cur := "English"
+	if app.State.I18n.Lang() == "zh" {
+		cur = "简体中文"
 	}
-	hideMs := a.State.Config.Dock.HideDelayMs
-	if hideMs <= 0 {
-		hideMs = 600
-	}
-	m.animEditor.SetText(strconv.Itoa(animMs))
-	m.hideEditor.SetText(strconv.Itoa(hideMs))
-	m.scroll.Axis = layout.Vertical
-	return m
+	v.langSelect.SetSelected(cur)
+
+	v.animEntry = widget.NewEntry()
+	v.animEntry.Text = fmt.Sprintf("%d", app.State.Config.Dock.AnimMs)
+	v.hideDelayEnt = widget.NewEntry()
+	v.hideDelayEnt.Text = fmt.Sprintf("%d", app.State.Config.Dock.HideDelayMs)
+
+	// Logout.
+	v.logoutBtn = widget.NewButton(i18n.T("manage.logout"), v.logout)
+
+	// Build the manage layout.
+	v.root = container.NewVScroll(container.NewPadded(container.NewVBox(
+		widget.NewLabelWithStyle(i18n.T("manage.language"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		v.langSelect,
+		widget.NewLabel(i18n.T("manage.animDuration")),
+		v.animEntry,
+		widget.NewLabel(i18n.T("manage.hideDelay")),
+		v.hideDelayEnt,
+		widget.NewSeparator(),
+		widget.NewLabelWithStyle(i18n.T("manage.status"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		v.statusChips.Build(),
+		widget.NewLabelWithStyle(i18n.T("manage.category"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		v.categoryChips.Build(),
+		widget.NewLabelWithStyle(i18n.T("manage.priority"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		v.priorityChips.Build(),
+		widget.NewLabel(i18n.T("manage.titleSearch")),
+		v.queryEntry,
+		widget.NewLabel(i18n.T("manage.codeExact")),
+		v.codeEntry,
+		v.applyBtn,
+		widget.NewSeparator(),
+		v.logoutBtn,
+	)))
+
+	// Build the create form.
+	v.titleEntry = widget.NewEntry()
+	v.titleEntry.SetPlaceHolder(i18n.T("manage.titleLabel"))
+	v.descEntry = widget.NewMultiLineEntry()
+	v.descEntry.SetPlaceHolder(i18n.T("manage.descLabel"))
+	v.descEntry.SetMinRowsVisible(3)
+	v.catEntry = widget.NewEntry()
+	v.catEntry.SetPlaceHolder(i18n.T("manage.catLabel"))
+	v.catEntry.Text = "task"
+	v.priEntry = widget.NewEntry()
+	v.priEntry.SetPlaceHolder(i18n.T("manage.priLabel"))
+	v.priEntry.Text = "p2"
+	v.tagsEntry = widget.NewEntry()
+	v.tagsEntry.SetPlaceHolder(i18n.T("manage.tagsLabel"))
+	v.dueEntry = widget.NewEntry()
+	v.dueEntry.SetPlaceHolder(i18n.T("manage.dueLabel"))
+	v.createBtn = widget.NewButton(i18n.T("manage.create"), v.createTodo)
+	v.createMsg = widget.NewLabel("")
+
+	v.createRoot = container.NewVScroll(container.NewPadded(container.NewVBox(
+		widget.NewLabel(i18n.T("manage.titleLabel")),
+		v.titleEntry,
+		widget.NewLabel(i18n.T("manage.descLabel")),
+		v.descEntry,
+		widget.NewLabel(i18n.T("manage.catLabel")),
+		v.catEntry,
+		widget.NewLabel(i18n.T("manage.priLabel")),
+		v.priEntry,
+		widget.NewLabel(i18n.T("manage.tagsLabel")),
+		v.tagsEntry,
+		widget.NewLabel(i18n.T("manage.dueLabel")),
+		v.dueEntry,
+		v.createBtn,
+		v.createMsg,
+	)))
+
+	return v
 }
 
-func (m *ManageUI) Layout(gtx layout.Context, w *app.Window, th *material.Theme) layout.Dimensions {
-	m.handleClicks(gtx)
-
-	body := func(gtx layout.Context) layout.Dimensions { return m.filtersView(gtx, th) }
-	if m.creating {
-		body = func(gtx layout.Context) layout.Dimensions { return m.createForm(gtx, th) }
-	}
-
-	children := make([]layout.FlexChild, 0, 3)
-	if !m.hideHeader {
-		children = append(children,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions { return m.header(gtx, th) }),
-			layout.Rigid(separator),
-		)
-	}
-	children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-		return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return m.scroll.Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
-				return body(gtx)
-			})
-		})
-	}))
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+// Build returns the manage panel root.
+func (v *ManageView) Build() fyne.CanvasObject {
+	return v.root
 }
 
-func (m *ManageUI) header(gtx layout.Context, th *material.Theme) layout.Dimensions {
-	return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(8), Right: unit.Dp(8)}.Layout(gtx,
-		func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, th, &m.backBtn, IconBack, false) }),
-				layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					t := material.Body1(th, i18n.T("manage.title"))
-					t.Font.Weight = font.SemiBold
-					t.Color = textPrimary
-					return t.Layout(gtx)
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return smallButton(gtx, th, &m.logoutBtn, i18n.T("manage.logout"))
-				}),
-			)
-		},
-	)
+// BuildCreate returns the create-todo panel root.
+func (v *ManageView) BuildCreate() fyne.CanvasObject {
+	return v.createRoot
 }
 
-// langRow renders two chip buttons (中文 / English); the active one is filled.
-func (m *ManageUI) langRow(gtx layout.Context, th *material.Theme) layout.Dimensions {
-	cur := i18n.Default.Lang()
-	return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return chipButton(gtx, th, &m.langZhBtn, "中文", cur == i18n.Zh)
-		}),
-		layout.Rigid(layout.Spacer{Width: unit.Dp(6)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return chipButton(gtx, th, &m.langEnBtn, "English", cur == i18n.En)
-		}),
-	)
+// Refresh re-syncs the chip selection from the config (used when first shown).
+func (v *ManageView) Refresh() {
+	cfg := v.app.State.Config
+	v.statusChips.SetSelected(cfg.Filters.Status)
+	v.categoryChips.SetSelected(cfg.Filters.Category)
+	v.priorityChips.SetSelected(cfg.Filters.Priority)
 }
 
-// switchLanguage changes the UI language, persists it, and repaints.
-func (m *ManageUI) switchLanguage(l i18n.Lang) {
-	i18n.Default.SetLang(l)
-	m.app.State.Lock()
-	m.app.State.Config.Language = string(l)
-	m.app.State.Unlock()
-	homePersist(m.app.State.Config)
-	if m.app.Invalidate != nil {
-		m.app.Invalidate()
-	}
-}
-
-func (m *ManageUI) filtersView(gtx layout.Context, th *material.Theme) layout.Dimensions {
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		// Language switcher.
-		layout.Rigid(sectionLabel(th, i18n.T("manage.language"))),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return m.langRow(gtx, th) }),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
-
-		// Dock timing settings.
-		layout.Rigid(sectionLabel(th, i18n.T("manage.animDuration"))),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &m.animEditor, i18n.T("manage.animDuration"), "500")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(sectionLabel(th, i18n.T("manage.hideDelay"))),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &m.hideEditor, i18n.T("manage.hideDelay"), "600")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
-
-		layout.Rigid(sectionLabel(th, i18n.T("manage.search"))),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &m.qEditor, i18n.T("manage.titleSearch"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &m.codeEditor, i18n.T("manage.codeExact"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
-
-		layout.Rigid(sectionLabel(th, i18n.T("manage.status"))),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return m.toggleRow(statusOptions, m.statusToggles, th)(gtx)
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
-
-		layout.Rigid(sectionLabel(th, i18n.T("manage.category"))),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return m.toggleRow(categoryOptions, m.categoryToggles, th)(gtx)
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
-
-		layout.Rigid(sectionLabel(th, i18n.T("manage.priority"))),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return m.toggleRow(priorityOptions, m.priorityToggles, th)(gtx)
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(18)}.Layout),
-
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return smallButton(gtx, th, &m.applyBtn, i18n.T("manage.apply"))
-		}),
-	)
-}
-
-// toggleRow renders a horizontal row of on/off chip buttons.
-func (m *ManageUI) toggleRow(options []string, toggles map[string]*widget.Clickable, th *material.Theme) layout.Widget {
-	return func(gtx layout.Context) layout.Dimensions {
-		flex := layout.Flex{Axis: layout.Horizontal}
-		children := make([]layout.FlexChild, 0, len(options))
-		active := m.activeSet(toggles)
-		for _, opt := range options {
-			opt := opt
-			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return chipButton(gtx, th, toggles[opt], labelForOption(opt), active[opt])
-			}))
-			children = append(children, layout.Rigid(layout.Spacer{Width: unit.Dp(6)}.Layout))
-		}
-		return flex.Layout(gtx, children...)
+// ShowCreate resets the create form for a fresh entry.
+func (v *ManageView) ShowCreate() {
+	v.titleEntry.Text = ""
+	v.descEntry.Text = ""
+	v.catEntry.Text = "task"
+	v.priEntry.Text = "p2"
+	v.tagsEntry.Text = ""
+	v.dueEntry.Text = ""
+	v.createMsg.SetText("")
+	for _, e := range []*widget.Entry{v.titleEntry, v.descEntry, v.catEntry, v.priEntry, v.tagsEntry, v.dueEntry} {
+		e.Refresh()
 	}
 }
 
-// activeSet reports which of the three filter slices contain each option, keyed
-// by option name. The toggles argument is only used to pick which set to read.
-func (m *ManageUI) activeSet(toggles map[string]*widget.Clickable) map[string]bool {
-	out := map[string]bool{}
-	m.app.State.Lock()
-	defer m.app.State.Unlock()
-	f := m.app.State.Config.Filters
-	var values []string
-	switch {
-	case toggles["open"] != nil || toggles["completed"] != nil:
-		values = f.Status
-	case toggles["bug"] != nil || toggles["task"] != nil:
-		values = f.Category
-	case toggles["p0"] != nil || toggles["p3"] != nil:
-		values = f.Priority
+// applyFilters writes the chip/entry state into config and refreshes the list.
+func (v *ManageView) applyFilters() {
+	v.app.State.Lock()
+	cfg := v.app.State.Config
+	cfg.Filters.Status = v.statusChips.Selected()
+	cfg.Filters.Category = v.categoryChips.Selected()
+	cfg.Filters.Priority = v.priorityChips.Selected()
+	cfg.Filters.Query = strings.TrimSpace(v.queryEntry.Text)
+	cfg.Filters.Code = strings.TrimSpace(v.codeEntry.Text)
+	if am := atoiOr(v.animEntry.Text, 0); am > 0 {
+		cfg.Dock.AnimMs = am
 	}
-	for _, v := range values {
-		out[v] = true
+	if hd := atoiOr(v.hideDelayEnt.Text, 0); hd > 0 {
+		cfg.Dock.HideDelayMs = hd
 	}
-	return out
+	v.app.State.Unlock()
+	v.app.refreshList()
 }
 
-func (m *ManageUI) createForm(gtx layout.Context, th *material.Theme) layout.Dimensions {
-	if m.newCat.Text() == "" {
-		m.newCat.SetText("task")
-		m.newPri.SetText("p2")
-	}
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(sectionLabel(th, i18n.T("manage.newTodo"))),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &m.newTitle, i18n.T("manage.titleLabel"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &m.newDesc, i18n.T("manage.descLabel"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &m.newCat, i18n.T("manage.catLabel"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &m.newPri, i18n.T("manage.priLabel"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &m.newTags, i18n.T("manage.tagsLabel"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &m.newDue, i18n.T("manage.dueLabel"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return smallButton(gtx, th, &m.createBtn, i18n.T("manage.create"))
-				}),
-				layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return smallButton(gtx, th, &m.cancelBtn, i18n.T("common.cancel"))
-				}),
-			)
-		}),
-	)
-}
-
-// --- click handling --------------------------------------------------------
-
-func (m *ManageUI) handleClicks(gtx layout.Context) {
-	for m.backBtn.Clicked(gtx) {
-		if m.onBack != nil {
-			m.onBack()
-		} else {
-			m.app.nav().goTo(store.PageList)
-		}
-	}
-	for m.logoutBtn.Clicked(gtx) {
-		m.doLogout()
-	}
-	for m.langEnBtn.Clicked(gtx) {
-		m.switchLanguage(i18n.En)
-	}
-	for m.langZhBtn.Clicked(gtx) {
-		m.switchLanguage(i18n.Zh)
-	}
-	for m.applyBtn.Clicked(gtx) {
-		m.applyFilters()
-	}
-	for m.cancelBtn.Clicked(gtx) {
-		m.creating = false
-		m.resetNewForm()
-	}
-	for m.createBtn.Clicked(gtx) {
-		m.createTodo()
-	}
-	// Chip toggles flip membership immediately; apply on Apply.
-	for opt, c := range m.statusToggles {
-		for c.Clicked(gtx) {
-			m.toggleFilter("status", opt)
-		}
-	}
-	for opt, c := range m.categoryToggles {
-		for c.Clicked(gtx) {
-			m.toggleFilter("category", opt)
-		}
-	}
-	for opt, c := range m.priorityToggles {
-		for c.Clicked(gtx) {
-			m.toggleFilter("priority", opt)
-		}
-	}
-}
-
-// toggleFilter adds/removes a value from the named filter slice.
-func (m *ManageUI) toggleFilter(kind, value string) {
-	m.app.State.Lock()
-	defer m.app.State.Unlock()
-	f := &m.app.State.Config.Filters
-	var slice *[]string
-	switch kind {
-	case "status":
-		slice = &f.Status
-	case "category":
-		slice = &f.Category
-	case "priority":
-		slice = &f.Priority
-	default:
-		return
-	}
-	for i, v := range *slice {
-		if v == value {
-			*slice = append((*slice)[:i], (*slice)[i+1:]...)
-			return
-		}
-	}
-	*slice = append(*slice, value)
-}
-
-func (m *ManageUI) applyFilters() {
-	animMs, _ := strconv.Atoi(strings.TrimSpace(m.animEditor.Text()))
-	hideMs, _ := strconv.Atoi(strings.TrimSpace(m.hideEditor.Text()))
-	m.app.State.Lock()
-	m.app.State.Config.Filters.Query = strings.TrimSpace(m.qEditor.Text())
-	m.app.State.Config.Filters.Code = strings.TrimSpace(m.codeEditor.Text())
-	m.app.State.Config.Dock.AnimMs = animMs
-	m.app.State.Config.Dock.HideDelayMs = hideMs
-	m.app.State.Unlock()
-	homePersist(m.app.State.Config)
-	m.app.List.RequestRefresh()
-	if m.onBack != nil {
-		m.onBack()
+// onLanguageChange switches the i18n language and re-renders labels.
+func (v *ManageView) onLanguageChange(lang string) {
+	if lang == "简体中文" {
+		v.app.State.I18n.SetLang("zh")
+		v.app.State.Config.Language = "zh"
 	} else {
-		m.app.nav().goTo(store.PageList)
+		v.app.State.I18n.SetLang("en")
+		v.app.State.Config.Language = "en"
 	}
+	v.app.syncTrayLabels()
 }
 
-func (m *ManageUI) doLogout() {
-	m.app.State.Lock()
-	m.app.State.Config.APIKey = ""
-	m.app.State.Client = nil
-	m.app.State.Page = store.PageLogin
-	m.app.State.Unlock()
-	homePersist(m.app.State.Config)
-	if m.app.Invalidate != nil {
-		m.app.Invalidate()
-	}
+// logout clears credentials and returns to the login page.
+func (v *ManageView) logout() {
+	v.app.State.Logout()
+	v.app.showPage()
 }
 
-func (m *ManageUI) resetNewForm() {
-	m.newTitle.SetText("")
-	m.newDesc.SetText("")
-	m.newCat.SetText("")
-	m.newPri.SetText("")
-	m.newTags.SetText("")
-	m.newDue.SetText("")
-}
-
-func (m *ManageUI) createTodo() {
-	cl := m.app.Client()
-	if cl == nil {
-		return
-	}
-	title := strings.TrimSpace(m.newTitle.Text())
+// createTodo POSTs a new todo and, on success, refreshes the list and opens the
+// created todo's detail.
+func (v *ManageView) createTodo() {
+	title := strings.TrimSpace(v.titleEntry.Text)
 	if title == "" {
-		m.app.State.SetMessage(i18n.T("manage.titleRequired"))
+		v.createMsg.SetText(i18n.T("manage.titleRequired"))
 		return
 	}
-	cat := strings.ToLower(strings.TrimSpace(m.newCat.Text()))
-	switch cat {
+	category := strings.ToLower(strings.TrimSpace(v.catEntry.Text))
+	if category == "" {
+		category = "task"
+	}
+	switch category {
 	case "bug", "feature", "task":
 	default:
-		m.app.State.SetMessage(i18n.T("manage.catInvalid"))
+		v.createMsg.SetText(i18n.T("manage.catInvalid"))
 		return
 	}
 	body := map[string]any{
-		"title":       title,
-		"description": m.newDesc.Text(),
-		"category":    cat,
-		"priority":    normalizePriority(m.newPri.Text()),
-		"tags":        parseTags(m.newTags.Text()),
+		"title":    title,
+		"category": category,
 	}
-	if due := strings.TrimSpace(m.newDue.Text()); due != "" {
+	if d := strings.TrimSpace(v.descEntry.Text); d != "" {
+		body["description"] = d
+	}
+	body["priority"] = normalisePriority(v.priEntry.Text)
+	if tags := parseTags(v.tagsEntry.Text); len(tags) > 0 {
+		body["tags"] = tags
+	}
+	if due := strings.TrimSpace(v.dueEntry.Text); due != "" {
 		body["due_at"] = due
 	}
+	c := v.app.State.Client
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		if _, err := cl.CreateTodo(ctx, body); err != nil {
-			m.app.State.SetMessage(i18n.T("manage.createFailed") + err.Error())
+		t, err := c.CreateTodo(ctx, body)
+		if err != nil {
+			fyne.Do(func() { v.createMsg.SetText(i18n.T("manage.createFailed") + err.Error()) })
 			return
 		}
-		m.app.State.SetMessage(i18n.T("manage.created"))
-		// Marshal UI-state mutation onto the side window's goroutine.
-		m.app.SideWin.Post(func() {
-			m.creating = false
-			m.resetNewForm()
-			m.app.List.RequestRefresh()
-			if m.onBack != nil {
-				m.onBack()
-			} else {
-				m.app.nav().goTo(store.PageList)
-			}
+		fyne.Do(func() {
+			v.createMsg.SetText(i18n.T("manage.created"))
+			v.app.refreshList()
+			v.app.OpenDetail(t.ID)
 		})
 	}()
 }
 
-// --- helpers ---------------------------------------------------------------
+// --- chipGroup ------------------------------------------------------------
 
-func labelForOption(opt string) string {
-	switch opt {
-	case "open":
-		return i18n.T("todo.open")
-	case "in_progress":
-		return i18n.T("todo.inProgress")
-	case "completed":
-		return i18n.T("todo.completed")
-	case "duplicate":
-		return i18n.T("todo.duplicate")
+// chipGroup is a row of toggleable chips (checkable buttons). It tracks which
+// values are currently selected.
+type chipGroup struct {
+	values []string
+	labels func(string) string
+	btns   []*widget.Button
+	sel    map[string]bool
+}
+
+func newChipGroup(values []string, labelFn func(string) string, initial []string) *chipGroup {
+	g := &chipGroup{
+		values: values,
+		labels: labelFn,
+		sel:    map[string]bool{},
 	}
-	return opt
+	for _, v := range initial {
+		g.sel[v] = true
+	}
+	for _, v := range values {
+		v := v
+		b := widget.NewButton(labelFn(v), nil)
+		b.Importance = widget.LowImportance
+		b.OnTapped = func() {
+			g.sel[v] = !g.sel[v]
+			g.refreshButtons()
+		}
+		g.btns = append(g.btns, b)
+	}
+	g.refreshButtons()
+	return g
 }
 
-func chipButton(gtx layout.Context, th *material.Theme, c *widget.Clickable, label string, active bool) layout.Dimensions {
-	btn := material.Button(th, c, label)
-	styleChipButton(&btn, active)
-	return uniformButton(gtx, &btn)
+// Build returns the container with all chip buttons.
+func (g *chipGroup) Build() *fyne.Container {
+	objs := make([]fyne.CanvasObject, 0, len(g.btns))
+	for _, b := range g.btns {
+		objs = append(objs, b)
+	}
+	return container.NewHBox(objs...)
 }
 
-// ensure fmt stays used if labelForOption ever returns formatted strings.
+// Selected returns the list of currently-selected values.
+func (g *chipGroup) Selected() []string {
+	out := make([]string, 0, len(g.sel))
+	for _, v := range g.values {
+		if g.sel[v] {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// SetSelected sets the selection from a list of values.
+func (g *chipGroup) SetSelected(vals []string) {
+	g.sel = map[string]bool{}
+	for _, v := range vals {
+		g.sel[v] = true
+	}
+	g.refreshButtons()
+}
+
+func (g *chipGroup) refreshButtons() {
+	for _, b := range g.btns {
+		// Use importance as a visual toggle proxy.
+		b.Importance = widget.LowImportance
+	}
+	for i, v := range g.values {
+		if g.sel[v] {
+			g.btns[i].Importance = widget.HighImportance
+		}
+		g.btns[i].Refresh()
+	}
+}
+
+// --- label helpers --------------------------------------------------------
+
+func labelsForStatuses(s string) string { return statusLabel(s) }
+
+func labelsForCategories(s string) string { return s }
+
+func identity(s string) string { return s }
+
+func atoiOr(s string, def int) int {
+	s = strings.TrimSpace(s)
+	n := 0
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return def
+		}
+		n = n*10 + int(r-'0')
+	}
+	if s == "" {
+		return def
+	}
+	return n
+}

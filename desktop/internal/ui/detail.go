@@ -6,768 +6,463 @@ import (
 	"strings"
 	"time"
 
-	"gioui.org/app"
-	"gioui.org/font"
-	"gioui.org/layout"
-	"gioui.org/unit"
-	"gioui.org/widget"
-	"gioui.org/widget/material"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/graydovee/todo-manager/desktop/internal/client"
 	"github.com/graydovee/todo-manager/desktop/internal/i18n"
 	"github.com/graydovee/todo-manager/desktop/internal/store"
 )
 
-// DetailUI shows a single todo with its relations and comments, and supports
-// editing and status transitions.
-type DetailUI struct {
+// DetailView renders the selected todo's full detail (relations, comments,
+// editable form) inside the side panel. The view is rebuilt lazily from the
+// store's detail snapshot.
+type DetailView struct {
 	app *App
 
-	backBtn     widget.Clickable
-	editBtn     widget.Clickable
-	saveBtn     widget.Clickable
-	cancelBtn   widget.Clickable
-	startBtn    widget.Clickable
-	completeBtn widget.Clickable
-	reopenBtn   widget.Clickable
-	deleteBtn   widget.Clickable
-	cascadeBtn  widget.Clickable // for conflict modal
+	root   *fyne.Container
+	scroll *container.Scroll
 
-	// Edit fields.
-	edTitle       widget.Editor
-	edDescription widget.Editor
-	edPriority    widget.Editor
-	edDueAt       widget.Editor
-	edTags        widget.Editor
+	// Read-only fields.
+	codeTitle *widget.Label
+	statusLbl *widget.Label
+
+	// Action buttons.
+	startBtn    *widget.Button
+	completeBtn *widget.Button
+	reopenBtn   *widget.Button
+	blockBtn    *widget.Button
+
+	// Metadata.
+	descLabel   *widget.Label
+	priorityLbl *widget.Label
+	dueLbl      *widget.Label
+	createdLbl  *widget.Label
+	updatedLbl  *widget.Label
+	tagsLabel   *widget.Label
+
+	// Relations.
+	prereqLabel    *widget.Label
+	dependentsLbl  *widget.Label
+	duplicateOfLbl *widget.Label
+	duplicatesLbl  *widget.Label
 
 	// Comments.
-	edComment   widget.Editor
-	commentBtn  widget.Clickable
-	commentRows []commentRow
+	commentEntry *widget.Entry
+	sendBtn      *widget.Button
+	commentBox   *fyne.Container
 
-	// Edit mode.
-	editing bool
-	// Pending conflict after a complete/reopen 409.
-	pendingConflict *client.ConflictResponse
+	// Edit form (toggled via the side-panel chrome Edit/Save button).
+	editForm *fyne.Container
 
-	// onBack, if set, overrides the default back-button behaviour (navigate to
-	// PageList). The detail side window sets this to close itself instead.
-	onBack func()
-
-	// hideHeader, when true, suppresses the header row (back button + title +
-	// edit/save). Used by the detail side window which draws its own top bar.
-	hideHeader bool
+	titleEdit    *widget.Entry
+	descEdit     *widget.Entry
+	priorityEdit *widget.Entry
+	tagsEdit     *widget.Entry
+	dueEdit      *widget.Entry
 }
 
-type commentRow struct {
-	del widget.Clickable
+func newDetailView(app *App) *DetailView {
+	v := &DetailView{app: app}
+
+	v.codeTitle = widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	v.statusLbl = widget.NewLabel("")
+
+	v.startBtn = widget.NewButton(i18n.T("detail.start"), nil)
+	v.completeBtn = widget.NewButton(i18n.T("detail.complete"), nil)
+	v.reopenBtn = widget.NewButton(i18n.T("detail.reopen"), nil)
+	v.blockBtn = widget.NewButton(i18n.T("detail.blocked"), nil)
+	v.blockBtn.Disable()
+
+	v.descLabel = widget.NewLabel("")
+	v.descLabel.Wrapping = fyne.TextWrapWord
+	v.priorityLbl = widget.NewLabel("")
+	v.dueLbl = widget.NewLabel("")
+	v.createdLbl = widget.NewLabel("")
+	v.updatedLbl = widget.NewLabel("")
+	v.tagsLabel = widget.NewLabel("")
+
+	v.prereqLabel = widget.NewLabel("")
+	v.prereqLabel.Wrapping = fyne.TextWrapWord
+	v.dependentsLbl = widget.NewLabel("")
+	v.dependentsLbl.Wrapping = fyne.TextWrapWord
+	v.duplicateOfLbl = widget.NewLabel("")
+	v.duplicatesLbl = widget.NewLabel("")
+	v.duplicatesLbl.Wrapping = fyne.TextWrapWord
+
+	v.commentEntry = widget.NewMultiLineEntry()
+	v.commentEntry.SetPlaceHolder(i18n.T("detail.commentHint"))
+	v.commentEntry.SetMinRowsVisible(2)
+	v.sendBtn = widget.NewButton(i18n.T("detail.send"), v.sendComment)
+	v.commentBox = container.NewVBox()
+
+	// Edit form.
+	v.titleEdit = widget.NewEntry()
+	v.titleEdit.SetPlaceHolder(i18n.T("manage.titleLabel"))
+	v.descEdit = widget.NewMultiLineEntry()
+	v.descEdit.SetPlaceHolder(i18n.T("manage.descLabel"))
+	v.descEdit.SetMinRowsVisible(3)
+	v.priorityEdit = widget.NewEntry()
+	v.priorityEdit.SetPlaceHolder(i18n.T("detail.priorityHint"))
+	v.tagsEdit = widget.NewEntry()
+	v.tagsEdit.SetPlaceHolder(i18n.T("detail.tagsHint"))
+	v.dueEdit = widget.NewEntry()
+	v.dueEdit.SetPlaceHolder(i18n.T("detail.dueHint"))
+
+	v.editForm = container.NewVBox(
+		widget.NewLabel(i18n.T("manage.titleLabel")),
+		v.titleEdit,
+		widget.NewLabel(i18n.T("manage.descLabel")),
+		v.descEdit,
+		widget.NewLabel(i18n.T("detail.priorityHint")),
+		v.priorityEdit,
+		widget.NewLabel(i18n.T("detail.tagsHint")),
+		v.tagsEdit,
+		widget.NewLabel(i18n.T("detail.dueHint")),
+		v.dueEdit,
+	)
+	v.editForm.Hide()
+
+	actions := container.NewHBox(v.startBtn, v.completeBtn, v.reopenBtn, v.blockBtn)
+
+	content := container.NewVBox(
+		v.codeTitle,
+		v.statusLbl,
+		actions,
+		widget.NewSeparator(),
+		v.sectionLabel(i18n.T("detail.description")),
+		v.descLabel,
+		widget.NewSeparator(),
+		container.NewGridWithColumns(2,
+			container.NewVBox(v.sectionLabel(i18n.T("detail.priority")), v.priorityLbl),
+			container.NewVBox(v.sectionLabel(i18n.T("detail.due")), v.dueLbl),
+		),
+		container.NewGridWithColumns(2,
+			container.NewVBox(v.sectionLabel(i18n.T("detail.created")), v.createdLbl),
+			container.NewVBox(v.sectionLabel(i18n.T("detail.updated")), v.updatedLbl),
+		),
+		v.sectionLabel(i18n.T("detail.tags")),
+		v.tagsLabel,
+		widget.NewSeparator(),
+		v.sectionLabel(i18n.T("detail.prereq")),
+		v.prereqLabel,
+		v.sectionLabel(i18n.T("detail.dependents")),
+		v.dependentsLbl,
+		v.sectionLabel(i18n.T("detail.duplicateOf")),
+		v.duplicateOfLbl,
+		v.sectionLabel(i18n.T("detail.duplicates")),
+		v.duplicatesLbl,
+		widget.NewSeparator(),
+		v.sectionLabel(i18n.T("detail.comments")),
+		v.commentBox,
+		container.NewBorder(nil, nil, nil, v.sendBtn, v.commentEntry),
+		widget.NewSeparator(),
+		v.editForm,
+	)
+	v.scroll = container.NewVScroll(content)
+	v.root = container.NewPadded(v.scroll)
+	return v
 }
 
-func NewDetailUI(a *App) *DetailUI {
-	d := &DetailUI{app: a}
-	d.edTitle.SingleLine = true
-	d.edTitle.Submit = true
-	d.edPriority.SingleLine = true
-	d.edDueAt.SingleLine = true
-	d.edTags.SingleLine = true
-	d.edComment.SingleLine = true
-	d.edComment.Submit = true
-	return d
+// Build returns the detail panel content (already wrapped in scroll).
+func (v *DetailView) Build() fyne.CanvasObject {
+	return v.root
 }
 
-// Load triggers a detail fetch for the currently selected id.
-func (d *DetailUI) Load() {
-	cl := d.app.Client()
-	if cl == nil {
+// sectionLabel is a styled heading for a detail section.
+func (v *DetailView) sectionLabel(text string) *widget.Label {
+	return widget.NewLabelWithStyle(text, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+}
+
+// Refresh re-reads the detail snapshot and re-populates the widgets.
+func (v *DetailView) Refresh() {
+	detail, loading, err := v.app.Todos.DetailSnapshot()
+	if loading || err != nil || detail == nil {
+		v.codeTitle.SetText(i18n.T("common.loading"))
 		return
 	}
-	d.app.State.Lock()
-	id := d.app.State.SelectedID
-	d.app.State.Unlock()
-	if id == 0 {
-		return
-	}
-	d.app.Todos.LoadDetail(context.Background(), cl, fmt.Sprintf("%d", id), func() {
-		// The data lives in TodoStore (locked); wake both windows to repaint.
-		d.app.SideWin.wake()
-		if d.app.Invalidate != nil {
-			d.app.Invalidate()
-		}
-	})
-}
+	t := detail.Todo
+	v.codeTitle.SetText(fmt.Sprintf("%s  %s", t.Code, t.Title))
+	v.statusLbl.SetText(statusLabel(t.Status))
+	v.descLabel.SetText(orDash(t.Description))
+	v.priorityLbl.SetText(priorityLabel(t.Priority))
+	v.dueLbl.SetText(orDash(derefStr(t.DueAt)))
+	v.createdLbl.SetText(formatTime(t.CreatedAt))
+	v.updatedLbl.SetText(formatTime(t.UpdatedAt))
+	v.tagsLabel.SetText(strings.Join(t.Tags, ", "))
 
-func (d *DetailUI) Layout(gtx layout.Context, w *app.Window, th *material.Theme) layout.Dimensions {
-	d.handleClicks(gtx)
-
-	detail, loading, err := d.app.Todos.DetailSnapshot()
-
-	// Conflict modal takes over if present.
-	if d.pendingConflict != nil {
-		return d.conflictModal(gtx, th)
-	}
-
-	children := make([]layout.FlexChild, 0, 3)
-	if !d.hideHeader {
-		children = append(children,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions { return d.header(gtx, th) }),
-			layout.Rigid(separator),
-		)
-	}
-	children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-		if err != nil {
-			return centeredText(gtx, th, i18n.T("common.error")+err.Error(), textMuted)
-		}
-		if loading || detail == nil {
-			return centeredText(gtx, th, i18n.T("common.loading"), textMuted)
-		}
-		list := &layout.List{Axis: layout.Vertical}
-		return list.Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
-			return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				if d.editing {
-					return d.editForm(gtx, detail, th)
-				}
-				return d.viewBody(gtx, detail, th)
-			})
-		})
-	}))
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
-}
-
-func (d *DetailUI) header(gtx layout.Context, th *material.Theme) layout.Dimensions {
-	return layout.Inset{Top: unit.Dp(10), Bottom: unit.Dp(10), Left: unit.Dp(8), Right: unit.Dp(8)}.Layout(gtx,
-		func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions { return iconButton(gtx, th, &d.backBtn, IconBack, false) }),
-				layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					t := material.Body1(th, i18n.T("detail.title"))
-					t.Font.Weight = font.SemiBold
-					t.Color = textPrimary
-					return t.Layout(gtx)
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					if d.editing {
-						return smallButton(gtx, th, &d.saveBtn, i18n.T("common.save"))
-					}
-					return smallButton(gtx, th, &d.editBtn, i18n.T("common.edit"))
-				}),
-			)
-		},
-	)
-}
-
-func (d *DetailUI) viewBody(gtx layout.Context, detail *client.TodoDetail, th *material.Theme) layout.Dimensions {
-	todo := detail.Todo
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		// Code + title.
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return codeTitle(gtx, th, todo)
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		// Action buttons row.
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return d.actionRow(gtx, todo, th)
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
-		// Description.
-		layout.Rigid(d.descriptionBlock(todo, th)),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
-		// Metadata.
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return d.metaBlock(gtx, detail, th)
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
-		// Relations.
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return d.relationsBlock(gtx, detail, th)
-		}),
-		// Comments.
-		layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return d.commentsBlock(gtx, detail, th)
-		}),
-	)
-}
-
-func (d *DetailUI) actionRow(gtx layout.Context, todo client.Todo, th *material.Theme) layout.Dimensions {
-	return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			switch todo.Status {
-			case "open":
-				return smallButton(gtx, th, &d.startBtn, i18n.T("detail.start"))
-			case "in_progress":
-				return smallButton(gtx, th, &d.completeBtn, i18n.T("detail.complete"))
-			case "completed":
-				return smallButton(gtx, th, &d.reopenBtn, i18n.T("detail.reopen"))
-			}
-			return layout.Dimensions{}
-		}),
-		layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return smallButton(gtx, th, &d.deleteBtn, i18n.T("common.delete"))
-		}),
-	)
-}
-
-func (d *DetailUI) descriptionBlock(todo client.Todo, th *material.Theme) layout.Widget {
-	return func(gtx layout.Context) layout.Dimensions {
-		if strings.TrimSpace(todo.Description) == "" {
-			return layout.Dimensions{}
-		}
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(sectionLabel(th, i18n.T("detail.description"))),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				body := material.Body2(th, todo.Description)
-				body.Color = textPrimary
-				return body.Layout(gtx)
-			}),
-		)
-	}
-}
-
-func (d *DetailUI) metaBlock(gtx layout.Context, detail *client.TodoDetail, th *material.Theme) layout.Dimensions {
-	todo := detail.Todo
-	rows := [][2]string{
-		{i18n.T("detail.due"), dashIfEmpty(formatTimePtr(todo.DueAt))},
-		{i18n.T("detail.created"), formatTime(todo.CreatedAt)},
-		{i18n.T("detail.updated"), formatTime(todo.UpdatedAt)},
-		{i18n.T("detail.priority"), strings.ToUpper(todo.Priority)},
-		{i18n.T("detail.tags"), dashIfEmpty(strings.Join(todo.Tags, ", "))},
-	}
-	list := &layout.List{Axis: layout.Vertical}
-	return list.Layout(gtx, len(rows), func(gtx layout.Context, i int) layout.Dimensions {
-		return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return colWidth(gtx, 70, func(gtx layout.Context) layout.Dimensions {
-					c := material.Caption(th, rows[i][0])
-					c.Color = textSecondary
-					return c.Layout(gtx)
-				})
-			}),
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				c := material.Caption(th, rows[i][1])
-				c.Color = textPrimary
-				return c.Layout(gtx)
-			}),
-		)
-	})
-}
-
-func (d *DetailUI) relationsBlock(gtx layout.Context, detail *client.TodoDetail, th *material.Theme) layout.Dimensions {
-	hasDeps := len(detail.DependsOn) > 0 || len(detail.DependedBy) > 0
-	hasDups := detail.DuplicateOf != nil || len(detail.Duplicates) > 0
-	if !hasDeps && !hasDups {
-		return layout.Dimensions{}
-	}
-	var sections []layout.Widget
-	if hasDeps {
-		sections = append(sections, d.summaryList(i18n.T("detail.prereq"), detail.DependsOn, th))
-		sections = append(sections, d.summaryList(i18n.T("detail.dependents"), detail.DependedBy, th))
-	}
-	if hasDups {
-		if detail.DuplicateOf != nil {
-			sections = append(sections, d.summaryList(i18n.T("detail.duplicateOf"), []client.TodoSummary{*detail.DuplicateOf}, th))
-		}
-		if len(detail.Duplicates) > 0 {
-			sections = append(sections, d.summaryList(i18n.T("detail.duplicates"), detail.Duplicates, th))
-		}
-	}
-	list := &layout.List{Axis: layout.Vertical}
-	return list.Layout(gtx, len(sections), func(gtx layout.Context, i int) layout.Dimensions {
-		return sections[i](gtx)
-	})
-}
-
-func (d *DetailUI) summaryList(label string, items []client.TodoSummary, th *material.Theme) layout.Widget {
-	return func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(sectionLabel(th, label)),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				list := &layout.List{Axis: layout.Vertical}
-				return list.Layout(gtx, len(items), func(gtx layout.Context, i int) layout.Dimensions {
-					it := items[i]
-					return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							c := material.Caption(th, DisplayCode(it.Category, it.Code))
-							c.Color = textMuted
-							return c.Layout(gtx)
-						}),
-						layout.Rigid(layout.Spacer{Width: unit.Dp(6)}.Layout),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							c := material.Caption(th, it.Title)
-							c.Color = textPrimary
-							return c.Layout(gtx)
-						}),
-					)
-				})
-			}),
-		)
-	}
-}
-
-func (d *DetailUI) commentsBlock(gtx layout.Context, detail *client.TodoDetail, th *material.Theme) layout.Dimensions {
-	comments := d.app.Todos.CommentsSnapshot()
-	// Keep the per-comment delete clickables sized to the comment count.
-	if cap(d.commentRows) < len(comments) {
-		d.commentRows = make([]commentRow, len(comments))
+	v.prereqLabel.SetText(summariesToText(detail.DependsOn))
+	v.dependentsLbl.SetText(summariesToText(detail.DependedBy))
+	if detail.DuplicateOf != nil {
+		v.duplicateOfLbl.SetText(summaryToText(*detail.DuplicateOf))
 	} else {
-		d.commentRows = d.commentRows[:len(comments)]
+		v.duplicateOfLbl.SetText("-")
 	}
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(sectionLabel(th, i18n.T("detail.comments"))),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			if len(comments) == 0 {
-				c := material.Caption(th, i18n.T("detail.noComments"))
-				c.Color = textMuted
-				return c.Layout(gtx)
-			}
-			list := &layout.List{Axis: layout.Vertical}
-			return list.Layout(gtx, len(comments), func(gtx layout.Context, i int) layout.Dimensions {
-				cm := comments[i]
-				if i >= len(d.commentRows) {
-					return layout.Dimensions{}
-				}
-				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								c := material.Caption(th, cm.Content)
-								c.Color = textPrimary
-								return c.Layout(gtx)
-							}),
-							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								c := material.Caption(th, formatTime(cm.CreatedAt))
-								c.Color = textMuted
-								return c.Layout(gtx)
-							}),
-						)
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return smallButton(gtx, th, &d.commentRows[i].del, i18n.T("detail.del"))
-					}),
-				)
-			})
-		}),
-		// New comment input.
-		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					ed := material.Editor(th, &d.edComment, "Add a comment…")
-					ed.Color = textPrimary
-					return ed.Layout(gtx)
-				}),
-				layout.Rigid(layout.Spacer{Width: unit.Dp(6)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return smallButton(gtx, th, &d.commentBtn, i18n.T("detail.send"))
-				}),
-			)
-		}),
-	)
+	v.duplicatesLbl.SetText(summariesToText(detail.Duplicates))
+
+	// Action buttons visibility.
+	v.startBtn.Hidden = t.Status != statusOpen
+	v.completeBtn.Hidden = t.Status == statusCompleted || t.Status == statusDuplicate
+	v.reopenBtn.Hidden = t.Status != statusCompleted
+	v.blockBtn.Hidden = true // shown only on conflict
+	for _, b := range []*widget.Button{v.startBtn, v.completeBtn, v.reopenBtn, v.blockBtn} {
+		b.Refresh()
+	}
+
+	// Hook action callbacks.
+	v.startBtn.OnTapped = func() { v.action("start", false) }
+	v.completeBtn.OnTapped = func() { v.action("complete", false) }
+	v.reopenBtn.OnTapped = func() { v.action("reopen", false) }
+
+	// Comments.
+	v.commentBox.Objects = v.renderComments()
+	v.commentBox.Refresh()
 }
 
-func (d *DetailUI) editForm(gtx layout.Context, detail *client.TodoDetail, th *material.Theme) layout.Dimensions {
-	todo := detail.Todo
-	// Initialise editors once when entering edit mode.
-	if d.edTitle.Text() == "" {
-		d.edTitle.SetText(todo.Title)
-		d.edDescription.SetText(todo.Description)
-		d.edPriority.SetText(strings.ToUpper(todo.Priority))
-		if todo.DueAt != nil {
-			d.edDueAt.SetText(*todo.DueAt)
-		}
-		d.edTags.SetText(strings.Join(todo.Tags, ","))
+// renderComments builds a list of widgets for the cached comments.
+func (v *DetailView) renderComments() []fyne.CanvasObject {
+	comments := v.app.Todos.CommentsSnapshot()
+	if len(comments) == 0 {
+		return []fyne.CanvasObject{widget.NewLabel(i18n.T("detail.noComments"))}
 	}
-	children := []layout.FlexChild{
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &d.edTitle, i18n.T("list.colTitle"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(10)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &d.edDescription, i18n.T("detail.description"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(10)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &d.edPriority, i18n.T("detail.priorityHint"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(10)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &d.edDueAt, i18n.T("detail.dueHint"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(10)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return labeledEditor(gtx, th, &d.edTags, i18n.T("detail.tagsHint"), "")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(6)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			c := material.Caption(th, i18n.T("detail.categoryNote", "category", todo.Category))
-			c.Color = textMuted
-			return c.Layout(gtx)
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
+	out := make([]fyne.CanvasObject, 0, len(comments))
+	for _, c := range comments {
+		c := c
+		body := widget.NewLabel(c.Content)
+		body.Wrapping = fyne.TextWrapWord
+		meta := widget.NewLabelWithStyle(
+			fmt.Sprintf("%s", formatTime(c.CreatedAt)),
+			fyne.TextAlignLeading, fyne.TextStyle{Italic: true},
+		)
+		del := widget.NewButton(i18n.T("detail.del"), func() { v.deleteComment(c.ID) })
+		out = append(out, container.NewBorder(nil, nil, nil, del,
+			container.NewVBox(meta, body)))
 	}
-	// Save/Cancel buttons — only in standalone (non-side-window) mode. The side
-	// window renders these in its top bar; rendering the same Clickable twice in
-	// one frame breaks click detection.
-	if !d.hideHeader {
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return smallButton(gtx, th, &d.saveBtn, i18n.T("common.save"))
-				}),
-				layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return smallButton(gtx, th, &d.cancelBtn, i18n.T("common.cancel"))
-				}),
-			)
-		}))
-	}
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+	return out
 }
 
-// conflictModal shows pending dependency blockers and offers a cascade.
-func (d *DetailUI) conflictModal(gtx layout.Context, th *material.Theme) layout.Dimensions {
-	cf := d.pendingConflict
-	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					t := material.H6(th, i18n.T("detail.blocked"))
-					t.Color = textPrimary
-					return t.Layout(gtx)
-				}),
-				layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					blockers := cf.PendingDependencies
-					if len(blockers) == 0 {
-						blockers = cf.CompletedDependents
-					}
-					list := &layout.List{Axis: layout.Vertical}
-					return list.Layout(gtx, len(blockers), func(gtx layout.Context, i int) layout.Dimensions {
-						b := blockers[i]
-						c := material.Body2(th, fmt.Sprintf("%s %s", DisplayCode(b.Category, b.Code), b.Title))
-						c.Color = textSecondary
-						return c.Layout(gtx)
-					})
-				}),
-				layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return smallButton(gtx, th, &d.cascadeBtn, i18n.T("detail.cascade"))
-						}),
-						layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return smallButton(gtx, th, &d.cancelBtn, i18n.T("detail.dismiss"))
-						}),
-					)
-				}),
-			)
-		})
-	})
-}
-
-// --- click handling --------------------------------------------------------
-
-func (d *DetailUI) handleClicks(gtx layout.Context) {
-	for d.backBtn.Clicked(gtx) {
-		if d.onBack != nil {
-			d.onBack()
-		} else {
-			d.app.nav().goTo(store.PageList)
-		}
-	}
-	for d.editBtn.Clicked(gtx) {
-		d.editing = true
-		d.resetEditors()
-	}
-	for d.cancelBtn.Clicked(gtx) {
-		d.editing = false
-		d.pendingConflict = nil
-		d.resetEditors()
-	}
-	for d.saveBtn.Clicked(gtx) {
-		if d.editing {
-			d.saveEdit()
-		}
-	}
-	for d.startBtn.Clicked(gtx) {
-		d.transition("start", false)
-	}
-	for d.completeBtn.Clicked(gtx) {
-		d.transition("complete", false)
-	}
-	for d.reopenBtn.Clicked(gtx) {
-		d.transition("reopen", false)
-	}
-	for d.deleteBtn.Clicked(gtx) {
-		d.deleteTodo()
-	}
-	for d.cascadeBtn.Clicked(gtx) {
-		if d.pendingConflict != nil {
-			// Determine which transition is pending from the conflict shape.
-			if len(d.pendingConflict.PendingDependencies) > 0 {
-				d.transition("complete", true)
-			} else {
-				d.transition("reopen", true)
-			}
-			d.pendingConflict = nil
-		}
-	}
-	for d.commentBtn.Clicked(gtx) {
-		d.addComment()
-	}
-	comments := d.app.Todos.CommentsSnapshot()
-	for i := range d.commentRows {
-		if i < len(comments) && d.commentRows[i].del.Clicked(gtx) {
-			d.deleteComment(comments[i].ID)
-		}
-	}
-}
-
-func (d *DetailUI) resetEditors() {
-	d.edTitle.SetText("")
-	d.edDescription.SetText("")
-	d.edPriority.SetText("")
-	d.edDueAt.SetText("")
-	d.edTags.SetText("")
-}
-
-// saveEdit persists the edited fields via PATCH.
-func (d *DetailUI) saveEdit() {
-	cl := d.app.Client()
-	if cl == nil {
+// action runs a start/complete/reopen action with a 15s context.
+func (v *DetailView) action(name string, cascade bool) {
+	detail, _, _ := v.app.Todos.DetailSnapshot()
+	if detail == nil {
 		return
 	}
-	id := d.selectedIDStr()
-	if id == "" {
-		return
-	}
-	body := map[string]any{
-		"title":       d.edTitle.Text(),
-		"description": d.edDescription.Text(),
-		"priority":    normalizePriority(d.edPriority.Text()),
-		"tags":        parseTags(d.edTags.Text()),
-	}
-	if due := strings.TrimSpace(d.edDueAt.Text()); due != "" {
-		body["due_at"] = due
-	} else {
-		body["due_at"] = nil
-	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		if _, err := cl.UpdateTodo(ctx, id, body); err != nil {
-			d.app.State.SetMessage(i18n.T("detail.saveFailed") + err.Error())
-		} else {
-			d.app.State.SetMessage(i18n.T("detail.saved"))
-		}
-		// Marshal UI-state mutation onto the side window's goroutine: the
-		// editors are owned by it and not concurrency-safe.
-		d.app.SideWin.Post(func() {
-			d.editing = false
-			d.resetEditors()
-			d.Load()
-			d.app.List.RequestRefresh()
-		})
-	}()
-}
-
-// transition performs a status transition, surfacing conflicts as a modal.
-func (d *DetailUI) transition(action string, cascade bool) {
-	cl := d.app.Client()
-	if cl == nil {
-		return
-	}
-	id := d.selectedIDStr()
-	if id == "" {
-		return
-	}
+	idStr := store.IDString(detail.Todo.ID)
+	c := v.app.State.Client
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		var err error
-		switch action {
+		switch name {
 		case "start":
-			_, err = cl.StartTodo(ctx, id)
+			_, err = c.StartTodo(ctx, idStr)
 		case "complete":
-			_, err = cl.CompleteTodo(ctx, id, cascade)
+			_, err = c.CompleteTodo(ctx, idStr, cascade)
 		case "reopen":
-			_, err = cl.ReopenTodo(ctx, id, cascade)
+			_, err = c.ReopenTodo(ctx, idStr, cascade)
 		}
 		if err != nil {
-			msg := i18n.T("detail.failed") + err.Error()
-			if cf, ok := client.IsConflict(err); ok && !cascade {
-				d.app.SideWin.Post(func() {
-					d.pendingConflict = cf
-					if d.app.Invalidate != nil {
-						d.app.Invalidate()
-					}
-				})
-			} else {
-				d.app.State.SetMessage(msg)
+			if conf, ok := client.IsConflict(err); ok {
+				fyne.Do(func() { v.showConflict(name, conf) })
+				return
 			}
-		} else {
-			d.app.State.SetMessage("")
+			v.app.SetMessage(i18n.T("detail.failed") + err.Error())
+			return
 		}
-		d.app.SideWin.Post(func() {
-			d.Load()
-			d.app.List.RequestRefresh()
+		fyne.Do(func() {
+			v.app.refreshList()
+			v.Refresh()
 		})
 	}()
 }
 
-func (d *DetailUI) deleteTodo() {
-	cl := d.app.Client()
-	if cl == nil {
+// showConflict displays a dialog offering cascade.
+func (v *DetailView) showConflict(action string, conf *client.ConflictResponse) {
+	msg := conf.Error
+	if msg == "" {
+		msg = i18n.T("list.blocked")
+	}
+	dialog.NewConfirm(i18n.T("detail.blocked"), msg, func(cascade bool) {
+		if cascade {
+			v.action(action, true)
+		}
+	}, v.app.Window).Show()
+}
+
+// IsEditing reports whether the inline edit form is currently visible.
+func (v *DetailView) IsEditing() bool {
+	return v.editForm != nil && v.editForm.Visible()
+}
+
+// enterEdit populates the edit form with the current detail and shows it.
+func (v *DetailView) enterEdit() {
+	detail, _, _ := v.app.Todos.DetailSnapshot()
+	if detail == nil {
 		return
 	}
-	id := d.selectedIDStr()
-	if id == "" {
+	t := detail.Todo
+	v.titleEdit.Text = t.Title
+	v.descEdit.Text = t.Description
+	v.priorityEdit.Text = t.Priority
+	v.tagsEdit.Text = strings.Join(t.Tags, ", ")
+	if t.DueAt != nil {
+		v.dueEdit.Text = *t.DueAt
+	} else {
+		v.dueEdit.Text = ""
+	}
+	v.titleEdit.Refresh()
+	v.descEdit.Refresh()
+	v.priorityEdit.Refresh()
+	v.tagsEdit.Refresh()
+	v.dueEdit.Refresh()
+
+	v.editForm.Show()
+}
+
+// saveEdit PUTs the edited fields and refreshes.
+func (v *DetailView) saveEdit() {
+	detail, _, _ := v.app.Todos.DetailSnapshot()
+	if detail == nil {
 		return
 	}
+	idStr := store.IDString(detail.Todo.ID)
+	body := map[string]any{
+		"title":       v.titleEdit.Text,
+		"description": v.descEdit.Text,
+		"priority":    normalisePriority(v.priorityEdit.Text),
+		"tags":        parseTags(v.tagsEdit.Text),
+	}
+	if due := strings.TrimSpace(v.dueEdit.Text); due != "" {
+		body["due_at"] = due
+	} else {
+		body["due_at"] = nil
+	}
+	c := v.app.State.Client
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		if err := cl.DeleteTodo(ctx, id); err != nil {
-			d.app.State.SetMessage(i18n.T("detail.deleteFailed") + err.Error())
+		if _, err := c.UpdateTodo(ctx, idStr, body); err != nil {
+			v.app.SetMessage(i18n.T("detail.saveFailed") + err.Error())
 			return
 		}
-		d.app.SideWin.Post(func() {
-			// Close the side window (onBack == sw.Close); fall back to nav.
-			if d.onBack != nil {
-				d.onBack()
-			} else {
-				d.app.nav().goTo(store.PageList)
-			}
-			d.app.List.RequestRefresh()
+		fyne.Do(func() {
+			v.app.refreshList()
+			v.app.OpenDetail(detail.Todo.ID) // reload detail
+			v.editForm.Hide()
 		})
 	}()
 }
 
-func (d *DetailUI) addComment() {
-	cl := d.app.Client()
-	if cl == nil {
+// sendComment posts a new comment and refreshes.
+func (v *DetailView) sendComment() {
+	detail, _, _ := v.app.Todos.DetailSnapshot()
+	if detail == nil {
 		return
 	}
-	content := strings.TrimSpace(d.edComment.Text())
+	content := strings.TrimSpace(v.commentEntry.Text)
 	if content == "" {
 		return
 	}
-	id := d.selectedIDStr()
-	if id == "" {
-		return
-	}
-	d.edComment.SetText("")
+	idStr := store.IDString(detail.Todo.ID)
+	c := v.app.State.Client
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		if _, err := cl.CreateComment(ctx, id, content); err != nil {
-			d.app.State.SetMessage(i18n.T("detail.commentFailed") + err.Error())
+		if _, err := c.CreateComment(ctx, idStr, content); err != nil {
+			v.app.SetMessage(i18n.T("detail.commentFailed") + err.Error())
+			return
 		}
-		d.app.SideWin.Post(func() {
-			d.Load()
+		fyne.Do(func() {
+			v.commentEntry.Text = ""
+			v.commentEntry.Refresh()
+			v.app.OpenDetail(detail.Todo.ID)
 		})
 	}()
 }
 
-func (d *DetailUI) deleteComment(commentID uint) {
-	cl := d.app.Client()
-	if cl == nil {
+// deleteComment removes a comment and refreshes.
+func (v *DetailView) deleteComment(commentID uint) {
+	detail, _, _ := v.app.Todos.DetailSnapshot()
+	if detail == nil {
 		return
 	}
-	id := d.selectedIDStr()
-	if id == "" {
-		return
-	}
+	idStr := store.IDString(detail.Todo.ID)
+	cStr := fmt.Sprintf("%d", commentID)
+	c := v.app.State.Client
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		if err := cl.DeleteComment(ctx, id, fmt.Sprintf("%d", commentID)); err != nil {
-			d.app.State.SetMessage(i18n.T("detail.delCommentFail") + err.Error())
+		if err := c.DeleteComment(ctx, idStr, cStr); err != nil {
+			v.app.SetMessage(i18n.T("detail.delCommentFail") + err.Error())
+			return
 		}
-		d.app.SideWin.Post(func() {
-			d.Load()
+		fyne.Do(func() {
+			v.app.OpenDetail(detail.Todo.ID)
 		})
 	}()
 }
 
-func (d *DetailUI) selectedIDStr() string {
-	d.app.State.Lock()
-	defer d.app.State.Unlock()
-	if d.app.State.SelectedID == 0 {
-		return ""
-	}
-	return fmt.Sprintf("%d", d.app.State.SelectedID)
-}
+// --- helpers --------------------------------------------------------------
 
-// --- formatting helpers ----------------------------------------------------
-
-func codeTitle(gtx layout.Context, th *material.Theme, todo client.Todo) layout.Dimensions {
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			c := material.Caption(th, DisplayCode(todo.Category, todo.Code)+"  ·  "+StatusLabel(todo.Status))
-			c.Color = textMuted
-			return c.Layout(gtx)
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			t := material.H6(th, todo.Title)
-			t.Color = textPrimary
-			return t.Layout(gtx)
-		}),
-	)
-}
-
-// sectionLabel returns a layout.Widget rendering a small semi-bold heading.
-func sectionLabel(th *material.Theme, label string) layout.Widget {
-	return func(gtx layout.Context) layout.Dimensions {
-		c := material.Caption(th, label)
-		c.Color = textSecondary
-		c.Font.Weight = font.SemiBold
-		return c.Layout(gtx)
-	}
-}
-
-func dashIfEmpty(s string) string {
+func orDash(s string) string {
 	if strings.TrimSpace(s) == "" {
-		return "—"
+		return "-"
 	}
 	return s
 }
 
+func derefStr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
 func formatTime(s string) string {
+	if s == "" {
+		return "-"
+	}
+	// Best-effort RFC3339 parse → local display.
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
 		return s
 	}
-	return t.Format("2006-01-02 15:04")
+	return t.Local().Format("2006-01-02 15:04")
 }
 
-func formatTimePtr(s *string) string {
-	if s == nil {
-		return ""
+func summaryToText(s client.TodoSummary) string {
+	return fmt.Sprintf("%s  %s", s.Code, s.Title)
+}
+
+func summariesToText(ss []client.TodoSummary) string {
+	if len(ss) == 0 {
+		return "-"
 	}
-	return formatTime(*s)
+	parts := make([]string, 0, len(ss))
+	for _, s := range ss {
+		parts = append(parts, summaryToText(s))
+	}
+	return strings.Join(parts, "\n")
 }
 
-func normalizePriority(s string) string {
-	p := strings.ToLower(strings.TrimSpace(s))
-	switch p {
-	case "p0", "p1", "p3":
-		return p
-	default:
+func normalisePriority(p string) string {
+	p = strings.ToLower(strings.TrimSpace(p))
+	if p == "" {
 		return "p2"
 	}
+	return p
 }
 
 func parseTags(s string) []string {
 	parts := strings.Split(s, ",")
-	tags := make([]string, 0, len(parts))
+	out := make([]string, 0, len(parts))
 	for _, p := range parts {
-		t := strings.TrimSpace(strings.ToLower(p))
-		if t != "" {
-			tags = append(tags, t)
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
 		}
 	}
-	return tags
+	return out
 }
