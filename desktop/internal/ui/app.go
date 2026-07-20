@@ -1,266 +1,309 @@
+// Package ui contains the Fyne UI for the desktop todo client.
+//
+// The app uses a single borderless window. The left half is the todo list; the
+// right half is a side panel that can show detail / manage / create and that
+// collapses to widen the list. A custom top bar carries the title and the
+// create / refresh / pin / lock / manage / close buttons.
 package ui
 
 import (
-	"strings"
+	"context"
 	"sync"
+	"time"
 
-	"gioui.org/app"
-	"gioui.org/layout"
-	"gioui.org/op/paint"
-	"gioui.org/unit"
-	"gioui.org/widget/material"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 
-	"github.com/graydovee/todo-manager/desktop/internal/client"
+	"github.com/graydovee/todo-manager/desktop/internal/i18n"
 	"github.com/graydovee/todo-manager/desktop/internal/platform"
 	"github.com/graydovee/todo-manager/desktop/internal/store"
 )
 
-// App owns the per-frame UI state (input fields, scroll positions) and renders
-// the current page based on store.AppState. It is rebuilt every frame by Layout.
+// SideMode identifies what the side panel is showing.
+type SideMode int
+
+const (
+	SideNone SideMode = iota
+	SideDetail
+	SideManage
+	SideCreate
+)
+
+// App is the central UI controller. It owns the Fyne window, the stores, and
+// the child views, and exposes actions invoked from the top bar, tray, list
+// rows, and detail/manage panels.
 type App struct {
-	// Theme is the main window's theme. It owns a text.Shaper that is NOT
-	// concurrency-safe, so it must only be used to render the main window (the
-	// side window keeps its own theme in SideWindow). Theme is set once in
-	// NewApp and never mutated.
-	Theme *material.Theme
-	State *store.AppState
-	Todos *store.TodoStore
+	App     fyne.App
+	Window  fyne.Window
+	State   *store.AppState
+	Todos   *store.TodoStore
+	HomeDir string
 
-	// mainCmds marshals deferred work onto the main window's event-loop
-	// goroutine. Background goroutines (network callbacks, tray, dock) call
-	// PostOnMain to schedule UI-affecting work there instead of mutating widget
-	// state directly from their own goroutine. runWindow drains this channel at
-	// the top of every event-loop iteration.
-	mainCmds chan func()
+	// Views.
+	login  *LoginView
+	list   *ListView
+	detail *DetailView
+	manage *ManageView
 
-	// Platform window controller; nil until the native handle arrives.
-	Platform platform.Controller
-	// OwnerHandle is the main window's native handle; used as the owner for
-	// dialog windows so they always render above it (Win32 owner-owned z-order).
-	OwnerHandle platform.Handle
-	// Invalidate triggers a repaint (passed in from main).
-	Invalidate func()
+	// Layout containers.
+	root       *fyne.Container
+	side       *container.Split // HSplit between list and side panel
+	sideHost   *fyne.Container  // wraps the current side panel content
+	sideChrome *sidePanel       // currently mounted side-panel chrome (or nil)
 
-	// modalMu guards modalCount. While > 0 a dialog is open and all main-window
-	// interaction should be blocked (modal behaviour). A count (rather than a
-	// bool) supports nested dialogs correctly.
-	modalMu    sync.Mutex
-	modalCount int
+	// Side panel state.
+	sideVisible bool
+	sideMode    SideMode
 
-	// Page sub-controllers, created once and reused across frames.
-	Login *LoginUI
-	List  *ListUI
+	// Platform glue.
+	platform platform.Platform
+	tray     *platform.Tray
 
-	// SideWin manages the reusable side window (detail / manage / create).
-	SideWin *SideWindow
+	// Internal signals.
+	stopDock     chan struct{}
+	stopDockOnce sync.Once
+
+	// Dock poll state (only accessed from dockTick on the poll goroutine).
+	cursorLeftSince int64
 }
 
-// IsModal reports whether any modal dialog is currently open. While true, the
-// main window's interactive handlers (toolbar, row clicks, drag) skip
-// processing so the user must dismiss the dialog first.
-func (a *App) IsModal() bool {
-	a.modalMu.Lock()
-	defer a.modalMu.Unlock()
-	return a.modalCount > 0
-}
-
-// enterModal increments the modal dialog count and requests a repaint. Called
-// when a dialog opens.
-func (a *App) enterModal() {
-	a.modalMu.Lock()
-	a.modalCount++
-	a.modalMu.Unlock()
-	if a.Invalidate != nil {
-		a.Invalidate()
-	}
-}
-
-// exitModal decrements the modal dialog count and requests a repaint. Called
-// when a dialog closes.
-func (a *App) exitModal() {
-	a.modalMu.Lock()
-	if a.modalCount > 0 {
-		a.modalCount--
-	}
-	a.modalMu.Unlock()
-	if a.Invalidate != nil {
-		a.Invalidate()
-	}
-}
-
-// NewApp constructs the UI controller with all sub-pages wired to the stores.
-func NewApp(th *material.Theme, state *store.AppState, todos *store.TodoStore) *App {
+// New constructs the App controller and builds its UI tree. It does NOT start
+// the dock poll loop or show the window; call Run() for that.
+func New(fyneApp fyne.App, win fyne.Window, st *store.AppState, todos *store.TodoStore, homeDir string) *App {
 	a := &App{
-		Theme:    th,
-		State:    state,
+		App:      fyneApp,
+		Window:   win,
+		State:    st,
 		Todos:    todos,
-		mainCmds: make(chan func(), 64),
+		HomeDir:  homeDir,
+		sideMode: SideNone,
+		stopDock: make(chan struct{}),
 	}
-	a.Login = NewLoginUI(a)
-	a.List = NewListUI(a)
-	a.SideWin = NewSideWindow(a)
+	a.platform = platform.New(win)
+
+	// Build child views. They each hold a back-reference to App for actions.
+	a.login = newLoginView(a)
+	a.list = newListView(a)
+	a.detail = newDetailView(a)
+	a.manage = newManageView(a)
+
+	// Side panel host starts empty; content is set when a side panel opens.
+	a.sideHost = container.NewStack()
+	a.side = container.NewHSplit(a.list.Build(), a.sideHost)
+	a.side.SetOffset(1.0) // 1.0 = right collapsed; left gets everything
+
+	a.root = container.NewBorder(a.list.BuildTopBar(), nil, nil, nil, a.side)
+	win.SetContent(a.root)
+
+	// Apply the loaded window mode (topmost / lock) before showing.
+	a.applyWindowMode()
+
+	// Intercept close: ask minimize-vs-quit instead of quitting outright.
+	win.SetCloseIntercept(a.onCloseIntercept)
+
 	return a
 }
 
-// PostOnMain schedules f to run on the main window's event-loop goroutine. Use
-// this from background goroutines (network callbacks) that need to mutate UI
-// widget state — Gio widgets are not concurrency-safe. Safe to call from any
-// goroutine.
-func (a *App) PostOnMain(f func()) {
-	select {
-	case a.mainCmds <- f:
-	default:
-		// Channel full: drop to avoid blocking the caller. UI state updates are
-		// best-effort; a dropped callback just delays a repaint.
-	}
+// SetTray wires the system tray. Called from main.go after creating the tray.
+func (a *App) SetTray(t *platform.Tray) {
+	a.tray = t
+	a.syncTrayLabels()
 }
 
-// DrainMainCmds runs all queued callbacks on the (main) event-loop goroutine.
-// Called by runWindow at the top of each iteration.
-func (a *App) DrainMainCmds() {
-	for {
-		select {
-		case f := <-a.mainCmds:
-			f()
-		default:
-			return
+// syncTrayLabels refreshes the tray menu item labels with the current language.
+func (a *App) syncTrayLabels() {
+	if a.tray == nil {
+		return
+	}
+	a.tray.SetLock(a.State.Locked, i18n.T("tray.lock"))
+	a.tray.SetTopMost(a.State.TopMost, i18n.T("tray.topMost"))
+	a.tray.SetQuitLabel(i18n.T("tray.quit"))
+}
+
+// Run starts the dock poll loop. Call after the window has been shown.
+func (a *App) Run() {
+	go a.dockLoop()
+}
+
+// Stop signals background loops to exit (called from main on quit). Safe to
+// call multiple times.
+func (a *App) Stop() {
+	a.stopDockOnce.Do(func() {
+		close(a.stopDock)
+	})
+}
+
+// showPage switches the root content between login and the main layout. It is
+// invoked after a successful login or a logout.
+func (a *App) showPage() {
+	a.State.Lock()
+	page := a.State.Page
+	a.State.Unlock()
+
+	if page == store.PageLogin {
+		a.Window.SetContent(a.login.Build())
+		a.Window.SetTitle(i18n.T("login.title"))
+		return
+	}
+	a.Window.SetContent(a.root)
+	a.Window.SetTitle(i18n.T("list.title"))
+	a.refreshList()
+}
+
+// refreshList triggers a list fetch using the current filters. Safe to call
+// from any goroutine; UI refresh happens via fyne.Do.
+func (a *App) refreshList() {
+	c := a.State.Client
+	if c == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	query := a.currentQuery()
+	a.Todos.Refresh(ctx, c, query, func() {
+		cancel()
+		a.list.Refresh()
+	})
+}
+
+// currentQuery builds the backend query map from the persisted filters.
+func (a *App) currentQuery() map[string][]string {
+	a.State.Lock()
+	defer a.State.Unlock()
+	f := a.State.Config.Filters
+	q := map[string][]string{}
+	add := func(key string, vals []string) {
+		for _, v := range vals {
+			if v != "" {
+				q[key] = append(q[key], v)
+			}
+		}
+	}
+	add("status", f.Status)
+	add("category", f.Category)
+	add("priority", f.Priority)
+	if f.Query != "" {
+		q["q"] = []string{f.Query}
+	}
+	if f.Code != "" {
+		q["code"] = []string{f.Code}
+	}
+	sb := f.SortBy
+	if sb == "" {
+		sb = "created_at"
+	}
+	so := f.SortOrder
+	if so == "" {
+		so = "desc"
+	}
+	q["sort_by"] = []string{sb}
+	q["sort_order"] = []string{so}
+	q["page"] = []string{"1"}
+	q["page_size"] = []string{"100"}
+	return q
+}
+
+// OpenDetail opens the detail side panel for the given todo id.
+func (a *App) OpenDetail(id uint) {
+	a.State.Lock()
+	a.State.SelectedID = id
+	a.State.Unlock()
+
+	a.sideMode = SideDetail
+	a.showSidePanel(a.detail.Build(), i18n.T("detail.title"))
+
+	idStr := store.IDString(id)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	a.Todos.LoadDetail(ctx, a.State.Client, idStr, func() {
+		cancel()
+		fyne.Do(func() {
+			a.detail.Refresh()
+		})
+	})
+}
+
+// OpenManage opens the manage side panel (filters / search / language / logout).
+func (a *App) OpenManage() {
+	a.sideMode = SideManage
+	a.manage.Refresh()
+	a.showSidePanel(a.manage.Build(), i18n.T("manage.title"))
+}
+
+// OpenCreate opens the create-todo side panel.
+func (a *App) OpenCreate() {
+	a.sideMode = SideCreate
+	a.manage.ShowCreate()
+	a.showSidePanel(a.manage.BuildCreate(), i18n.T("manage.newTodo"))
+}
+
+// ToggleSidePanel collapses or expands the side panel.
+func (a *App) ToggleSidePanel() {
+	if a.sideVisible {
+		a.hideSidePanel()
+	} else {
+		// Default re-open is detail of selected (if any), else manage.
+		if a.State.SelectedID != 0 {
+			a.OpenDetail(a.State.SelectedID)
+		} else {
+			a.OpenManage()
 		}
 	}
 }
 
-// OpenDetail opens the side window in detail mode for the given todo ID.
-func (a *App) OpenDetail(id uint) {
-	a.SideWin.OpenDetail(id)
+// IsSidePanelVisible reports whether the side panel is currently expanded.
+func (a *App) IsSidePanelVisible() bool { return a.sideVisible }
+
+// hideSidePanel collapses the right side of the HSplit.
+func (a *App) hideSidePanel() {
+	a.sideVisible = false
+	a.sideMode = SideNone
+	a.side.SetOffset(1.0)
+	a.refreshList()
 }
 
-// OpenManage opens the side window in management mode.
-func (a *App) OpenManage() {
-	a.SideWin.OpenManage()
-}
-
-// OpenCreate opens the side window in create-todo mode.
-func (a *App) OpenCreate() {
-	a.SideWin.OpenCreate()
-}
-
-// isSelected reports whether the given todo ID matches the currently selected
-// todo (the one whose detail is open).
-func (a *App) isSelected(id uint) bool {
-	a.State.Lock()
-	defer a.State.Unlock()
-	return a.State.SelectedID == id
-}
-
-// Layout is called on every FrameEvent. It fills the background and routes to
-// the active page.
-func (a *App) Layout(gtx layout.Context, w *app.Window) layout.Dimensions {
-	// Background: opaque light, or translucent glass when locked.
-	if a.isLocked() {
-		paint.Fill(gtx.Ops, bgGlass)
-	} else {
-		paint.Fill(gtx.Ops, bgPage)
+// showSidePanel expands the side panel and mounts the given content. The HSplit
+// offset is moved to give the side panel roughly 55% of the width when there
+// is enough room. The content is wrapped in a sidePanel chrome that provides
+// the mode title bar and a "<" collapse button.
+func (a *App) showSidePanel(content fyne.CanvasObject, title string) {
+	var onEdit func()
+	var editLabel string
+	if a.sideMode == SideDetail {
+		editLabel = i18n.T("common.edit")
+		onEdit = func() {
+			if a.detail.IsEditing() {
+				a.detail.saveEdit()
+			} else {
+				a.detail.enterEdit()
+			}
+			// Refresh the side panel chrome so its edit button label updates.
+			if a.sideChrome != nil {
+				if a.detail.IsEditing() {
+					a.sideChrome.SetEditLabel(i18n.T("common.save"))
+				} else {
+					a.sideChrome.SetEditLabel(i18n.T("common.edit"))
+				}
+			}
+		}
 	}
-
-	page := a.currentPage()
-	var dims layout.Dimensions
-	switch page {
-	case store.PageLogin:
-		dims = a.Login.Layout(gtx, w, a.Theme)
-	case store.PageList:
-		dims = a.List.Layout(gtx, w, a.Theme)
-	default:
-		dims = layout.Dimensions{Size: gtx.Constraints.Max}
+	sp := newSidePanel(a, title, content, onEdit)
+	sp.SetEditLabel(editLabel)
+	a.sideChrome = sp
+	a.sideHost.Objects = []fyne.CanvasObject{sp.root}
+	a.sideHost.Refresh()
+	a.sideVisible = true
+	a.side.SetOffset(0.45) // 0.45 = left gets 45%, side panel gets 55%
+	if a.list != nil && a.list.topBar != nil {
+		a.list.topBar.Refresh()
 	}
-
-	// Transient status banner across the bottom.
-	if msg := a.message(); msg != "" {
-		showBanner(gtx, a.Theme, msg)
-	}
-	return dims
 }
 
-func (a *App) currentPage() store.Page {
-	a.State.Lock()
-	defer a.State.Unlock()
-	return a.State.Page
-}
-
-func (a *App) isLocked() bool {
-	a.State.Lock()
-	defer a.State.Unlock()
-	return a.State.Locked
-}
-
-// IsLocked reports the lock state (safe for any goroutine).
-func (a *App) IsLocked() bool { return a.isLocked() }
-
-func (a *App) isTopMost() bool {
-	a.State.Lock()
-	defer a.State.Unlock()
-	return a.State.TopMost
-}
-
-// IsTopMost reports the top-most state (safe for any goroutine).
-func (a *App) IsTopMost() bool { return a.isTopMost() }
-
-// CurrentPage returns the current page (safe for any goroutine).
-func (a *App) CurrentPage() store.Page {
-	a.State.Lock()
-	defer a.State.Unlock()
-	return a.State.Page
-}
-
-// DockSnapshot returns a copy of the dock state (safe for any goroutine).
-func (a *App) DockSnapshot() store.DockSnapshot {
-	return a.State.Dock.Snapshot()
-}
-
-// SetDockHidden toggles the dock hidden flag (safe for any goroutine).
-func (a *App) SetDockHidden(v bool, curX, curY int, nowMs int64) {
-	a.State.Dock.SetHidden(v, curX, curY, nowMs)
-}
-
-// StopAnim clears the dock animation-in-progress flag.
-func (a *App) StopAnim() {
-	a.State.Dock.Lock()
-	a.State.Dock.Animating = false
-	a.State.Dock.Unlock()
-}
-
-// DockAnimMs returns the configured slide animation duration (ms), defaulting to
-// 500 when unset.
-func (a *App) DockAnimMs() int {
-	a.State.Lock()
-	defer a.State.Unlock()
-	if v := a.State.Config.Dock.AnimMs; v > 0 {
-		return v
-	}
-	return 500
-}
-
-// DockHideDelayMs returns the configured cursor-leave delay before auto-hide
-// (ms), defaulting to 600 when unset.
-func (a *App) DockHideDelayMs() int {
-	a.State.Lock()
-	defer a.State.Unlock()
-	if v := a.State.Config.Dock.HideDelayMs; v > 0 {
-		return v
-	}
-	return 600
-}
-
-func (a *App) message() string {
-	a.State.Lock()
-	defer a.State.Unlock()
-	return a.State.Message
-}
-
-// SetLock updates state and applies the platform window mode, then invalidates.
+// SetLock toggles the lock state and updates platform + tray.
 func (a *App) SetLock(locked bool) {
 	a.State.Lock()
 	a.State.Locked = locked
 	if locked {
-		a.State.TopMost = true // locking implies top-most
+		a.State.TopMost = true // lock implies topmost
 	}
 	cfg := a.State.Config
 	cfg.Window.Locked = locked
@@ -268,111 +311,106 @@ func (a *App) SetLock(locked bool) {
 		cfg.Window.TopMost = true
 	}
 	a.State.Unlock()
+
 	a.applyWindowMode()
-	// Sync tray menu checkboxes.
-	platform.SetTrayLock(locked)
-	platform.SetTrayTopMost(a.isTopMost())
+	a.syncTrayLabels()
 }
 
-// SetTopMost toggles the always-on-top state. It is a no-op to disable top-most
-// while locked (lock implies top-most).
-func (a *App) SetTopMost(topmost bool) {
+// SetTopMost toggles the always-on-top state and updates platform + tray.
+func (a *App) SetTopMost(top bool) {
 	a.State.Lock()
-	a.State.TopMost = topmost
-	if !topmost && a.State.Locked {
-		a.State.TopMost = true
+	a.State.TopMost = top
+	a.State.Config.Window.TopMost = top
+	// Unlocking topmost implicitly unlocks lock (lock requires topmost).
+	if !top {
+		a.State.Locked = false
+		a.State.Config.Window.Locked = false
 	}
-	a.State.Config.Window.TopMost = a.State.TopMost
 	a.State.Unlock()
+
 	a.applyWindowMode()
-	// Sync tray menu checkbox.
-	platform.SetTrayTopMost(a.isTopMost())
+	a.syncTrayLabels()
 }
 
-// applyWindowMode pushes the current lock/top-most state to the platform
-// controller and requests a repaint.
+// applyWindowMode pushes the current TopMost / Locked state to the platform
+// implementation. Safe to call repeatedly.
 func (a *App) applyWindowMode() {
-	if a.Platform == nil {
-		return
-	}
-	topmost := a.isTopMost()
-	locked := a.isLocked()
-	if locked {
-		a.Platform.SetLock(true)
-	} else {
-		a.Platform.SetLock(false)
-		a.Platform.SetTopMost(topmost)
-	}
-	if a.Invalidate != nil {
-		a.Invalidate()
-	}
+	a.State.Lock()
+	top := a.State.TopMost
+	locked := a.State.Locked
+	a.State.Unlock()
+	a.platform.SetAlwaysOnTop(top)
+	a.platform.SetLock(locked)
 }
 
-// showBanner draws a small bottom-of-window status line.
-func showBanner(gtx layout.Context, th *material.Theme, msg string) {
-	layout.Stack{Alignment: layout.S}.Layout(gtx,
-		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-			gtx.Constraints.Min.Y = 0
-			return layout.UniformInset(unit.Dp(8)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				lbl := material.Body2(th, msg)
-				lbl.Color = textSecondary
-				return lbl.Layout(gtx)
-			})
-		}),
+// onCloseIntercept is invoked when the user clicks the close button. We show a
+// confirmation dialog offering "minimize to tray" or "close".
+func (a *App) onCloseIntercept() {
+	d := dialog.NewConfirm(
+		i18n.T("list.closeTitle"),
+		i18n.T("list.closeHint"),
+		func(closeApp bool) {
+			if closeApp {
+				a.quit()
+			} else {
+				a.platform.Minimize()
+			}
+		},
+		a.Window,
 	)
+	d.SetConfirmText(i18n.T("list.close"))
+	d.SetDismissText(i18n.T("list.minimize"))
+	d.Show()
 }
 
-// navigator is a small helper passed to pages for navigation.
-type navigator struct {
-	app *App
+// quit stops background work and exits the app. Config is persisted first.
+func (a *App) quit() {
+	a.Stop()
+	_ = a.persistConfig()
+	a.App.Quit()
 }
 
-func (n navigator) goTo(p store.Page) {
-	n.app.State.Lock()
-	n.app.State.Page = p
-	n.app.State.Unlock()
-	if n.app.Invalidate != nil {
-		n.app.Invalidate()
+// Quit is the public version of quit, used by the tray's Quit action.
+func (a *App) Quit() { a.quit() }
+
+// persistConfig writes the current state to disk.
+func (a *App) persistConfig() error {
+	// Capture window geometry into config.
+	if x, y, w, h := a.platform.WindowGeometry(); w > 0 && h > 0 {
+		a.State.Lock()
+		a.State.Config.Window.Width = w
+		a.State.Config.Window.Height = h
+		_ = x
+		_ = y
+		cfg := a.State.Config
+		a.State.Unlock()
+		return writeConfig(a.HomeDir, cfg)
 	}
-}
-
-func (a *App) nav() navigator { return navigator{app: a} }
-
-// Client returns the active API client, or nil when not logged in.
-func (a *App) Client() *client.Client {
 	a.State.Lock()
-	defer a.State.Unlock()
-	return a.State.Client
+	cfg := a.State.Config
+	a.State.Unlock()
+	return writeConfig(a.HomeDir, cfg)
 }
 
-// buildListQuery converts the persisted filters into backend query params.
-func (a *App) buildListQuery() map[string][]string {
-	a.State.Lock()
-	defer a.State.Unlock()
-	f := a.State.Config.Filters
-	q := map[string][]string{}
-	if strings.TrimSpace(f.Query) != "" {
-		q["q"] = []string{strings.TrimSpace(f.Query)}
-	}
-	if strings.TrimSpace(f.Code) != "" {
-		q["code"] = []string{strings.TrimSpace(f.Code)}
-	}
-	if len(f.Status) > 0 {
-		q["status"] = []string{strings.Join(f.Status, ",")}
-	}
-	if len(f.Category) > 0 {
-		q["category"] = []string{strings.Join(f.Category, ",")}
-	}
-	if len(f.Priority) > 0 {
-		q["priority"] = []string{strings.Join(f.Priority, ",")}
-	}
-	if f.SortBy != "" {
-		q["sort_by"] = []string{f.SortBy}
-	}
-	if f.SortOrder != "" {
-		q["sort_order"] = []string{f.SortOrder}
-	}
-	q["page"] = []string{"1"}
-	q["page_size"] = []string{"100"}
-	return q
+// ShowError displays a transient error dialog. Safe from any goroutine.
+func (a *App) ShowError(msg string) {
+	fyne.Do(func() {
+		dialog.NewInformation(i18n.T("common.error"), msg, a.Window).Show()
+	})
+}
+
+// ShowMessage displays a transient info dialog from any goroutine.
+func (a *App) ShowMessage(title, msg string) {
+	fyne.Do(func() {
+		dialog.NewInformation(title, msg, a.Window).Show()
+	})
+}
+
+// SetMessage updates the state's transient status banner and the list header.
+// Safe to call from any goroutine; UI work is dispatched via fyne.Do.
+func (a *App) SetMessage(msg string) {
+	a.State.SetMessage(msg)
+	fyne.Do(func() {
+		a.list.RefreshHeader()
+	})
 }

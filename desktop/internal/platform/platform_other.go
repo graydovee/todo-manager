@@ -2,26 +2,25 @@
 
 package platform
 
-import "os"
+// stubPlatform is a no-op Platform for non-Windows platforms (Linux/macOS dev
+// builds). The nativeHWND-specific features (click-through lock, topmost) are
+// not available; the rest of the app remains usable.
+type stubPlatform struct{}
 
-// NewController returns a no-op controller on platforms whose native window
-// integration is not yet implemented (macOS, Linux). The app still runs; only
-// top-most / click-through are unavailable.
-func NewController(_ Handle) Controller {
-	return Noop{}
+func newPlatform(_ any) Platform {
+	return &stubPlatform{}
 }
 
-// SetupChildWindow is a no-op on unsupported platforms.
-func SetupChildWindow(_, _ Handle) {}
-
-// CenterWindow is a no-op on unsupported platforms.
-func CenterWindow(_ Handle) {}
-
-// SetDialogOwner is a no-op on unsupported platforms.
-func SetDialogOwner(_, _ Handle) {}
-
-// ActivateWindow is a no-op on unsupported platforms.
-func ActivateWindow(_ Handle) {}
-
-// SetLogFile is a no-op on platforms without a native platform layer.
-func SetLogFile(_ *os.File) {}
+func (s *stubPlatform) SetAlwaysOnTop(bool) {}
+func (s *stubPlatform) MoveWindow(int, int) {}
+func (s *stubPlatform) WindowGeometry() (int, int, int, int) {
+	return 0, 0, 0, 0
+}
+func (s *stubPlatform) WorkArea() (int, int, int, int) {
+	return 0, 0, 1920, 1080
+}
+func (s *stubPlatform) CursorPos() (int, int) {
+	return 0, 0
+}
+func (s *stubPlatform) SetLock(bool) {}
+func (s *stubPlatform) Minimize()    {}
