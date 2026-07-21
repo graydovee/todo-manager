@@ -1,6 +1,7 @@
 // Command todo-desktop is the desktop companion client for the todo-manager
-// backend, rewritten from Gio to Fyne v2.8. The window is borderless and
-// side-panel based: left = todo list, right = detail / manage / create. Window
+// backend, rewritten from Gio to Fyne v2.8. The window is borderless: a
+// fixed-width todo list column is always visible, and a side panel (detail /
+// manage / create) opens to its right by widening the whole window. Window
 // mode (always-on-top / click-through lock) is driven through the platform
 // package on Windows.
 package main
@@ -11,6 +12,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/driver/desktop"
 
 	"github.com/graydovee/todo-manager/desktop/internal/config"
 	"github.com/graydovee/todo-manager/desktop/internal/i18n"
@@ -41,18 +43,26 @@ func main() {
 	fyneApp := app.New()
 	fyneApp.Settings().SetTheme(theme.Minimal)
 
-	// Compute window size: bump width to accommodate the side panel.
-	width := cfg.Window.Width
+	// Compute the initial window size. The window starts at the narrow
+	// list-only width (320) and widens when the side panel opens. Persisted
+	// widths are ignored for the initial list-only view so the layout is
+	// always predictable; the side panel widens the window on demand.
+	width := 320
 	height := cfg.Window.Height
-	if width < 500 {
-		width = 500
-	}
 	if height < 560 {
 		height = 560
 	}
 
-	win := fyneApp.NewWindow(i18n.T("common.appName"))
-	win.SetDecorated(false)
+	// Use CreateSplashWindow for a borderless (frameless) window — Fyne's only
+	// public API for undecorated windows. Override its defaults (padding/center).
+	var win fyne.Window
+	if drv, ok := fyneApp.Driver().(desktop.Driver); ok {
+		win = drv.CreateSplashWindow()
+		win.SetTitle(i18n.T("common.appName"))
+		win.SetPadded(true)
+	} else {
+		win = fyneApp.NewWindow(i18n.T("common.appName"))
+	}
 	win.Resize(fyne.NewSize(float32(width), float32(height)))
 
 	// Build the central App controller (mounts UI, sets close intercept).
@@ -73,7 +83,7 @@ func main() {
 	a.SetTray(tray)
 
 	// Show the appropriate initial page (login or list).
-	a.showPage()
+	a.ShowPage()
 
 	win.Show()
 	a.Run()

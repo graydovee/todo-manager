@@ -76,9 +76,14 @@ func newPlatform(window any) Platform {
 // resolveHWND extracts the native HWND via Fyne's RunNative callback. The
 // callback runs on the Fyne main goroutine; we do not hold p.mu while it
 // executes (to avoid deadlock when RunNative re-enters the main goroutine).
+//
+// A zero HWND means the GLFW window has not been created yet (e.g. before
+// win.Show()). Such a result is NOT cached so that later callers can re-resolve
+// once the window actually exists — caching 0 would permanently disable every
+// HWND-based feature for the lifetime of the app.
 func (p *windowsPlatform) resolveHWND() windows.HWND {
 	p.mu.Lock()
-	if p.got {
+	if p.got && p.hwnd != 0 {
 		hwnd := p.hwnd
 		p.mu.Unlock()
 		return hwnd
@@ -91,8 +96,12 @@ func (p *windowsPlatform) resolveHWND() windows.HWND {
 	}
 	var hwnd windows.HWND
 	nw.RunNative(func(ctx any) {
-		// Fyne v2.8 passes the HWND (typed or as a raw pointer) to the callback.
+		// Fyne v2.8 passes a driver.WindowsWindowContext{HWND uintptr} struct on
+		// Windows. Older/newer code paths may pass a raw HWND/uintptr, so we keep
+		// those cases as fallbacks.
 		switch v := ctx.(type) {
+		case driver.WindowsWindowContext:
+			hwnd = windows.HWND(v.HWND)
 		case windows.HWND:
 			hwnd = v
 		case *windows.HWND:
@@ -104,10 +113,14 @@ func (p *windowsPlatform) resolveHWND() windows.HWND {
 		}
 	})
 
-	p.mu.Lock()
-	p.hwnd = hwnd
-	p.got = true
-	p.mu.Unlock()
+	// Only cache a non-zero handle. A zero handle means "window not ready" and
+	// must remain re-resolvable on subsequent calls.
+	if hwnd != 0 {
+		p.mu.Lock()
+		p.hwnd = hwnd
+		p.got = true
+		p.mu.Unlock()
+	}
 	return hwnd
 }
 

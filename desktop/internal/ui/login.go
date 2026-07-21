@@ -40,6 +40,7 @@ func newLoginView(app *App) *LoginView {
 	v.status.Wrapping = fyne.TextWrapWord
 
 	v.connectBtn = widget.NewButton(i18n.T("login.connect"), v.connect)
+	v.connectBtn.Importance = widget.HighImportance
 
 	form := container.NewVBox(
 		widget.NewLabelWithStyle(i18n.T("login.title"), fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
@@ -109,7 +110,7 @@ func (v *LoginView) connect() {
 			v.connectBtn.Enable()
 			v.connectBtn.SetText(i18n.T("login.connect"))
 			v.app.State.Page = store.PageList
-			v.app.showPage()
+			v.app.ShowPage()
 		})
 	}()
 }

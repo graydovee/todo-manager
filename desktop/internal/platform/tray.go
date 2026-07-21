@@ -39,6 +39,7 @@ func NewTray(app fyne.App, cb TrayCallbacks) *Tray {
 	t.topMostItem.Checked = false
 
 	quitItem := fyne.NewMenuItem("", cb.OnQuit)
+	quitItem.IsQuit = true // mark as the quit item so Fyne doesn't auto-append another Quit
 
 	t.menu = fyne.NewMenu("",
 		t.lockItem,
