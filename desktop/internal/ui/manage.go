@@ -70,6 +70,7 @@ func newManageView(app *App) *ManageView {
 	v.codeEntry.Text = app.State.Config.Filters.Code
 
 	v.applyBtn = widget.NewButton(i18n.T("manage.apply"), v.applyFilters)
+	v.applyBtn.Importance = widget.HighImportance
 
 	// Language + dock settings.
 	v.langSelect = widget.NewSelect([]string{"English", "简体中文"}, v.onLanguageChange)
@@ -86,6 +87,7 @@ func newManageView(app *App) *ManageView {
 
 	// Logout.
 	v.logoutBtn = widget.NewButton(i18n.T("manage.logout"), v.logout)
+	v.logoutBtn.Importance = widget.HighImportance
 
 	// Build the manage layout.
 	v.root = container.NewVScroll(container.NewPadded(container.NewVBox(
@@ -128,6 +130,7 @@ func newManageView(app *App) *ManageView {
 	v.dueEntry = widget.NewEntry()
 	v.dueEntry.SetPlaceHolder(i18n.T("manage.dueLabel"))
 	v.createBtn = widget.NewButton(i18n.T("manage.create"), v.createTodo)
+	v.createBtn.Importance = widget.HighImportance
 	v.createMsg = widget.NewLabel("")
 
 	v.createRoot = container.NewVScroll(container.NewPadded(container.NewVBox(
@@ -216,7 +219,7 @@ func (v *ManageView) onLanguageChange(lang string) {
 // logout clears credentials and returns to the login page.
 func (v *ManageView) logout() {
 	v.app.State.Logout()
-	v.app.showPage()
+	v.app.ShowPage()
 }
 
 // createTodo POSTs a new todo and, on success, refreshes the list and opens the

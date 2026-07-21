@@ -15,8 +15,9 @@ var (
 	colBackground   = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF} // white
 	colForeground   = color.NRGBA{R: 0x1A, G: 0x1A, B: 0x1A, A: 0xFF} // near-black text
 	colPanel        = color.NRGBA{R: 0xFA, G: 0xFA, B: 0xFA, A: 0xFF} // side panel / cards
-	colButtonBg     = color.NRGBA{R: 0x1A, G: 0x1A, B: 0x1A, A: 0xFF} // primary button
+	colButtonBg     = color.NRGBA{R: 0x1A, G: 0x1A, B: 0x1A, A: 0xFF} // primary (high-importance) button
 	colButtonTxt    = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF} // primary button text
+	colButtonLight  = color.NRGBA{R: 0xEF, G: 0xEF, B: 0xEF, A: 0xFF} // default (medium-importance) button bg
 	colDisabled     = color.NRGBA{R: 0xBD, G: 0xBD, B: 0xBD, A: 0xFF} // grey
 	colBorder       = color.NRGBA{R: 0xE0, G: 0xE0, B: 0xE0, A: 0xFF} // hairline border
 	colSeparator    = color.NRGBA{R: 0xE0, G: 0xE0, B: 0xE0, A: 0xFF}
@@ -46,7 +47,10 @@ func (t *minimalTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) colo
 	case theme.ColorNameForeground:
 		return colForeground
 	case theme.ColorNameButton:
-		return colButtonBg
+		// Default (medium-importance) buttons: light background so the dark
+		// foreground text stays readable. High-importance buttons fill with
+		// ColorNamePrimary below.
+		return colButtonLight
 	case theme.ColorNameDisabledButton:
 		return colDisabled
 	case theme.ColorNameInputBackground:
@@ -56,7 +60,9 @@ func (t *minimalTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) colo
 	case theme.ColorNamePlaceHolder:
 		return colPlaceholder
 	case theme.ColorNamePrimary:
-		return colForeground
+		// High-importance buttons fill with this and render text in
+		// ColorNameBackground (white), so it must be the dark button colour.
+		return colButtonBg
 	case theme.ColorNameHover:
 		return colHover
 	case theme.ColorNameSelection:

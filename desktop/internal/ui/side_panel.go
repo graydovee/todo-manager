@@ -15,8 +15,9 @@ import (
 // a small header carrying the mode title and a "<" collapse button. When the
 // mode is SideDetail, an Edit/Save toggle button is shown as well.
 //
-// App already owns the HSplit that physically shows/hides the side panel; this
-// widget is the visual chrome around whatever content body App has mounted.
+// App owns the sideHost container that physically shows/hides the side panel
+// (and widens the window to make room for it); this widget is the visual chrome
+// around whatever content body App has mounted.
 type sidePanel struct {
 	app *App
 
@@ -32,10 +33,11 @@ type sidePanel struct {
 func newSidePanel(app *App, title string, body fyne.CanvasObject, onEdit func()) *sidePanel {
 	sp := &sidePanel{app: app, body: body}
 	sp.title = widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	sp.collBtn = widget.NewButton("<", func() {
+	sp.collBtn = widget.NewButtonWithIcon("", chevronLeft(), func() {
 		app.hideSidePanel()
 		app.list.topBar.Refresh()
 	})
+	sp.collBtn.Importance = widget.LowImportance
 	if onEdit != nil {
 		sp.editBtn = widget.NewButton(i18n.T("common.edit"), onEdit)
 	} else {

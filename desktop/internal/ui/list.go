@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"image/color"
 	"strings"
 	"time"
@@ -114,8 +115,9 @@ func (v *ListView) listLength() int {
 	return len(v.items)
 }
 
-// listItemCreate builds a fresh row widget. Rows are listRow custom widgets so
-// we can tint the background when they match the currently-open detail.
+// listItemCreate builds a fresh row widget. We use the custom listRow widget
+// (rather than a raw container) so the row owns its renderer and reliably
+// re-flows the title label when SetTodo changes it.
 func (v *ListView) listItemCreate() fyne.CanvasObject {
 	return newListRow(v.app)
 }
@@ -125,12 +127,11 @@ func (v *ListView) listItemUpdate(id widget.ListItemID, obj fyne.CanvasObject) {
 	if id < 0 || id >= len(v.items) {
 		return
 	}
-	t := v.items[id]
 	row, ok := obj.(*listRow)
 	if !ok {
 		return
 	}
-	row.SetTodo(t)
+	row.SetTodo(v.items[id])
 }
 
 // doStart starts the todo and refreshes the list.
@@ -211,7 +212,7 @@ func showConflictDialog(app *App, id uint, conf *client.ConflictResponse, action
 	if len(conf.PendingDependencies) > 0 {
 		var names []string
 		for _, d := range conf.PendingDependencies {
-			names = append(names, d.Code)
+			names = append(names, formatDisplayCode(d.Category, d.Code))
 		}
 		msg += "\n" + strings.Join(names, ", ")
 	}
@@ -252,8 +253,7 @@ type listRow struct {
 	app *App
 
 	id        uint
-	title     *widget.Label
-	code      *widget.Label
+	title     *widget.Label // combined "CODE  Title" (bold, ellipsis-truncated)
 	priority  *widget.Label
 	status    *widget.Label
 	actionBtn *widget.Button
@@ -268,8 +268,6 @@ func newListRow(app *App) *listRow {
 	r := &listRow{app: app}
 	r.title = widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	r.title.Truncation = fyne.TextTruncateEllipsis
-	r.code = widget.NewLabel("")
-	r.code.TextStyle = fyne.TextStyle{Italic: true}
 	r.priority = widget.NewLabel("")
 	r.status = widget.NewLabel("")
 	r.actionBtn = widget.NewButton("", nil)
@@ -279,9 +277,12 @@ func newListRow(app *App) *listRow {
 	r.sep = canvas.NewLine(color.NRGBA{R: 0xE0, G: 0xE0, B: 0xE0, A: 0xFF})
 	r.sep.StrokeWidth = 1
 
-	left := container.NewVBox(r.title, r.code)
+	// Title (combined "CODE  Title") is the border CENTER so it absorbs leftover
+	// width and ellipsis-truncates only when truly too long; the priority/status
+	// trailing column is the border RIGHT and stays at its MinSize.
 	middle := container.NewHBox(r.priority, r.status)
-	r.content = container.NewBorder(nil, nil, left, container.NewHBox(middle, r.actionBtn))
+	trailing := container.NewHBox(middle, r.actionBtn)
+	r.content = container.NewBorder(nil, nil, nil, trailing, r.title)
 
 	r.ExtendBaseWidget(r)
 	return r
@@ -329,12 +330,14 @@ func (r *listRowRenderer) Destroy()                     {}
 func (r *listRow) SetTodo(t client.Todo) {
 	r.id = t.ID
 
+	// Combine code and title into a single bold label ("F-1  Fix login bug"),
+	// matching the detail panel format. Falls back to "(untitled)" when the
+	// title is empty.
 	title := t.Title
 	if title == "" {
 		title = "(untitled)"
 	}
-	r.title.SetText(title)
-	r.code.SetText(t.Code)
+	r.title.SetText(fmt.Sprintf("%s  %s", formatDisplayCode(t.Category, t.Code), title))
 	r.priority.SetText(priorityLabel(t.Priority))
 	r.status.SetText(statusLabel(t.Status))
 
@@ -352,14 +355,14 @@ func (r *listRow) SetTodo(t client.Todo) {
 		r.actionBtn.OnTapped = nil
 	case statusInProgress:
 		r.actionBtn.Hidden = false
-		r.actionBtn.Text = i18n.T("detail.complete")
+		r.actionBtn.Text = "✓"
 		id := t.ID
 		r.actionBtn.OnTapped = func() {
 			r.app.list.doComplete(id)
 		}
 	default: // open
 		r.actionBtn.Hidden = false
-		r.actionBtn.Text = i18n.T("detail.start")
+		r.actionBtn.Text = "▶"
 		id := t.ID
 		r.actionBtn.OnTapped = func() {
 			r.app.list.doStart(id)
@@ -380,14 +383,13 @@ type topBar struct {
 
 	root *fyne.Container
 
-	title       *widget.Label
-	createBtn   *widget.Button
-	refreshBtn  *widget.Button
-	pinBtn      *widget.Button
-	lockBtn     *widget.Button
-	manageBtn   *widget.Button
-	closeBtn    *widget.Button
-	collapseBtn *widget.Button
+	title      *widget.Label
+	createBtn  *widget.Button
+	refreshBtn *widget.Button
+	pinBtn     *widget.Button
+	lockBtn    *widget.Button
+	manageBtn  *widget.Button
+	closeBtn   *widget.Button
 }
 
 func newTopBar(app *App, view *ListView) *topBar {
@@ -397,32 +399,43 @@ func newTopBar(app *App, view *ListView) *topBar {
 	t.createBtn = widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
 		t.app.OpenCreate()
 	})
+	t.createBtn.Importance = widget.LowImportance
+
 	t.refreshBtn = widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
 		t.app.refreshList()
 	})
+	t.refreshBtn.Importance = widget.LowImportance
+
 	t.pinBtn = widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
 		t.app.SetTopMost(!t.app.State.TopMost)
 		t.Refresh()
 	})
+	t.pinBtn.Importance = widget.LowImportance
+
 	t.lockBtn = widget.NewButtonWithIcon("", lockIcon(), func() {
 		t.app.SetLock(!t.app.State.Locked)
 		t.Refresh()
 	})
+	t.lockBtn.Importance = widget.LowImportance
+
 	t.manageBtn = widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
 		t.app.OpenManage()
 	})
-	t.collapseBtn = widget.NewButton("<", func() {
-		t.app.ToggleSidePanel()
-		t.Refresh()
-	})
+	t.manageBtn.Importance = widget.LowImportance
+
 	t.closeBtn = widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 		t.app.Window.Close() // triggers close intercept
 	})
+	t.closeBtn.Importance = widget.LowImportance
 
 	buttons := container.NewHBox(
-		t.createBtn, t.refreshBtn, t.pinBtn, t.lockBtn, t.manageBtn, t.collapseBtn, t.closeBtn,
+		t.createBtn, t.refreshBtn, t.pinBtn, t.lockBtn, t.manageBtn, t.closeBtn,
 	)
-	t.root = container.NewBorder(nil, nil, t.title, buttons)
+	// Wrap the title in a dragBar that fills the whole space left of the
+	// buttons, so the title text and the empty title-bar area can both be
+	// dragged to move the borderless window.
+	titleDrag := newDragBar(t.app, t.title)
+	t.root = container.NewBorder(nil, nil, nil, buttons, titleDrag)
 	t.Refresh()
 	return t
 }
@@ -444,14 +457,8 @@ func (t *topBar) Refresh() {
 	} else {
 		t.lockBtn.Icon = unlockIcon()
 	}
-	if t.app.IsSidePanelVisible() {
-		t.collapseBtn.SetText("<")
-	} else {
-		t.collapseBtn.SetText(">")
-	}
 	t.pinBtn.Refresh()
 	t.lockBtn.Refresh()
-	t.collapseBtn.Refresh()
 }
 
 // lockIcon returns a simple lock SVG icon resource (Fyne has no built-in lock icon).
@@ -462,8 +469,14 @@ var lockIconRes = fyne.NewStaticResource("lock.svg", []byte(
 var unlockIconRes = fyne.NewStaticResource("unlock.svg", []byte(
 	`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`))
 
-func lockIcon() fyne.Resource   { return lockIconRes }
-func unlockIcon() fyne.Resource { return unlockIconRes }
+// chevronLeftRes is a left-pointing chevron used for the side-panel collapse
+// button, matching the line-style of the lock icons above.
+var chevronLeftRes = fyne.NewStaticResource("chevron-left.svg", []byte(
+	`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`))
+
+func lockIcon() fyne.Resource    { return lockIconRes }
+func unlockIcon() fyne.Resource  { return unlockIconRes }
+func chevronLeft() fyne.Resource { return chevronLeftRes }
 
 // time.Now kept referenced for possible future use (refresh timestamp).
 var _ = time.Now

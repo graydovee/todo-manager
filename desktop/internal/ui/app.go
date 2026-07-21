@@ -1,13 +1,15 @@
 // Package ui contains the Fyne UI for the desktop todo client.
 //
-// The app uses a single borderless window. The left half is the todo list; the
-// right half is a side panel that can show detail / manage / create and that
-// collapses to widen the list. A custom top bar carries the title and the
-// create / refresh / pin / lock / manage / close buttons.
+// The app uses a single borderless window. The left column is a fixed-width
+// todo list; a side panel (detail / manage / create) opens to its right by
+// widening the whole window, so the list never loses width. A custom top bar
+// carries the title and the create / refresh / pin / lock / manage / close
+// buttons.
 package ui
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +20,15 @@ import (
 	"github.com/graydovee/todo-manager/desktop/internal/i18n"
 	"github.com/graydovee/todo-manager/desktop/internal/platform"
 	"github.com/graydovee/todo-manager/desktop/internal/store"
+)
+
+// Width budget for the two columns of the main layout, in theme-independent
+// pixels. The todo list is a narrow, fixed column; the side panel (detail /
+// manage / create) opens to its right by widening the whole window rather than
+// by stealing width from the list.
+const (
+	listPanelWidth float32 = 320
+	sidePanelWidth float32 = 400
 )
 
 // SideMode identifies what the side panel is showing.
@@ -48,9 +59,10 @@ type App struct {
 
 	// Layout containers.
 	root       *fyne.Container
-	side       *container.Split // HSplit between list and side panel
-	sideHost   *fyne.Container  // wraps the current side panel content
-	sideChrome *sidePanel       // currently mounted side-panel chrome (or nil)
+	contentRow *fyne.Container   // horizontal row: list column + side panel host
+	listCol    fyne.CanvasObject // fixed-width todo list column
+	sideHost   *fyne.Container   // wraps the current side panel content
+	sideChrome *sidePanel        // currently mounted side-panel chrome (or nil)
 
 	// Side panel state.
 	sideVisible bool
@@ -88,16 +100,24 @@ func New(fyneApp fyne.App, win fyne.Window, st *store.AppState, todos *store.Tod
 	a.detail = newDetailView(a)
 	a.manage = newManageView(a)
 
-	// Side panel host starts empty; content is set when a side panel opens.
+	// Build the two columns: a fixed-width todo list column on the left, and a
+	// side panel host on the right that starts hidden. When a side panel opens
+	// the whole window widens (see showSidePanel / hideSidePanel), so the list
+	// never loses width. listSideLayout keeps the list at exactly listPanelWidth
+	// and lets the side panel absorb all remaining horizontal space.
 	a.sideHost = container.NewStack()
-	a.side = container.NewHSplit(a.list.Build(), a.sideHost)
-	a.side.SetOffset(1.0) // 1.0 = right collapsed; left gets everything
+	a.sideHost.Hide()
 
-	a.root = container.NewBorder(a.list.BuildTopBar(), nil, nil, nil, a.side)
+	a.listCol = a.list.Build()
+	a.contentRow = fyne.NewContainerWithLayout(newListSideLayout(listPanelWidth), a.listCol, a.sideHost)
+
+	a.root = container.NewBorder(a.list.BuildTopBar(), nil, nil, nil, a.contentRow)
 	win.SetContent(a.root)
 
-	// Apply the loaded window mode (topmost / lock) before showing.
-	a.applyWindowMode()
+	// NOTE: applyWindowMode() is deliberately NOT called here — the native
+	// GLFW window does not exist yet (it is created during win.Show()), so any
+	// HWND-based Win32 call would resolve HWND=0. It is applied from Run()
+	// after the window has been shown.
 
 	// Intercept close: ask minimize-vs-quit instead of quitting outright.
 	win.SetCloseIntercept(a.onCloseIntercept)
@@ -121,8 +141,16 @@ func (a *App) syncTrayLabels() {
 	a.tray.SetQuitLabel(i18n.T("tray.quit"))
 }
 
-// Run starts the dock poll loop. Call after the window has been shown.
+// Run starts the dock poll loop and applies the persisted window mode
+// (always-on-top / lock). Call after the window has been shown, so the native
+// GLFW window exists and HWND-based Win32 calls resolve to a real handle.
 func (a *App) Run() {
+	// Apply window mode on the Fyne main goroutine after the window is up. We
+	// defer via fyne.Do so the GLFW event loop has finished creating the window
+	// (Show() queues creation onto the main thread).
+	fyne.Do(func() {
+		a.applyWindowMode()
+	})
 	go a.dockLoop()
 }
 
@@ -134,9 +162,9 @@ func (a *App) Stop() {
 	})
 }
 
-// showPage switches the root content between login and the main layout. It is
+// ShowPage switches the root content between login and the main layout. It is
 // invoked after a successful login or a logout.
-func (a *App) showPage() {
+func (a *App) ShowPage() {
 	a.State.Lock()
 	page := a.State.Page
 	a.State.Unlock()
@@ -172,16 +200,32 @@ func (a *App) currentQuery() map[string][]string {
 	defer a.State.Unlock()
 	f := a.State.Config.Filters
 	q := map[string][]string{}
-	add := func(key string, vals []string) {
+	// The backend reads multi-value filters (status/category/priority) as a
+	// single comma-joined query param and splits them itself (repo layer does
+	// strings.Split(",") + SQL IN). Sending repeated params (?status=a&status=b)
+	// would be silently truncated to the first value by Echo's QueryParam, so we
+	// join the selected values into one comma-separated string instead.
+	joinNonEmpty := func(vals []string) []string {
+		var parts []string
 		for _, v := range vals {
 			if v != "" {
-				q[key] = append(q[key], v)
+				parts = append(parts, v)
 			}
 		}
+		if len(parts) == 0 {
+			return nil
+		}
+		return []string{strings.Join(parts, ",")}
 	}
-	add("status", f.Status)
-	add("category", f.Category)
-	add("priority", f.Priority)
+	if v := joinNonEmpty(f.Status); v != nil {
+		q["status"] = v
+	}
+	if v := joinNonEmpty(f.Category); v != nil {
+		q["category"] = v
+	}
+	if v := joinNonEmpty(f.Priority); v != nil {
+		q["priority"] = v
+	}
 	if f.Query != "" {
 		q["q"] = []string{f.Query}
 	}
@@ -211,6 +255,9 @@ func (a *App) OpenDetail(id uint) {
 
 	a.sideMode = SideDetail
 	a.showSidePanel(a.detail.Build(), i18n.T("detail.title"))
+
+	// Refresh the list so visible rows re-apply the selected-row tint.
+	a.list.list.Refresh()
 
 	idStr := store.IDString(id)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -253,17 +300,21 @@ func (a *App) ToggleSidePanel() {
 // IsSidePanelVisible reports whether the side panel is currently expanded.
 func (a *App) IsSidePanelVisible() bool { return a.sideVisible }
 
-// hideSidePanel collapses the right side of the HSplit.
+// hideSidePanel collapses the side panel by hiding it and shrinking the window
+// back to the list-only width. The list column keeps its fixed width throughout.
 func (a *App) hideSidePanel() {
 	a.sideVisible = false
 	a.sideMode = SideNone
-	a.side.SetOffset(1.0)
+	a.sideHost.Hide()
+	a.sideHost.Objects = nil
+	a.sideChrome = nil
+	a.resizeWindowTo(listPanelWidth)
 	a.refreshList()
 }
 
-// showSidePanel expands the side panel and mounts the given content. The HSplit
-// offset is moved to give the side panel roughly 55% of the width when there
-// is enough room. The content is wrapped in a sidePanel chrome that provides
+// showSidePanel expands the side panel and mounts the given content. The whole
+// window is widened to listPanelWidth + sidePanelWidth so the list column keeps
+// its fixed width. The content is wrapped in a sidePanel chrome that provides
 // the mode title bar and a "<" collapse button.
 func (a *App) showSidePanel(content fyne.CanvasObject, title string) {
 	var onEdit func()
@@ -292,9 +343,28 @@ func (a *App) showSidePanel(content fyne.CanvasObject, title string) {
 	a.sideHost.Objects = []fyne.CanvasObject{sp.root}
 	a.sideHost.Refresh()
 	a.sideVisible = true
-	a.side.SetOffset(0.45) // 0.45 = left gets 45%, side panel gets 55%
+	a.sideHost.Show()
+	a.resizeWindowTo(listPanelWidth + sidePanelWidth)
 	if a.list != nil && a.list.topBar != nil {
 		a.list.topBar.Refresh()
+	}
+}
+
+// resizeWindowTo resizes the window so its content area is contentWidth wide,
+// keeping the current height. The top-left corner is captured before the resize
+// and restored afterwards so widening extends to the right (the window does not
+// slide leftward). Safe to call on the UI goroutine.
+func (a *App) resizeWindowTo(contentWidth float32) {
+	// Capture current position + height before resizing.
+	x, y, _, h := a.platform.WindowGeometry()
+	height := float32(h)
+	if height <= 0 {
+		height = a.Window.Canvas().Size().Height
+	}
+	a.Window.Resize(fyne.NewSize(contentWidth, height))
+	// Best-effort reposition (no-op on the stub platform; honoured on Windows).
+	if x != 0 || y != 0 {
+		a.platform.MoveWindow(x, y)
 	}
 }
 

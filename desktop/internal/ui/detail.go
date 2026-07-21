@@ -71,8 +71,11 @@ func newDetailView(app *App) *DetailView {
 	v.statusLbl = widget.NewLabel("")
 
 	v.startBtn = widget.NewButton(i18n.T("detail.start"), nil)
+	v.startBtn.Importance = widget.HighImportance
 	v.completeBtn = widget.NewButton(i18n.T("detail.complete"), nil)
+	v.completeBtn.Importance = widget.HighImportance
 	v.reopenBtn = widget.NewButton(i18n.T("detail.reopen"), nil)
+	v.reopenBtn.Importance = widget.HighImportance
 	v.blockBtn = widget.NewButton(i18n.T("detail.blocked"), nil)
 	v.blockBtn.Disable()
 
@@ -96,6 +99,7 @@ func newDetailView(app *App) *DetailView {
 	v.commentEntry.SetPlaceHolder(i18n.T("detail.commentHint"))
 	v.commentEntry.SetMinRowsVisible(2)
 	v.sendBtn = widget.NewButton(i18n.T("detail.send"), v.sendComment)
+	v.sendBtn.Importance = widget.HighImportance
 	v.commentBox = container.NewVBox()
 
 	// Edit form.
@@ -184,7 +188,7 @@ func (v *DetailView) Refresh() {
 		return
 	}
 	t := detail.Todo
-	v.codeTitle.SetText(fmt.Sprintf("%s  %s", t.Code, t.Title))
+	v.codeTitle.SetText(fmt.Sprintf("%s  %s", formatDisplayCode(t.Category, t.Code), t.Title))
 	v.statusLbl.SetText(statusLabel(t.Status))
 	v.descLabel.SetText(orDash(t.Description))
 	v.priorityLbl.SetText(priorityLabel(t.Priority))
@@ -432,8 +436,27 @@ func formatTime(s string) string {
 	return t.Local().Format("2006-01-02 15:04")
 }
 
+// formatDisplayCode renders a todo code with its category prefix (T-1/B-2/F-3),
+// matching the web client's display convention. The backend stores bare
+// numeric codes; the prefix is purely presentational.
+func formatDisplayCode(category, code string) string {
+	prefix := "?"
+	switch strings.ToLower(strings.TrimSpace(category)) {
+	case "bug":
+		prefix = "B"
+	case "feature":
+		prefix = "F"
+	case "task":
+		prefix = "T"
+	}
+	if strings.TrimSpace(code) == "" {
+		return prefix
+	}
+	return prefix + "-" + code
+}
+
 func summaryToText(s client.TodoSummary) string {
-	return fmt.Sprintf("%s  %s", s.Code, s.Title)
+	return fmt.Sprintf("%s  %s", formatDisplayCode(s.Category, s.Code), s.Title)
 }
 
 func summariesToText(ss []client.TodoSummary) string {
