@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { TodoDetail } from "../types";
 import { DetailPanel } from "./DetailPanel";
 import { ManagePanel } from "./ManagePanel";
 import { CreatePanel } from "./CreatePanel";
+import { ChevronLeftIcon } from "./ui/icons";
 
 interface SidePanelProps {
   mode: "detail" | "manage" | "create";
@@ -13,18 +15,11 @@ interface SidePanelProps {
   onLogout: () => void;
 }
 
-const TITLES: Record<SidePanelProps["mode"], string> = {
-  detail: "Detail",
-  manage: "Manage",
-  create: "New Todo",
-};
-
 /**
  * SidePanel — the chrome wrapper for all side-panel modes.
  *
- * Renders a header (title + collapse chevron-left + Edit/Save button for
- * detail mode) and the mode-specific body. The collapse button calls onClose
- * which shrinks the window back to list-only width.
+ * Renders a header (title + collapse button + Edit/Save toggle for detail
+ * mode) and the mode-specific body.
  */
 export function SidePanel({
   mode,
@@ -34,38 +29,27 @@ export function SidePanel({
   onTodoChanged,
   onLogout,
 }: SidePanelProps) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
+
+  const titles: Record<SidePanelProps["mode"], string> = {
+    detail: t("detail.title"),
+    manage: t("manage.title"),
+    create: t("create.title"),
+  };
 
   return (
     <div className="side-panel">
       <div className="side-panel__header">
-        <span className="side-panel__title">{TITLES[mode]}</span>
+        <span className="side-panel__title">{titles[mode]}</span>
         <div className="side-panel__actions">
           {mode === "detail" && (
-            <button
-              className="side-panel__btn"
-              onClick={() => setEditing((e) => !e)}
-            >
-              {editing ? "Save" : "Edit"}
+            <button className="btn btn--ghost btn--sm" onClick={() => setEditing((e) => !e)}>
+              {editing ? t("detail.save") : t("detail.edit")}
             </button>
           )}
-          <button
-            className="side-panel__btn side-panel__btn--icon"
-            title="Collapse"
-            onClick={onClose}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
+          <button className="icon-btn" title={t("detail.collapse")} onClick={onClose}>
+            <ChevronLeftIcon />
           </button>
         </div>
       </div>

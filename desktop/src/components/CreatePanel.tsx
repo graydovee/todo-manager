@@ -1,82 +1,137 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import dayjs from "dayjs";
 import * as todoApi from "../api/todos";
-import type { CreateTodoInput, Category, Priority } from "../types";
+import type { CreateTodoInput, Category, Priority, TodoSummary } from "../types";
+import { Field } from "./ui/Field";
+import { Select } from "./ui/Select";
+import { TagInput } from "./ui/TagInput";
+import { TodoSearchSelect } from "./ui/TodoSearchSelect";
+import { categoryOptions, priorityOptions } from "../utils/enumOptions";
 
 interface CreatePanelProps {
   onTodoChanged: () => void;
 }
 
 /**
- * CreatePanel — form to create a new todo.
- *
- * On success: refreshes the list (so the new item appears) and the parent
- * DesktopMain will switch to detail mode for the new todo.
+ * CreatePanel — form to create a new todo. Fields mirror the web frontend:
+ * title, description, category/priority dropdowns, tag tokens, due date,
+ * and a remote-search prerequisite picker.
  */
 export function CreatePanel({ onTodoChanged }: CreatePanelProps) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
   const [category, setCategory] = useState<Category>("task");
   const [priority, setPriority] = useState<Priority>("p2");
-  const [tags, setTags] = useState("");
-  const [msg, setMsg] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [dueAt, setDueAt] = useState("");
+  const [deps, setDeps] = useState<TodoSummary[]>([]);
+  const [error, setError] = useState("");
+  const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const create = async () => {
+    setMsg(null);
     if (!title.trim()) {
-      setMsg("Title is required");
+      setError(t("form.titleRequired"));
       return;
     }
-    const cat = category.trim().toLowerCase();
-    if (cat && !["bug", "feature", "task"].includes(cat)) {
-      setMsg("Category must be bug/feature/task");
-      return;
-    }
+    setError("");
     const input: CreateTodoInput = {
       title: title.trim(),
-      category: (cat || "task") as Category,
-      priority: (priority.trim().toLowerCase() || "p2") as Priority,
+      category,
+      priority,
     };
     if (desc.trim()) input.description = desc.trim();
-    const parsedTags = tags.split(",").map((t) => t.trim()).filter(Boolean);
-    if (parsedTags.length) input.tags = parsedTags;
+    if (tags.length) input.tags = tags;
+    if (dueAt) input.due_at = dayjs(dueAt).toISOString();
+    if (deps.length) input.depends_on_ids = deps.map((d) => d.id);
 
+    setSubmitting(true);
     try {
       await todoApi.createTodo(input);
-      setMsg("Created");
-      setTitle(""); setDesc(""); setCategory("task"); setPriority("p2"); setTags("");
+      setMsg({ kind: "ok", text: t("form.created") });
+      setTitle("");
+      setDesc("");
+      setCategory("task");
+      setPriority("p2");
+      setTags([]);
+      setDueAt("");
+      setDeps([]);
       onTodoChanged();
     } catch (e) {
-      setMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
+      setMsg({
+        kind: "error",
+        text: t("form.createFailed", { msg: e instanceof Error ? e.message : String(e) }),
+      });
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="create-panel">
-      <Field label="Title *">
-        <input className="text-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" autoFocus />
+    <form
+      className="create-panel"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void create();
+      }}
+    >
+      <Field label={t("form.title")} required error={error}>
+        <input
+          className="text-input"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={t("form.titlePlaceholder")}
+          autoFocus
+        />
       </Field>
-      <Field label="Description">
-        <textarea className="text-input" rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description" />
+      <Field label={t("form.description")}>
+        <textarea
+          className="text-input"
+          rows={3}
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          placeholder={t("form.descriptionPlaceholder")}
+        />
       </Field>
-      <Field label="Category (bug/feature/task)">
-        <input className="text-input" value={category} onChange={(e) => setCategory(e.target.value as Category)} />
+      <Field label={t("form.category")}>
+        <Select
+          options={categoryOptions(t)}
+          value={category}
+          onChange={(v) => setCategory(v as Category)}
+        />
       </Field>
-      <Field label="Priority (P0-P3)">
-        <input className="text-input" value={priority} onChange={(e) => setPriority(e.target.value as Priority)} />
+      <Field label={t("form.priority")}>
+        <Select
+          options={priorityOptions(t)}
+          value={priority}
+          onChange={(v) => setPriority(v as Priority)}
+        />
       </Field>
-      <Field label="Tags (comma separated)">
-        <input className="text-input" value={tags} onChange={(e) => setTags(e.target.value)} />
+      <Field label={t("form.tags")}>
+        <TagInput value={tags} onChange={setTags} placeholder={t("form.tagsPlaceholder")} />
       </Field>
-      <button className="btn-primary" onClick={create}>Create</button>
-      {msg && <div className="create-msg">{msg}</div>}
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="manage-field">
-      <label className="manage-field__label">{label}</label>
-      {children}
-    </div>
+      <Field label={t("form.dueDate")}>
+        <input
+          type="datetime-local"
+          className="text-input"
+          value={dueAt}
+          onChange={(e) => setDueAt(e.target.value)}
+        />
+      </Field>
+      <Field label={t("form.dependsOn")}>
+        <TodoSearchSelect
+          value={deps}
+          onChange={setDeps}
+          placeholder={t("form.dependsOnPlaceholder")}
+        />
+      </Field>
+      <button type="submit" className="btn btn--primary" disabled={submitting}>
+        {t("form.create")}
+      </button>
+      {msg && <div className={`form-msg form-msg--${msg.kind}`}>{msg.text}</div>}
+    </form>
   );
 }

@@ -1,27 +1,13 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../stores/authContext";
+import { Field } from "./ui/Field";
+import { ChipGroup } from "./ui/ChipGroup";
+import { statusLabel, CATEGORIES, PRIORITIES, STATUSES } from "../utils/enumOptions";
 
 interface ManagePanelProps {
   onLogout: () => void;
 }
-
-const STATUS_OPTIONS = [
-  { value: "open", label: "Not Started" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "completed", label: "Completed" },
-  { value: "duplicate", label: "Duplicate" },
-];
-const CATEGORY_OPTIONS = [
-  { value: "bug", label: "bug" },
-  { value: "feature", label: "feature" },
-  { value: "task", label: "task" },
-];
-const PRIORITY_OPTIONS = [
-  { value: "p0", label: "p0" },
-  { value: "p1", label: "p1" },
-  { value: "p2", label: "p2" },
-  { value: "p3", label: "p3" },
-];
 
 /**
  * ManagePanel — filters, search, language, and logout.
@@ -30,13 +16,47 @@ const PRIORITY_OPTIONS = [
  * them. The Apply button triggers a list refresh via a custom event.
  */
 export function ManagePanel({ onLogout }: ManagePanelProps) {
+  const { t, i18n } = useTranslation();
   const { logout } = useAuth();
   const [statusSel, setStatusSel] = useState<Set<string>>(() => loadSet("filter_status", ["open", "in_progress"]));
   const [catSel, setCatSel] = useState<Set<string>>(() => loadSet("filter_category"));
   const [priSel, setPriSel] = useState<Set<string>>(() => loadSet("filter_priority"));
   const [query, setQuery] = useState(() => localStorage.getItem("filter_query") ?? "");
   const [codeSearch, setCodeSearch] = useState(() => localStorage.getItem("filter_code") ?? "");
-  const [lang, setLang] = useState(() => localStorage.getItem("lang") ?? "en");
+  const [opacity, setOpacity] = useState(() => loadOpacity());
+  const [previewing, setPreviewing] = useState(false);
+  const previewTimer = useRef<number | null>(null);
+
+  // Make sure a pending preview is cancelled if the panel unmounts.
+  useEffect(() => {
+    return () => {
+      if (previewTimer.current) window.clearTimeout(previewTimer.current);
+      document.getElementById("root")?.classList.remove("opacity-preview");
+    };
+  }, []);
+
+  const changeOpacity = (v: number) => {
+    setOpacity(v);
+    localStorage.setItem("lock_opacity", String(v));
+    window.dispatchEvent(new CustomEvent("lock-opacity-changed"));
+  };
+
+  const togglePreview = () => {
+    const root = document.getElementById("root");
+    if (!root) return;
+    if (previewing) {
+      if (previewTimer.current) window.clearTimeout(previewTimer.current);
+      root.classList.remove("opacity-preview");
+      setPreviewing(false);
+      return;
+    }
+    root.classList.add("opacity-preview");
+    setPreviewing(true);
+    previewTimer.current = window.setTimeout(() => {
+      root.classList.remove("opacity-preview");
+      setPreviewing(false);
+    }, 2500);
+  };
 
   const toggle = (set: Set<string>, setFn: (s: Set<string>) => void, val: string) => {
     const next = new Set(set);
@@ -55,9 +75,8 @@ export function ManagePanel({ onLogout }: ManagePanelProps) {
   };
 
   const changeLang = (l: string) => {
-    setLang(l);
     localStorage.setItem("lang", l);
-    window.location.reload();
+    void i18n.changeLanguage(l);
   };
 
   const doLogout = async () => {
@@ -67,8 +86,12 @@ export function ManagePanel({ onLogout }: ManagePanelProps) {
 
   return (
     <div className="manage-panel">
-      <Field label="Language">
-        <select className="text-input" value={lang} onChange={(e) => changeLang(e.target.value)}>
+      <Field label={t("manage.language")}>
+        <select
+          className="text-input"
+          value={i18n.language}
+          onChange={(e) => changeLang(e.target.value)}
+        >
           <option value="en">English</option>
           <option value="zh">简体中文</option>
         </select>
@@ -76,70 +99,89 @@ export function ManagePanel({ onLogout }: ManagePanelProps) {
 
       <div className="detail-sep" />
 
-      <Field label="Status">
-        <ChipGroup options={STATUS_OPTIONS} selected={statusSel} onToggle={(v) => toggle(statusSel, setStatusSel, v)} />
+      <Field label={`${t("manage.opacity")} · ${Math.round(opacity * 100)}%`}>
+        <div className="opacity-row">
+          <input
+            type="range"
+            className="opacity-slider"
+            min={0.2}
+            max={1}
+            step={0.05}
+            value={opacity}
+            onChange={(e) => changeOpacity(parseFloat(e.target.value))}
+          />
+          <button className="btn btn--ghost btn--sm" onClick={togglePreview}>
+            {previewing ? t("manage.previewing") : t("manage.preview")}
+          </button>
+        </div>
       </Field>
-      <Field label="Category">
-        <ChipGroup options={CATEGORY_OPTIONS} selected={catSel} onToggle={(v) => toggle(catSel, setCatSel, v)} />
-      </Field>
-      <Field label="Priority">
-        <ChipGroup options={PRIORITY_OPTIONS} selected={priSel} onToggle={(v) => toggle(priSel, setPriSel, v)} />
-      </Field>
-
-      <Field label="Title search">
-        <input className="text-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title…" />
-      </Field>
-      <Field label="Code (exact)">
-        <input className="text-input" value={codeSearch} onChange={(e) => setCodeSearch(e.target.value)} placeholder="T-1" />
-      </Field>
-
-      <button className="btn-primary" onClick={apply}>Apply</button>
 
       <div className="detail-sep" />
 
-      <button className="btn-primary" onClick={doLogout}>Logout</button>
+      <Field label={t("manage.status")}>
+        <ChipGroup
+          options={STATUSES.map((s) => ({ value: s, label: statusLabel(t, s) }))}
+          selected={statusSel}
+          onToggle={(v) => toggle(statusSel, setStatusSel, v)}
+        />
+      </Field>
+      <Field label={t("manage.category")}>
+        <ChipGroup
+          options={CATEGORIES.map((c) => ({ value: c, label: t(`category.${c}`) }))}
+          selected={catSel}
+          onToggle={(v) => toggle(catSel, setCatSel, v)}
+        />
+      </Field>
+      <Field label={t("manage.priority")}>
+        <ChipGroup
+          options={PRIORITIES.map((p) => ({ value: p, label: t(`priority.${p}`) }))}
+          selected={priSel}
+          onToggle={(v) => toggle(priSel, setPriSel, v)}
+        />
+      </Field>
+
+      <Field label={t("manage.titleSearch")}>
+        <input
+          className="text-input"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t("manage.titleSearchPlaceholder")}
+        />
+      </Field>
+      <Field label={t("manage.codeExact")}>
+        <input
+          className="text-input"
+          value={codeSearch}
+          onChange={(e) => setCodeSearch(e.target.value)}
+          placeholder={t("manage.codePlaceholder")}
+        />
+      </Field>
+
+      <button className="btn btn--primary" onClick={apply}>
+        {t("manage.apply")}
+      </button>
+
+      <div className="detail-sep" />
+
+      <button className="btn btn--ghost" onClick={doLogout}>
+        {t("manage.logout")}
+      </button>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="manage-field">
-      <label className="manage-field__label">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function ChipGroup({
-  options,
-  selected,
-  onToggle,
-}: {
-  options: { value: string; label: string }[];
-  selected: Set<string>;
-  onToggle: (v: string) => void;
-}) {
-  return (
-    <div className="chip-group">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          className={`chip${selected.has(opt.value) ? " chip--on" : ""}`}
-          onClick={() => onToggle(opt.value)}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
+function loadOpacity(): number {
+  const v = parseFloat(localStorage.getItem("lock_opacity") ?? "0.75");
+  return isNaN(v) ? 0.75 : Math.min(1, Math.max(0.2, v));
 }
 
 function loadSet(key: string, defaults?: string[]): Set<string> {
   try {
     const raw = localStorage.getItem(key);
     if (raw) return new Set(JSON.parse(raw));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return new Set(defaults ?? []);
 }
 

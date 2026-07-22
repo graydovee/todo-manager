@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import * as todoApi from "../api/todos";
 import { formatDisplayCode } from "../utils/displayCode";
-import type { Todo, Status } from "../types";
+import { statusLabel, PRIORITY_COLORS } from "../utils/enumOptions";
+import { PlayIcon, CheckIcon, PinIcon } from "./ui/icons";
+import type { Todo } from "../types";
 
 interface TodoListProps {
   refreshKey: number;
@@ -15,9 +18,8 @@ interface TodoListProps {
 /**
  * TodoList — the fixed-width (320px) todo list column.
  *
- * Fetches todos via the shared API (no TanStack Query needed for this simple
- * list). Each row shows "CODE  Title" (bold) on the left and priority / status
- * / action button on the right. Clicking a row opens the detail side panel.
+ * Each row: priority dot + title on top, code + category/status badges below.
+ * A contextual action button (start / complete) appears on hover.
  */
 export function TodoList({
   refreshKey,
@@ -25,6 +27,7 @@ export function TodoList({
   onOpenDetail,
   onTodoChanged,
 }: TodoListProps) {
+  const { t } = useTranslation();
   const [items, setItems] = useState<Todo[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -83,7 +86,6 @@ export function TodoList({
         }
         onTodoChanged();
       } catch (e) {
-        // TODO: show conflict dialog on 409
         console.error("Action failed:", e);
       }
     },
@@ -91,10 +93,10 @@ export function TodoList({
   );
 
   const footer = loading
-    ? "Loading…"
+    ? t("common.loading")
     : error
-      ? `Error: ${error}`
-      : `${total} items`;
+      ? t("list.error", { msg: error })
+      : t("list.items", { count: total });
 
   return (
     <div className="todo-list">
@@ -109,7 +111,7 @@ export function TodoList({
           />
         ))}
         {!loading && items.length === 0 && !error && (
-          <div className="todo-list__empty">No todos</div>
+          <div className="todo-list__empty">{t("list.empty")}</div>
         )}
       </div>
       <div className="todo-list__footer">{footer}</div>
@@ -125,78 +127,57 @@ interface TodoRowProps {
 }
 
 function TodoRow({ todo, selected, onClick, onAction }: TodoRowProps) {
+  const { t } = useTranslation();
   const code = formatDisplayCode(todo.category, todo.code);
-  const title = todo.title || "(untitled)";
-  const priority = (todo.priority || "").toUpperCase();
-  const status = statusLabel(todo.status);
-
-  let actionBtn: React.ReactNode = null;
-  if (todo.status === "open") {
-    actionBtn = (
-      <button
-        className="row-action"
-        title="Start"
-        onClick={(e) => {
-          e.stopPropagation();
-          onAction("start");
-        }}
-      >
-        ▶
-      </button>
-    );
-  } else if (todo.status === "in_progress") {
-    actionBtn = (
-      <button
-        className="row-action"
-        title="Complete"
-        onClick={(e) => {
-          e.stopPropagation();
-          onAction("complete");
-        }}
-      >
-        ✓
-      </button>
-    );
-  }
+  const title = todo.title || t("list.untitled");
+  const done = todo.status === "completed" || todo.status === "duplicate";
 
   return (
     <div
       className={`todo-row${selected ? " todo-row--selected" : ""}`}
       onClick={onClick}
     >
-      <div className="todo-row__main">
-        <span className="todo-row__title">
-          {code}&nbsp;&nbsp;{title}
+      <div className="todo-row__top">
+        <span className="dot" style={{ background: PRIORITY_COLORS[todo.priority] }} />
+        <span className={`todo-row__title${done ? " todo-row__title--done" : ""}`}>
+          {title}
         </span>
-      </div>
-      <div className="todo-row__meta">
-        {priority && <span className="todo-row__priority">{priority}</span>}
-        {status && (
-          <span
-            className={`todo-row__status${todo.status === "in_progress" ? " todo-row__status--bold" : ""}`}
+        {todo.pinned && <PinIcon size={12} filled className="todo-row__pin" />}
+        {todo.status === "open" && (
+          <button
+            className="row-action"
+            title={t("list.start")}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAction("start");
+            }}
           >
-            {status}
-          </span>
+            <PlayIcon size={13} />
+          </button>
         )}
-        {actionBtn}
+        {todo.status === "in_progress" && (
+          <button
+            className="row-action"
+            title={t("list.complete")}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAction("complete");
+            }}
+          >
+            <CheckIcon size={13} />
+          </button>
+        )}
+      </div>
+      <div className="todo-row__bottom">
+        <span className="todo-row__code">{code}</span>
+        <span className={`badge badge--cat-${todo.category}`}>
+          {t(`category.${todo.category}`)}
+        </span>
+        <span className={`badge badge--st-${todo.status}`}>{statusLabel(t, todo.status)}</span>
+        {todo.highlighted && <span className="badge badge--warm">{t("list.highlighted")}</span>}
       </div>
     </div>
   );
-}
-
-function statusLabel(s: Status): string {
-  switch (s) {
-    case "open":
-      return "Not Started";
-    case "in_progress":
-      return "In Progress";
-    case "completed":
-      return "Completed";
-    case "duplicate":
-      return "Duplicate";
-    default:
-      return s;
-  }
 }
 
 /** Read a filter set from localStorage and return it as a comma-joined string

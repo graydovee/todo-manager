@@ -1,0 +1,291 @@
+/* Base: reset, typography, shared controls (buttons, inputs, badges, dots, chips, pills). */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+}
+
+/* Only while locked (or previewing the lock opacity) does the window let the
+ * desktop show through — both html and body backgrounds must step aside. */
+html:has(#root.app-locked),
+html:has(#root.opacity-preview),
+body:has(#root.app-locked),
+body:has(#root.opacity-preview) {
+  background: transparent;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* #root must stay opaque — the OS window is transparent. */
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+/* Window-lock mode (and its settings preview): the whole app goes
+ * semi-transparent so the desktop shows through. */
+#root.app-locked,
+#root.opacity-preview {
+  opacity: var(--lock-opacity, 0.75);
+}
+
+h1, h2, h3 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+p { margin: 0; }
+button { font: inherit; color: inherit; }
+input, textarea, select { font: inherit; }
+
+/* Thin, quiet scrollbars */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  transition: transform var(--dur-press) var(--ease-out),
+    background-color var(--dur-press) var(--ease-out),
+    border-color var(--dur-press) var(--ease-out);
+}
+
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn:disabled:active { transform: none; }
+
+.btn--primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
+}
+
+.btn--ghost {
+  border-color: var(--border-strong);
+  color: var(--fg);
+  background: var(--surface);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn--ghost:hover:not(:disabled) { background: var(--surface-2); }
+}
+
+.btn--sm { padding: 3px 10px; font-size: 12px; border-radius: var(--radius-sm); }
+
+/* Icon-only button */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out),
+    background-color var(--dur-press) var(--ease-out),
+    color var(--dur-press) var(--ease-out);
+}
+.icon-btn:active { transform: scale(0.92); }
+@media (hover: hover) and (pointer: fine) {
+  .icon-btn:hover { background: var(--surface-2); color: var(--fg); }
+}
+.icon-btn--active { color: var(--warm); background: var(--warm-soft); }
+
+/* ---------- Inputs ---------- */
+
+.text-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--dur-press) var(--ease-out),
+    box-shadow var(--dur-press) var(--ease-out);
+}
+.text-input::placeholder { color: var(--fg-3); }
+.text-input:focus {
+  border-color: var(--warm);
+  box-shadow: 0 0 0 2px var(--warm-soft);
+}
+textarea.text-input { resize: vertical; min-height: 56px; user-select: text; }
+input.text-input { user-select: text; }
+select.text-input { cursor: pointer; }
+
+/* Form row */
+.field { margin-bottom: 12px; }
+.field__label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-2);
+}
+.field__error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+/* ---------- Badges, dots, chips, pills ---------- */
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fg-3);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  height: 18px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  background: var(--surface-2);
+  color: var(--fg-2);
+}
+.badge--warm { background: var(--warm-soft); color: var(--warm); }
+
+.badge--p0 { background: color-mix(in srgb, var(--p0) 12%, white); color: var(--p0); }
+.badge--p1 { background: color-mix(in srgb, var(--p1) 12%, white); color: var(--p1); }
+.badge--p2 { background: color-mix(in srgb, var(--p2) 14%, white); color: #92610a; }
+.badge--p3 { background: var(--surface-2); color: var(--fg-2); }
+
+.badge--cat-bug { background: color-mix(in srgb, var(--cat-bug) 10%, white); color: var(--cat-bug); }
+.badge--cat-feature { background: color-mix(in srgb, var(--cat-feature) 12%, white); color: var(--cat-feature); }
+.badge--cat-task { background: color-mix(in srgb, var(--cat-task) 10%, white); color: var(--cat-task); }
+
+.badge--st-open { background: color-mix(in srgb, var(--st-open) 10%, white); color: var(--st-open); }
+.badge--st-in_progress { background: color-mix(in srgb, var(--st-progress) 14%, white); color: #92610a; }
+.badge--st-completed { background: color-mix(in srgb, var(--st-done) 12%, white); color: var(--st-done); }
+.badge--st-duplicate { background: var(--surface-2); color: var(--fg-2); }
+
+/* Filter chips (ManagePanel) */
+.chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  padding: 3px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--fg-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out),
+    background-color var(--dur-press) var(--ease-out),
+    border-color var(--dur-press) var(--ease-out),
+    color var(--dur-press) var(--ease-out);
+}
+.chip:active { transform: scale(0.95); }
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover { background: var(--surface-2); }
+}
+.chip--on {
+  background: var(--warm-soft);
+  border-color: var(--warm-border);
+  color: var(--warm);
+  font-weight: 500;
+}
+
+/* Selected-item pill (TagInput / TodoSearchSelect) */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 1px 4px 1px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 18px;
+}
+.pill__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pill__x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: color var(--dur-press) var(--ease-out),
+    background-color var(--dur-press) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .pill__x:hover { color: var(--fg); background: var(--surface-3); }
+}
+
+/* Links */
+.link {
+  color: var(--warm);
+  text-decoration: none;
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) {
+  .link:hover { text-decoration: underline; }
+}
+
+/* ---------- Accessibility: reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .btn, .icon-btn, .chip { transition: none; }
+  .btn:active, .icon-btn:active, .chip:active { transform: none; }
+}

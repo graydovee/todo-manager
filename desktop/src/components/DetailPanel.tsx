@@ -1,7 +1,14 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import dayjs from "dayjs";
 import * as todoApi from "../api/todos";
 import { formatDisplayCode } from "../utils/displayCode";
-import type { TodoDetail, Status, TodoSummary, Priority } from "../types";
+import { statusLabel, categoryOptions, priorityOptions } from "../utils/enumOptions";
+import { Field } from "./ui/Field";
+import { Select } from "./ui/Select";
+import { TagInput } from "./ui/TagInput";
+import { TrashIcon } from "./ui/icons";
+import type { TodoDetail, TodoSummary, Category, Priority } from "../types";
 
 interface DetailPanelProps {
   detail: TodoDetail | null;
@@ -12,7 +19,7 @@ interface DetailPanelProps {
 }
 
 /**
- * DetailPanel — shows the full detail of the selected todo: header, status,
+ * DetailPanel — shows the full detail of the selected todo: header, badges,
  * action buttons, metadata, relations, and comments.
  */
 export function DetailPanel({
@@ -22,18 +29,19 @@ export function DetailPanel({
   onEditingChange,
   onTodoChanged,
 }: DetailPanelProps) {
-  if (loading) return <div className="detail-panel">Loading…</div>;
-  if (!detail) return <div className="detail-panel">No detail</div>;
+  const { t } = useTranslation();
 
-  const t = detail;
-  const code = formatDisplayCode(t.category, t.code);
+  if (loading) return <div className="detail-panel">{t("common.loading")}</div>;
+  if (!detail) return <div className="detail-panel">{t("detail.noDetail")}</div>;
+
+  const todo = detail;
+  const code = formatDisplayCode(todo.category, todo.code);
 
   const doAction = async (action: "start" | "complete" | "reopen") => {
     try {
-      if (action === "start") await todoApi.startTodo(t.id);
-      else if (action === "complete")
-        await todoApi.completeTodo(t.id, false);
-      else await todoApi.reopenTodo(t.id, false);
+      if (action === "start") await todoApi.startTodo(todo.id);
+      else if (action === "complete") await todoApi.completeTodo(todo.id, false);
+      else await todoApi.reopenTodo(todo.id, false);
       onTodoChanged();
     } catch (e) {
       console.error("Action failed:", e);
@@ -42,64 +50,65 @@ export function DetailPanel({
 
   return (
     <div className="detail-panel">
-      <div className="detail-panel__header-text">{code}&nbsp;&nbsp;{t.title}</div>
-      <div className="detail-panel__status">{statusLabel(t.status)}</div>
+      <div className="detail-panel__header-text">
+        {todo.title}
+      </div>
+      <div className="detail-panel__meta-row">
+        <span className="todo-row__code">{code}</span>
+        <span className={`badge badge--cat-${todo.category}`}>{t(`category.${todo.category}`)}</span>
+        <span className={`badge badge--st-${todo.status}`}>{statusLabel(t, todo.status)}</span>
+        <span className={`badge badge--${todo.priority}`}>{todo.priority.toUpperCase()}</span>
+      </div>
 
       <div className="detail-panel__actions">
-        {t.status === "open" && (
-          <button className="btn-primary" onClick={() => doAction("start")}>
-            Start
+        {todo.status === "open" && (
+          <button className="btn btn--primary btn--sm" onClick={() => doAction("start")}>
+            {t("detail.start")}
           </button>
         )}
-        {t.status !== "completed" && t.status !== "duplicate" && (
-          <button className="btn-primary" onClick={() => doAction("complete")}>
-            Complete
+        {todo.status !== "completed" && todo.status !== "duplicate" && (
+          <button className="btn btn--primary btn--sm" onClick={() => doAction("complete")}>
+            {t("detail.complete")}
           </button>
         )}
-        {t.status === "completed" && (
-          <button className="btn-primary" onClick={() => doAction("reopen")}>
-            Reopen
+        {todo.status === "completed" && (
+          <button className="btn btn--primary btn--sm" onClick={() => doAction("reopen")}>
+            {t("detail.reopen")}
           </button>
         )}
       </div>
 
       <div className="detail-sep" />
 
-      <Section label="Description">{t.description || "-"}</Section>
+      <Section label={t("detail.description")}>
+        {todo.description || <span className="detail-muted">-</span>}
+      </Section>
 
       <div className="detail-sep" />
 
       <div className="detail-grid">
-        <Section label="Priority">{(t.priority || "").toUpperCase() || "-"}</Section>
-        <Section label="Due">{t.due_at || "-"}</Section>
+        <Section label={t("detail.due")}>{todo.due_at ? formatTime(todo.due_at) : "-"}</Section>
+        <Section label={t("detail.tags")}>{(todo.tags ?? []).join(", ") || "-"}</Section>
       </div>
       <div className="detail-grid">
-        <Section label="Created">{formatTime(t.created_at)}</Section>
-        <Section label="Updated">{formatTime(t.updated_at)}</Section>
+        <Section label={t("detail.created")}>{formatTime(todo.created_at)}</Section>
+        <Section label={t("detail.updated")}>{formatTime(todo.updated_at)}</Section>
       </div>
-
-      <Section label="Tags">{(t.tags ?? []).join(", ") || "-"}</Section>
 
       <div className="detail-sep" />
 
-      <Section label="Prerequisites">
-        {summariesText(detail.depends_on)}
-      </Section>
-      <Section label="Dependents">
-        {summariesText(detail.depended_by)}
-      </Section>
-      <Section label="Duplicate of">
+      <Section label={t("detail.prerequisites")}>{summariesText(detail.depends_on)}</Section>
+      <Section label={t("detail.dependents")}>{summariesText(detail.depended_by)}</Section>
+      <Section label={t("detail.duplicateOf")}>
         {detail.duplicate_of
           ? `${formatDisplayCode(detail.duplicate_of.category, detail.duplicate_of.code)}  ${detail.duplicate_of.title}`
           : "-"}
       </Section>
-      <Section label="Duplicates">
-        {summariesText(detail.duplicates)}
-      </Section>
+      <Section label={t("detail.duplicates")}>{summariesText(detail.duplicates)}</Section>
 
       <div className="detail-sep" />
 
-      <CommentsSection todoId={t.id} />
+      <CommentsSection todoId={todo.id} />
 
       {editing && (
         <EditForm
@@ -123,9 +132,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function summariesText(
-  summaries: TodoSummary[] | undefined,
-): string {
+function summariesText(summaries: TodoSummary[] | undefined): React.ReactNode {
   if (!summaries || summaries.length === 0) return "-";
   return summaries
     .map((s) => `${formatDisplayCode(s.category, s.code)}  ${s.title}`)
@@ -134,45 +141,14 @@ function summariesText(
 
 function formatTime(s: string): string {
   if (!s) return "-";
-  try {
-    const d = new Date(s);
-    if (isNaN(d.getTime())) return s;
-    return d
-      .toLocaleString("sv-SE", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-      .replace("T", " ");
-  } catch {
-    return s;
-  }
-}
-
-function statusLabel(s: Status): string {
-  switch (s) {
-    case "open":
-      return "Not Started";
-    case "in_progress":
-      return "In Progress";
-    case "completed":
-      return "Completed";
-    case "duplicate":
-      return "Duplicate";
-    default:
-      return s;
-  }
+  const d = dayjs(s);
+  return d.isValid() ? d.format("YYYY-MM-DD HH:mm") : s;
 }
 
 // --- Comments ---
 
-function CommentsSection({
-  todoId,
-}: {
-  todoId: number;
-}) {
+function CommentsSection({ todoId }: { todoId: number }) {
+  const { t } = useTranslation();
   const [comments, setComments] = useState<
     { id: number; content: string; created_at: string }[]
   >([]);
@@ -216,11 +192,11 @@ function CommentsSection({
   };
 
   return (
-    <Section label="Comments">
+    <Section label={t("detail.comments")}>
       {loadingC ? (
-        "Loading…"
+        t("common.loading")
       ) : comments.length === 0 ? (
-        <span className="detail-muted">No comments</span>
+        <span className="detail-muted">{t("detail.noComments")}</span>
       ) : (
         <div className="comment-list">
           {comments.map((c) => (
@@ -228,11 +204,8 @@ function CommentsSection({
               <div className="comment-item__body">{c.content}</div>
               <div className="comment-item__meta">
                 <span className="comment-item__time">{formatTime(c.created_at)}</span>
-                <button
-                  className="comment-item__del"
-                  onClick={() => del(c.id)}
-                >
-                  Del
+                <button className="icon-btn" title={t("common.delete")} onClick={() => del(c.id)}>
+                  <TrashIcon size={14} />
                 </button>
               </div>
             </div>
@@ -241,14 +214,14 @@ function CommentsSection({
       )}
       <div className="comment-input-row">
         <textarea
-          className="comment-input"
-          placeholder="Add a comment…"
+          className="text-input"
+          placeholder={t("detail.commentPlaceholder")}
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={2}
         />
-        <button className="btn-primary" onClick={send}>
-          Send
+        <button className="btn btn--primary btn--sm" onClick={send}>
+          {t("detail.send")}
         </button>
       </div>
     </Section>
@@ -257,67 +230,93 @@ function CommentsSection({
 
 // --- Edit form ---
 
-function EditForm({
-  detail,
-  onSaved,
-}: {
-  detail: TodoDetail;
-  onSaved: () => void;
-}) {
+function EditForm({ detail, onSaved }: { detail: TodoDetail; onSaved: () => void }) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState(detail.title);
   const [desc, setDesc] = useState(detail.description);
+  const [category, setCategory] = useState<Category>(detail.category);
   const [priority, setPriority] = useState<Priority>(detail.priority);
-  const [tags, setTags] = useState((detail.tags ?? []).join(", "));
+  const [tags, setTags] = useState<string[]>(detail.tags ?? []);
+  const [dueAt, setDueAt] = useState(
+    detail.due_at ? dayjs(detail.due_at).format("YYYY-MM-DDTHH:mm") : "",
+  );
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const save = async () => {
+    if (!title.trim()) {
+      setError(t("form.titleRequired"));
+      return;
+    }
+    setError("");
+    setSaving(true);
     try {
       await todoApi.updateTodo(detail.id, {
-        title,
+        title: title.trim(),
         description: desc,
-        priority: (priority || "p2") as Priority,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
+        category,
+        priority,
+        tags,
+        due_at: dueAt ? dayjs(dueAt).toISOString() : null,
       });
       onSaved();
     } catch (e) {
       console.error("Save failed:", e);
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <div className="detail-sep" >
-      <div className="edit-form">
-        <label className="edit-form__label">Title *</label>
-        <input
-          className="text-input"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <label className="edit-form__label">Description</label>
-        <textarea
-          className="text-input"
-          rows={3}
-          value={desc}
-          onChange={(e) => setDesc(e.target.value)}
-        />
-        <label className="edit-form__label">Priority (P0-P3)</label>
-        <input
-          className="text-input"
-          value={priority}
-          onChange={(e) => setPriority(e.target.value as Priority)}
-        />
-        <label className="edit-form__label">Tags (comma separated)</label>
-        <input
-          className="text-input"
-          value={tags}
-          onChange={(e) => setTags(e.target.value)}
-        />
-        <button className="btn-primary" onClick={save}>
-          Save
+    <>
+      <div className="detail-sep" />
+      <form
+        className="edit-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <Field label={t("form.title")} required error={error}>
+          <input className="text-input" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+        <Field label={t("form.description")}>
+          <textarea
+            className="text-input"
+            rows={3}
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+          />
+        </Field>
+        <Field label={t("form.category")}>
+          <Select
+            options={categoryOptions(t)}
+            value={category}
+            onChange={(v) => setCategory(v as Category)}
+          />
+        </Field>
+        <Field label={t("form.priority")}>
+          <Select
+            options={priorityOptions(t)}
+            value={priority}
+            onChange={(v) => setPriority(v as Priority)}
+          />
+        </Field>
+        <Field label={t("form.tags")}>
+          <TagInput value={tags} onChange={setTags} placeholder={t("form.tagsPlaceholder")} />
+        </Field>
+        <Field label={t("form.dueDate")}>
+          <input
+            type="datetime-local"
+            className="text-input"
+            value={dueAt}
+            onChange={(e) => setDueAt(e.target.value)}
+          />
+        </Field>
+        <button type="submit" className="btn btn--primary" disabled={saving}>
+          {t("detail.save")}
         </button>
-      </div>
-    </div>
+      </form>
+    </>
   );
 }
