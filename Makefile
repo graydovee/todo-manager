@@ -22,9 +22,18 @@ cli-test:
 desktop-dev:
 	cd desktop && npm run tauri dev
 
-# Cross-compile a Windows binary from Linux (requires mingw-w64 + rust target x86_64-pc-windows-gnu).
+# Cross-compile a Windows binary from Linux to the MSVC target.
+# Produces a single self-contained .exe (WebView2Loader statically linked,
+# no DLL to ship alongside). Requires: cargo-xwin, llvm-15-tools, clang-15,
+# lld-15 (see README for install commands).
 desktop-windows:
-	cd desktop && npx tauri build --target x86_64-pc-windows-gnu
+	cd desktop && npm run build
+	cd desktop/src-tauri && cargo xwin build --release --features prod --target x86_64-pc-windows-msvc
+
+# Legacy: cross-compile via mingw (produces an .exe + WebView2Loader.dll that
+# must be shipped together). Kept as a fallback in case the MSVC path breaks.
+desktop-windows-gnu:
+	cd desktop && npx tauri build --target x86_64-pc-windows-gnu --no-bundle
 
 # Build for the current platform.
 desktop-build:
