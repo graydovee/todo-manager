@@ -1,5 +1,15 @@
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  PlusIcon,
+  RefreshIcon,
+  PinIcon,
+  LockIcon,
+  UnlockIcon,
+  SettingsIcon,
+  CloseIcon,
+} from "./ui/icons";
 
 interface TitleBarProps {
   authenticated?: boolean;
@@ -26,6 +36,8 @@ export function TitleBar({
   onRefresh,
   onManage,
 }: TitleBarProps) {
+  const { t } = useTranslation();
+
   const handleClose = useCallback(async () => {
     try {
       await getCurrentWindow().close();
@@ -37,58 +49,42 @@ export function TitleBar({
   return (
     <div className="title-bar" data-tauri-drag-region>
       <span className="title-bar__title" data-tauri-drag-region>
-        Todos
+        {t("common.appName")}
       </span>
       <div className="title-bar__buttons">
         {authenticated && (
           <>
-            <TitleBarButton title="New" onClick={() => onCreate?.()}>
-              ＋
-            </TitleBarButton>
-            <TitleBarButton title="Refresh" onClick={() => onRefresh?.()}>
-              ↻
-            </TitleBarButton>
+            <button className="icon-btn" title={t("titlebar.new")} onClick={() => onCreate?.()}>
+              <PlusIcon />
+            </button>
+            <button className="icon-btn" title={t("titlebar.refresh")} onClick={() => onRefresh?.()}>
+              <RefreshIcon />
+            </button>
           </>
         )}
-        <TitleBarButton title="Pin on top" active={pinned} onClick={onTogglePin}>
-          {pinned ? "📌" : "📍"}
-        </TitleBarButton>
-        <TitleBarButton title="Lock" active={locked} onClick={onToggleLock}>
-          {locked ? "🔒" : "🔓"}
-        </TitleBarButton>
+        <button
+          className={`icon-btn${pinned ? " icon-btn--active" : ""}`}
+          title={t("titlebar.pin")}
+          onClick={onTogglePin}
+        >
+          <PinIcon filled={pinned} />
+        </button>
+        <button
+          className={`icon-btn${locked ? " icon-btn--active" : ""}`}
+          title={t("titlebar.lock")}
+          onClick={onToggleLock}
+        >
+          {locked ? <LockIcon /> : <UnlockIcon />}
+        </button>
         {authenticated && (
-          <TitleBarButton title="Manage" onClick={() => onManage?.()}>
-            ⚙
-          </TitleBarButton>
+          <button className="icon-btn" title={t("titlebar.manage")} onClick={() => onManage?.()}>
+            <SettingsIcon />
+          </button>
         )}
-        <TitleBarButton title="Close" onClick={handleClose}>
-          ✕
-        </TitleBarButton>
+        <button className="icon-btn" title={t("titlebar.close")} onClick={handleClose}>
+          <CloseIcon />
+        </button>
       </div>
     </div>
-  );
-}
-
-interface TitleBarButtonProps {
-  children: React.ReactNode;
-  title: string;
-  active?: boolean;
-  onClick: () => void;
-}
-
-function TitleBarButton({
-  children,
-  title,
-  active = false,
-  onClick,
-}: TitleBarButtonProps) {
-  return (
-    <button
-      className={`title-bar__btn${active ? " title-bar__btn--active" : ""}`}
-      title={title}
-      onClick={onClick}
-    >
-      {children}
-    </button>
   );
 }

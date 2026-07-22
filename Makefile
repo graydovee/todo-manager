@@ -26,8 +26,12 @@ desktop-dev:
 # Produces a single self-contained .exe (WebView2Loader statically linked,
 # no DLL to ship alongside). Requires: cargo-xwin, llvm-15-tools, clang-15,
 # lld-15 (see README for install commands).
+# Note: stale build-script outputs (embedded icon resources etc.) are removed
+# first — cargo clean -p does NOT clean them, and an outdated resource.lib
+# would silently be relinked into the new exe.
 desktop-windows:
 	cd desktop && npm run build
+	rm -rf desktop/src-tauri/target/x86_64-pc-windows-msvc/release/build/todo-desktop-*
 	cd desktop/src-tauri && cargo xwin build --release --features prod --target x86_64-pc-windows-msvc
 
 # Legacy: cross-compile via mingw (produces an .exe + WebView2Loader.dll that

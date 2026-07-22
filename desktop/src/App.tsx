@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AuthProvider, useAuth } from "./stores/authContext";
@@ -21,6 +22,7 @@ interface DesktopMainHandle {
 }
 
 function AppContent() {
+  const { t } = useTranslation();
   const { user, ready, clientReady } = useAuth();
   const authenticated = clientReady && ready && !!user;
   const mainHandle = useRef<DesktopMainHandle | null>(null);
@@ -74,6 +76,19 @@ function AppContent() {
     }
   }, [locked]);
 
+  // Lock opacity: read the persisted value on startup and follow changes
+  // from the manage panel (custom event keeps the two in sync).
+  useEffect(() => {
+    const apply = () => {
+      const v = parseFloat(localStorage.getItem("lock_opacity") ?? "0.75");
+      const clamped = isNaN(v) ? 0.75 : Math.min(1, Math.max(0.2, v));
+      document.documentElement.style.setProperty("--lock-opacity", String(clamped));
+    };
+    apply();
+    window.addEventListener("lock-opacity-changed", apply);
+    return () => window.removeEventListener("lock-opacity-changed", apply);
+  }, []);
+
   return (
     <>
       <TitleBar
@@ -88,7 +103,7 @@ function AppContent() {
       />
       <div className="app-content">
         {!ready ? (
-          <div className="loading-screen">Loading…</div>
+          <div className="loading-screen">{t("common.loading")}</div>
         ) : authenticated ? (
           <DesktopMain ref={mainHandle} />
         ) : (

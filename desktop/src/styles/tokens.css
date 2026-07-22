@@ -1,0 +1,55 @@
+/* Design tokens — black/white body on a warm paper base, one warm accent. */
+:root {
+  /* Neutral body (slightly warm) */
+  --bg: #f7f6f3;
+  --surface: #ffffff;
+  --surface-2: #f1efe9;
+  --surface-3: #e8e5de;
+  --border: #e6e3dc;
+  --border-strong: #d8d4cb;
+
+  --fg: #1d1c19;
+  --fg-2: #6e6a62;
+  --fg-3: #a8a49a;
+
+  /* Primary action = near-black */
+  --accent: #1d1c19;
+  --accent-fg: #ffffff;
+  --accent-hover: #3a3833;
+
+  /* Warm highlight: focus rings, active chips, highlight badges, links */
+  --warm: #b45309;
+  --warm-soft: #faf0e0;
+  --warm-border: #ecd9b8;
+
+  /* Semantic colors — dots & badges only */
+  --p0: #dc2626;
+  --p1: #ea580c;
+  --p2: #ca8a04;
+  --p3: #9c968a;
+  --cat-bug: #dc2626;
+  --cat-feature: #0d9488;
+  --cat-task: #2563eb;
+  --st-open: #2563eb;
+  --st-progress: #d97706;
+  --st-done: #16a34a;
+  --st-dup: #9c968a;
+
+  --danger: #dc2626;
+
+  /* Shape */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  /* Elevation */
+  --shadow-pop: 0 8px 24px rgba(41, 37, 28, 0.14), 0 2px 6px rgba(41, 37, 28, 0.08);
+  --shadow-card: 0 1px 2px rgba(41, 37, 28, 0.05);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-press: 160ms;
+  --dur-pop: 180ms;
+  --dur-panel: 260ms;
+}

@@ -28,6 +28,7 @@ Thumbs.db
 config.yaml
 
 # Build
+*.tsbuildinfo
 todolist
 
 !charts/todolist
