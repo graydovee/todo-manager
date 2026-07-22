@@ -1,4 +1,4 @@
-.PHONY: frontend-dev backend-dev frontend-build cli-build cli-test desktop-build desktop-windows desktop-run test build run docker-build release clean
+.PHONY: frontend-dev backend-dev frontend-build cli-build cli-test desktop-dev desktop-windows desktop-build test build run docker-build release clean
 
 frontend-dev:
 	cd frontend && npm run dev -- --port 5173
@@ -18,19 +18,17 @@ cli-build:
 cli-test:
 	cd todo-cli && go test ./...
 
-# Desktop GUI client (Gio). Windows is the primary target.
-desktop-build:
-	mkdir -p bin
-	cd desktop && go build -o ../bin/todo-desktop .
+# Desktop GUI client (Tauri 2 + React). Windows is the primary target.
+desktop-dev:
+	cd desktop && npm run tauri dev
 
-# Cross-compile a Windows binary (requires mingw-w64: x86_64-w64-mingw32-gcc).
+# Cross-compile a Windows binary from Linux (requires mingw-w64 + rust target x86_64-pc-windows-gnu).
 desktop-windows:
-	mkdir -p bin
-	cd desktop && GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags="-s -w -H windowsgui" -o ../bin/todo-desktop.exe .
+	cd desktop && npx tauri build --target x86_64-pc-windows-gnu
 
-# Build for the current platform (Linux/macOS for development).
-desktop-run:
-	cd desktop && go run .
+# Build for the current platform.
+desktop-build:
+	cd desktop && npx tauri build
 
 test:
 	cd backend && go test ./...
