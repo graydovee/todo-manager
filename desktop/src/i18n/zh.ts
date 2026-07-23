@@ -98,6 +98,9 @@ const zh = {
   },
   manage: {
     title: '管理',
+    secFilter: '筛选',
+    secInterface: '界面',
+    secHotkeys: '热键',
     language: '语言',
     status: '状态',
     category: '分类',
@@ -111,6 +114,12 @@ const zh = {
     opacity: '锁定透明度',
     preview: '预览',
     previewing: '预览中…',
+    unlockHotkey: '解锁快捷键',
+    unlockHotkeyHint: '锁定时按下该快捷键即可解锁',
+    hotkeyRecording: '按下快捷键…',
+    hotkeyError: '快捷键无效或已被占用',
+    restoreDefaults: '还原默认设置',
+    restoreConfirm: '再点一次确认还原',
   },
   create: {
     title: '新建待办',

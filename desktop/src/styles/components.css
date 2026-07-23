@@ -328,6 +328,20 @@
 /* ---------- Manage panel ---------- */
 
 .manage-panel .btn { width: 100%; }
+.manage-panel .btn + .btn { margin-top: 8px; }
+
+.manage-section .detail-section__label { margin-bottom: 8px; }
+
+.manage-hint {
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+/* HotkeyRecorder — read-only input that captures a combo on focus.
+   The recording state borrows the .text-input:focus highlight; the
+   waiting text just dims like a placeholder. */
+.hotkey-recorder { cursor: pointer; user-select: none; }
+.hotkey-recorder--recording { color: var(--fg-3); }
 
 /* ---------- Connection screen ---------- */
 

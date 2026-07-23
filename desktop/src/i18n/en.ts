@@ -98,6 +98,9 @@ const en = {
   },
   manage: {
     title: 'Manage',
+    secFilter: 'Filter',
+    secInterface: 'Interface',
+    secHotkeys: 'Hotkeys',
     language: 'Language',
     status: 'Status',
     category: 'Category',
@@ -111,6 +114,12 @@ const en = {
     opacity: 'Lock opacity',
     preview: 'Preview',
     previewing: 'Previewing…',
+    unlockHotkey: 'Unlock shortcut',
+    unlockHotkeyHint: 'Press to unlock while locked',
+    hotkeyRecording: 'Press shortcut…',
+    hotkeyError: 'Invalid or already in use',
+    restoreDefaults: 'Restore defaults',
+    restoreConfirm: 'Click again to confirm',
   },
   create: {
     title: 'New Todo',

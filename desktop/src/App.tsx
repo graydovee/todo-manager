@@ -6,6 +6,8 @@ import { AuthProvider, useAuth } from "./stores/authContext";
 import { TitleBar } from "./components/TitleBar";
 import { ConnectionScreen } from "./components/ConnectionScreen";
 import { DesktopMain } from "./components/DesktopMain";
+import { applyHotkey, currentHotkey, onUnlock } from "./utils/hotkey";
+import { DEFAULT_LOCK_OPACITY } from "./utils/settings";
 
 export default function App() {
   return (
@@ -51,7 +53,12 @@ function AppContent() {
     setPinned(next);
     try {
       await invoke("set_always_on_top", { top: next });
-      if (!next) setLocked(false);
+      if (!next && locked) {
+        setLocked(false);
+        // Also clear the OS-level click-through, or the window stays
+        // unresponsive even though the UI looks unlocked.
+        await invoke("set_lock", { locked: false });
+      }
       await invoke("sync_tray_state", { locked: locked && next, topmost: next });
     } catch (e) {
       console.error("set_always_on_top failed:", e);
@@ -65,6 +72,24 @@ function AppContent() {
     listen("tray-toggle-pin", () => void togglePin()).then((u) => unlisteners.push(u));
     return () => unlisteners.forEach((u) => u());
   }, [toggleLock, togglePin]);
+
+  // Refs so the OS-global hotkey callback always sees fresh state without
+  // re-registering the shortcut on every lock/unlock.
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
+  const toggleLockRef = useRef(toggleLock);
+  toggleLockRef.current = toggleLock;
+
+  // Register the global unlock hotkey (default Alt+Shift+F11). Unlock-only:
+  // pressing it while already unlocked does nothing.
+  useEffect(() => {
+    onUnlock(() => {
+      if (lockedRef.current) void toggleLockRef.current();
+    });
+    void applyHotkey(currentHotkey()).catch((e) =>
+      console.error("unlock hotkey registration failed:", e)
+    );
+  }, []);
 
   // Apply semi-transparent background when locked — toggle a class on #root
   // so all child elements (title-bar, panels, rows) become semi-transparent
@@ -80,8 +105,8 @@ function AppContent() {
   // from the manage panel (custom event keeps the two in sync).
   useEffect(() => {
     const apply = () => {
-      const v = parseFloat(localStorage.getItem("lock_opacity") ?? "0.75");
-      const clamped = isNaN(v) ? 0.75 : Math.min(1, Math.max(0.2, v));
+      const v = parseFloat(localStorage.getItem("lock_opacity") ?? String(DEFAULT_LOCK_OPACITY));
+      const clamped = isNaN(v) ? DEFAULT_LOCK_OPACITY : Math.min(1, Math.max(0.2, v));
       document.documentElement.style.setProperty("--lock-opacity", String(clamped));
     };
     apply();
