@@ -36,3 +36,4 @@ charts/todolist/charts/*.tgz
 
 CLAUDE.md
 .kiro
+.zcode/
