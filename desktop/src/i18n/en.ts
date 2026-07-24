@@ -94,6 +94,7 @@ const en = {
     reopen: 'Reopen',
     edit: 'Edit',
     save: 'Save',
+    cancel: 'Cancel',
     collapse: 'Collapse',
   },
   manage: {

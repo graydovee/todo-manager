@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TodoDetail } from "../types";
 import { DetailPanel } from "./DetailPanel";
@@ -32,6 +32,9 @@ export function SidePanel({
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
 
+  // Leave edit mode when a different todo is selected.
+  useEffect(() => setEditing(false), [detail?.id]);
+
   const titles: Record<SidePanelProps["mode"], string> = {
     detail: t("detail.title"),
     manage: t("manage.title"),
@@ -45,7 +48,7 @@ export function SidePanel({
         <div className="side-panel__actions">
           {mode === "detail" && (
             <button className="btn btn--ghost btn--sm" onClick={() => setEditing((e) => !e)}>
-              {editing ? t("detail.save") : t("detail.edit")}
+              {editing ? t("detail.cancel") : t("detail.edit")}
             </button>
           )}
           <button className="icon-btn" title={t("detail.collapse")} onClick={onClose}>

@@ -34,6 +34,22 @@ export function DetailPanel({
   if (loading) return <div className="detail-panel">{t("common.loading")}</div>;
   if (!detail) return <div className="detail-panel">{t("detail.noDetail")}</div>;
 
+  // Edit mode replaces the read-only view so the form is immediately visible.
+  if (editing) {
+    return (
+      <div className="detail-panel">
+        <EditForm
+          key={detail.id}
+          detail={detail}
+          onSaved={() => {
+            onEditingChange(false);
+            onTodoChanged();
+          }}
+        />
+      </div>
+    );
+  }
+
   const todo = detail;
   const code = formatDisplayCode(todo.category, todo.code);
 
@@ -109,16 +125,6 @@ export function DetailPanel({
       <div className="detail-sep" />
 
       <CommentsSection todoId={todo.id} />
-
-      {editing && (
-        <EditForm
-          detail={detail}
-          onSaved={() => {
-            onEditingChange(false);
-            onTodoChanged();
-          }}
-        />
-      )}
     </div>
   );
 }

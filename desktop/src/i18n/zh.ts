@@ -94,6 +94,7 @@ const zh = {
     reopen: '重新打开',
     edit: '编辑',
     save: '保存',
+    cancel: '取消',
     collapse: '收起',
   },
   manage: {
