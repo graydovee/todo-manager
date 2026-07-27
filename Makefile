@@ -26,8 +26,8 @@ backend-dev:
 
 frontend-build:
 	cd frontend && npm install && npm run build
-	rm -rf backend/static/frontend_dist
-	cp -r frontend/dist backend/static/frontend_dist
+	find backend/static/frontend_dist -mindepth 1 ! -name '.gitkeep' -delete
+	cp -r frontend/dist/. backend/static/frontend_dist/
 
 cli-build:
 	mkdir -p bin

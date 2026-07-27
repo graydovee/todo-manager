@@ -1,5 +1,8 @@
 # Backend
-backend/static/frontend_dist/
+# frontend_dist is a build artifact, but keep a .gitkeep placeholder so the
+# //go:embed in static.go compiles on a fresh checkout (before any build).
+backend/static/frontend_dist/*
+!backend/static/frontend_dist/.gitkeep
 backend/todolist.db
 *.db
 
