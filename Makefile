@@ -1,4 +1,22 @@
-.PHONY: frontend-dev backend-dev frontend-build cli-build cli-test desktop-dev desktop-windows desktop-build test build run docker-build release clean
+# === Platform detection =====================================================
+# Goal: the same Makefile works under GNU Make on Linux/macOS and under
+# mingw32-make on Windows. Two Windows-specific issues are handled here:
+#   1. mingw32-make defaults to cmd.exe, which lacks rm/cp/mkdir/find used
+#      throughout this file. We force Git Bash's sh so all recipes stay
+#      Unix-style and cross-platform.
+#   2. `go build -o name` on Windows produces a PE binary with NO .exe
+#      suffix, which then cannot be executed by name. We append $(EXE) to
+#      every Go build output and to the `run` target so the artifact is
+#      directly runnable on every platform.
+ifeq ($(OS),Windows_NT)
+SHELL := C:/Program Files/Git/bin/sh.exe
+EXE   := .exe
+else
+SHELL := /bin/sh
+EXE   :=
+endif
+
+.PHONY: frontend-dev backend-dev frontend-build cli-build cli-test desktop-dev desktop-windows desktop-windows-gnu desktop-build test build run docker-build release clean
 
 frontend-dev:
 	cd frontend && npm run dev -- --port 5173
@@ -13,7 +31,7 @@ frontend-build:
 
 cli-build:
 	mkdir -p bin
-	cd todo-cli && go build -o ../bin/todo-cli .
+	cd todo-cli && go build -o ../bin/todo-cli$(EXE) .
 
 cli-test:
 	cd todo-cli && go test ./...
@@ -50,7 +68,7 @@ test:
 
 build: frontend-build cli-build
 	mkdir -p bin
-	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../bin/todo-manager cmd/server/main.go
+	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../bin/todo-manager$(EXE) cmd/server/main.go
 
 IMAGE_NAME := graydovee/todo-manager
 GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
@@ -70,7 +88,7 @@ release:
 	$(CONTAINER_ENGINE) manifest push $(IMAGE_NAME):$(GIT_VERSION) docker://docker.io/$(IMAGE_NAME):latest
 
 run:
-	./bin/todo-manager -config config.yaml
+	./bin/todo-manager$(EXE) -config config.yaml
 
 clean:
 	rm -rf frontend/dist backend/static/frontend_dist bin
