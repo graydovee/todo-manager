@@ -59,11 +59,25 @@ type LoaderOptions struct {
 	HomeDir string
 }
 
+// ResolveUserHomeDir returns the user's home directory in a cross-platform way.
+//
+// It honors the HOME environment variable first (the Unix convention and what
+// most tools, CI runners, and our test fixtures set via t.Setenv("HOME", ...)),
+// then falls back to os.UserHomeDir(), which reads USERPROFILE on Windows and
+// HOME on POSIX. This makes HOME authoritative on every platform so that
+// Windows behaves consistently with Linux/macOS for config discovery.
+func ResolveUserHomeDir() (string, error) {
+	if home := os.Getenv("HOME"); home != "" {
+		return home, nil
+	}
+	return os.UserHomeDir()
+}
+
 func Load(opts LoaderOptions) (*Config, error) {
 	homeDir := opts.HomeDir
 	if homeDir == "" {
 		var err error
-		homeDir, err = os.UserHomeDir()
+		homeDir, err = ResolveUserHomeDir()
 		if err != nil {
 			return nil, fmt.Errorf("resolve user home directory: %w", err)
 		}
@@ -175,7 +189,7 @@ func MarshalYAML(cfg *Config) ([]byte, error) {
 func Write(homeDir string, cfg *Config) error {
 	if homeDir == "" {
 		var err error
-		homeDir, err = os.UserHomeDir()
+		homeDir, err = ResolveUserHomeDir()
 		if err != nil {
 			return fmt.Errorf("resolve user home directory: %w", err)
 		}

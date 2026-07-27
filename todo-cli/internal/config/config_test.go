@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -123,12 +124,17 @@ func TestWriteConfig(t *testing.T) {
 	if content == "" || !containsAll(content, "auth:", "default_user: default", "api_key: secret", "base_url: https://todo.qaer.io") {
 		t.Fatalf("unexpected config content: %q", content)
 	}
-	info, err := os.Stat(ConfigPath(home))
-	if err != nil {
-		t.Fatalf("stat config file: %v", err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("expected mode 0600, got %#o", info.Mode().Perm())
+	// Unix permission bits are not honored on Windows (NTFS ignores the
+	// mode passed to WriteFile and reports 0666), so only assert the
+	// restrictive 0600 mode on POSIX systems.
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(ConfigPath(home))
+		if err != nil {
+			t.Fatalf("stat config file: %v", err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("expected mode 0600, got %#o", info.Mode().Perm())
+		}
 	}
 }
 

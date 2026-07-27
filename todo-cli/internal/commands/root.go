@@ -161,5 +161,5 @@ func mustStringSliceFlag(cmd *cobra.Command, name string) []string {
 }
 
 func configUserHomeDir() (string, error) {
-	return os.UserHomeDir()
+	return config.ResolveUserHomeDir()
 }
