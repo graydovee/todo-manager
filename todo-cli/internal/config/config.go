@@ -15,6 +15,7 @@ import (
 const (
 	EnvAPIKey      = "TODO_MANAGER_API_KEY"
 	EnvBaseURL     = "TODO_MANAGER_BASE_URL"
+	EnvHome        = "TODO_MANAGER_HOME"
 	DefaultBaseURL = "https://todo.qaer.io"
 )
 
@@ -59,15 +60,16 @@ type LoaderOptions struct {
 	HomeDir string
 }
 
-// ResolveUserHomeDir returns the user's home directory in a cross-platform way.
+// ResolveUserHomeDir returns the directory holding the CLI config.
 //
-// It honors the HOME environment variable first (the Unix convention and what
-// most tools, CI runners, and our test fixtures set via t.Setenv("HOME", ...)),
-// then falls back to os.UserHomeDir(), which reads USERPROFILE on Windows and
-// HOME on POSIX. This makes HOME authoritative on every platform so that
-// Windows behaves consistently with Linux/macOS for config discovery.
+// It honors the TODO_MANAGER_HOME environment variable first — a portable,
+// user-defined config location that works identically on every platform
+// (this is the only cross-platform way to override the config dir, since
+// Windows has no HOME convention and reads USERPROFILE). When unset, it falls
+// back to os.UserHomeDir(), which resolves to HOME on POSIX and USERPROFILE on
+// Windows, i.e. the native platform default (~/.todo-manager/config.yaml).
 func ResolveUserHomeDir() (string, error) {
-	if home := os.Getenv("HOME"); home != "" {
+	if home := os.Getenv(EnvHome); home != "" {
 		return home, nil
 	}
 	return os.UserHomeDir()

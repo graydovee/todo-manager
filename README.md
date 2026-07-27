@@ -211,6 +211,7 @@ auth:
 ```
 
 - **`-u`/`--user`** selects the profile for a command (defaults to `auth.default_user`; if that's empty, `-u` is required).
+- **`TODO_MANAGER_HOME`** overrides the config directory (default `~/.todo-manager`). Set it to relocate the config, e.g. for tests, CI, or a portable install — works the same on Windows as on POSIX.
 - **`config user`** manages profiles: `list`, `set-default <name>` (`""` clears it), `remove <name>`, `rename <old> <new>`.
 - **`--output`/`-o`** picks the output format: `yaml` or `json` (both pretty); `pretty` is a kept as a `json` alias. `config view` defaults to YAML — pass `-o json` for machine parsing.
 - A legacy single-user config (flat `api_key`/`base_url`) is **auto-migrated** to the `default` profile on first run.

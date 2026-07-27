@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/graydovee/todo-manager/todo-cli/internal/client"
+	"github.com/graydovee/todo-manager/todo-cli/internal/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -32,7 +33,7 @@ func seedHome(t *testing.T, content string) string {
 	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("write config file: %v", err)
 	}
-	t.Setenv("HOME", home)
+	t.Setenv(config.EnvHome, home)
 	return home
 }
 
@@ -204,7 +205,7 @@ func TestCommentsCreateSendsBody(t *testing.T) {
 
 func TestLoginBootstrap(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	t.Setenv(config.EnvHome, home)
 
 	cmd := NewRootCommand()
 	var stdout bytes.Buffer
@@ -238,7 +239,7 @@ func TestLoginBootstrap(t *testing.T) {
 
 func TestLoginReadsAPIKeyFromStdin(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	t.Setenv(config.EnvHome, home)
 
 	cmd := NewRootCommand()
 	cmd.SetIn(bytes.NewBufferString("tdk_from_stdin\n"))
@@ -282,7 +283,7 @@ func TestLoginWithUserAddsNamed(t *testing.T) {
 		t.Fatalf("execute login -u: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".todo-manager", "config.yaml"))
+	data, err := os.ReadFile(filepath.Join(os.Getenv(config.EnvHome), ".todo-manager", "config.yaml"))
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}
@@ -307,7 +308,7 @@ func TestLoginWithUserOverwritesExisting(t *testing.T) {
 		t.Fatalf("execute login -u: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".todo-manager", "config.yaml"))
+	data, err := os.ReadFile(filepath.Join(os.Getenv(config.EnvHome), ".todo-manager", "config.yaml"))
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}

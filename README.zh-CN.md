@@ -211,6 +211,7 @@ auth:
 ```
 
 - **`-u`/`--user`** 指定本次命令使用的用户（缺省时取 `auth.default_user`；若为空则必须传 `-u`）。
+- **`TODO_MANAGER_HOME`** 覆盖配置目录（默认 `~/.todo-manager`）。可用于测试、CI 或便携安装时重定位配置 —— 在 Windows 与 POSIX 上行为一致。
 - **`config user`** 管理用户：`list`、`set-default <name>`（传 `""` 清空默认）、`remove <name>`、`rename <old> <new>`。
 - **`--output`/`-o`** 选择输出格式：`yaml` 或 `json`（均为 pretty 打印）；`pretty` 作为 `json` 的兼容别名保留。`config view` 默认输出 YAML —— 机器解析请加 `-o json`。
 - 旧版单用户配置（扁平的 `api_key`/`base_url`）会在首次运行时**自动迁移**为 `default` 用户。
