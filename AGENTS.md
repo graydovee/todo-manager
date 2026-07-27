@@ -1,6 +1,39 @@
 # Agent 指南
 
-本仓库为 monorepo（Go 后端 + React 前端 + Tauri 桌面端）。通用架构与领域规则见 `CLAUDE.md`。
+## 协作规则
+
+- **回答使用中文**；代码、注释、commit message、PR 描述等产物一律使用**英文**。
+- **编译、测试必须通过 `make` 执行**。如果现有 Makefile 目标无法满足需求，**优先修改 Makefile**（新增或调整 target），而不是绕过 make 直接在终端拼命令。
+
+## 仓库概览
+
+Monorepo，四个子项目：
+
+| 目录 | 说明 |
+| --- | --- |
+| `backend/` | Go 1.25 + Echo v4 + GORM；支持 SQLite / MySQL / PostgreSQL；生产构建将前端 SPA 嵌入单个二进制 |
+| `frontend/` | Vite + React 19 + TypeScript + Ant Design v6 + TanStack Query 的 Web SPA |
+| `desktop/` | Tauri 2 + React 桌面端（Windows 为主要目标），通过 HTTP API 与 backend 通信 |
+| `todo-cli/` | Go CLI 客户端，通过 API access key 调用后端 |
+
+其他：`charts/` 为 Helm chart；`Dockerfile` 为多阶段 distroless 镜像；本地配置由 `config.example.yaml` 复制为 `config.yaml`（已 gitignore）。
+
+## 常用 Make 目标
+
+- 开发：`make backend-dev`（:8080）、`make frontend-dev`（:5173，Vite 代理 API 到后端）、`make desktop-dev`
+- 测试：`make test`（backend + frontend + cli 全量）、`make cli-test`
+- 构建：`make build`（前端嵌入 + server + CLI → `bin/`）、`make frontend-build`、`make cli-build`
+- 桌面打包：`make desktop-windows`（交叉编译，见下文）、`make desktop-build`（本机平台）
+- 其他：`make run`、`make clean`、`make docker-build`、`make release`
+
+前端 lint 暂无 Make 目标，如需请先在 Makefile 中添加（底层命令为 `cd frontend && npm run lint`）。
+
+## 架构约定
+
+- backend 分层：`internal/handler`（HTTP）→ `internal/service`（业务逻辑）→ `internal/repository`（持久化）；模型在 `internal/model`，认证授权在 `internal/auth`、`internal/authz`、`internal/session`。handler 不直接访问 repository。
+- 生产模式下后端从 `backend/static/frontend_dist` 提供前端静态资源（由 `make frontend-build` 负责构建并拷贝）。
+- 领域规则：todo 分 `bug` / `feature` / `task` 三类，按用户自动编号为 `BUG-N` / `FEATURE-N` / `TASK-N`；`depends_on` 构成 DAG，完成/重开会沿图级联。
+- 更详细的领域与架构说明见 `README.md` / `README.zh-CN.md`。
 
 ---
 
