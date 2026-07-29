@@ -1,4 +1,4 @@
-import { register, unregisterAll } from "@tauri-apps/plugin-global-shortcut";
+import { register, unregisterAll, type ShortcutEvent } from "@tauri-apps/plugin-global-shortcut";
 import { DEFAULT_UNLOCK_HOTKEY } from "./settings";
 
 /**
@@ -9,6 +9,15 @@ import { DEFAULT_UNLOCK_HOTKEY } from "./settings";
  * re-registers via applyHotkey() when the user records a new combination.
  */
 let unlockHandler: (() => void) | null = null;
+
+/**
+ * Shortcut registration handler. Only fires on the "Pressed" transition so
+ * that holding the key down (which some platforms surface as repeated
+ * Pressed/Released events) doesn't toggle the lock on and off repeatedly.
+ */
+function onShortcutPressed(event: ShortcutEvent) {
+  if (event.state === "Pressed") unlockHandler?.();
+}
 
 /** Set the callback fired when the global hotkey is pressed. */
 export function onUnlock(cb: () => void) {
@@ -29,11 +38,11 @@ export async function applyHotkey(accel: string): Promise<void> {
   const prev = currentHotkey();
   try {
     await unregisterAll();
-    await register(accel, () => unlockHandler?.());
+    await register(accel, onShortcutPressed);
   } catch (e) {
     try {
       await unregisterAll();
-      await register(prev, () => unlockHandler?.());
+      await register(prev, onShortcutPressed);
     } catch {
       /* keep the original error */
     }
