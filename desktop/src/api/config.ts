@@ -12,6 +12,11 @@ import { LazyStore } from "@tauri-apps/plugin-store";
 const STORE_FILE = "desktop-config.json";
 const KEY_BACKEND_URL = "backendUrl";
 const KEY_API_KEY = "apiKey";
+const KEY_MODE = "mode";
+
+/** Connection mode: "remote" talks to a user-configured server; "local" runs an
+ * embedded backend against a local SQLite database with no login. */
+export type ConnectionMode = "remote" | "local";
 
 let storePromise: Promise<LazyStore> | null = null;
 
@@ -61,6 +66,23 @@ export async function setApiKey(key: string): Promise<void> {
 export async function clearApiKey(): Promise<void> {
   const s = await store();
   await s.delete(KEY_API_KEY);
+  await s.save();
+}
+
+/**
+ * Get the connection mode. Defaults to "remote" (the historical behaviour) when
+ * unset, so existing users keep connecting to their configured server.
+ */
+export async function getMode(): Promise<ConnectionMode> {
+  const s = await store();
+  const v = await s.get<string>(KEY_MODE);
+  return v === "local" ? "local" : "remote";
+}
+
+/** Persist the connection mode. */
+export async function setMode(mode: ConnectionMode): Promise<void> {
+  const s = await store();
+  await s.set(KEY_MODE, mode);
   await s.save();
 }
 

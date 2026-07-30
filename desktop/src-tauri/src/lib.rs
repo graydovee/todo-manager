@@ -1,16 +1,20 @@
 // Tauri desktop client — library entry point.
 
+mod sidecar;
 mod tray;
 
-use tauri::WebviewWindow;
+use sidecar::SidecarState;
+use tauri::{Manager, RunEvent, WebviewWindow};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_shell::init())
+        .manage(SidecarState::new())
         .setup(|app| {
             tray::setup(app)?;
             Ok(())
@@ -19,9 +23,22 @@ pub fn run() {
             set_always_on_top,
             set_lock,
             tray::sync_tray_state,
+            sidecar::start_local_backend,
+            sidecar::stop_local_backend,
+            sidecar::local_http,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        // On exit, kill the embedded sidecar so we never leave an orphaned
+        // backend process behind.
+        if let RunEvent::ExitRequested { .. } | RunEvent::Exit = event {
+            if let Some(state) = app_handle.try_state::<SidecarState>() {
+                state.kill_child();
+            }
+        }
+    });
 }
 
 /// Toggle always-on-top for the main window.

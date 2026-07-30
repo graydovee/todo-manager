@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../stores/authContext";
+import { setMode } from "../api/config";
 import { Field } from "./ui/Field";
 import { ChipGroup } from "./ui/ChipGroup";
 import { HotkeyRecorder } from "./ui/HotkeyRecorder";
@@ -91,6 +92,15 @@ export function ManagePanel({ onLogout }: ManagePanelProps) {
   };
 
   const doLogout = async () => {
+    onLogout();
+    await logout();
+  };
+
+  // Clear the stored mode and log out, so the connection screen reappears and
+  // the user can pick remote or local again. Switching does not delete data —
+  // local SQLite and remote server data remain independent.
+  const doSwitchConnection = async () => {
+    await setMode("remote");
     onLogout();
     await logout();
   };
@@ -226,6 +236,9 @@ export function ManagePanel({ onLogout }: ManagePanelProps) {
 
       <button className="btn btn--ghost" onClick={onRestoreClick}>
         {armRestore ? t("manage.restoreConfirm") : t("manage.restoreDefaults")}
+      </button>
+      <button className="btn btn--ghost" onClick={doSwitchConnection}>
+        {t("manage.switchConnection")}
       </button>
       <button className="btn btn--ghost" onClick={doLogout}>
         {t("manage.logout")}

@@ -23,6 +23,12 @@
     "global-shortcut:allow-unregister",
     "global-shortcut:allow-unregister-all",
     {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        { "name": "binaries/todo-manager-sidecar", "sidecar": true }
+      ]
+    },
+    {
       "identifier": "http:default",
       "allow": [
         { "url": "http://*" },

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../stores/authContext";
-import { getBackendUrl, setBackendUrl, setApiKey } from "../api/config";
+import { getBackendUrl, setBackendUrl, setApiKey, setMode } from "../api/config";
 import { initClient, ping, checkAuth, resetClient } from "../api/client";
 
 /**
@@ -14,7 +14,7 @@ import { initClient, ping, checkAuth, resetClient } from "../api/client";
  */
 export function ConnectionScreen() {
   const { t } = useTranslation();
-  const { connect, setClientReady } = useAuth();
+  const { connect, connectLocal, setClientReady } = useAuth();
   const [url, setUrl] = useState("");
   const [apiKey, setApiKeyState] = useState("");
   const [loading, setLoading] = useState(false);
@@ -32,14 +32,15 @@ export function ConnectionScreen() {
     setError("");
     setLoading(true);
     try {
-      // Step 1: persist the URL + key.
+      // Persist mode + URL + key.
+      await setMode("remote");
       await setBackendUrl(url);
       await setApiKey(apiKey);
 
-      // Step 2: ping the backend (health check, no auth).
+      // Ping the backend (health check, no auth).
       await ping(url);
 
-      // Step 3: initialise the client (sets baseURL + Bearer header) and verify.
+      // Initialise the client (sets baseURL + Bearer header) and verify.
       const ok = await initClient();
       if (!ok) {
         setError(t("connection.errInit"));
@@ -59,6 +60,22 @@ export function ConnectionScreen() {
       } else {
         setError(t("connection.errFailed", { msg }));
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUseLocal = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      await setMode("local");
+      await connectLocal();
+    } catch (e) {
+      resetClient();
+      setClientReady(false);
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(t("connection.localError", { msg }));
     } finally {
       setLoading(false);
     }
@@ -93,6 +110,17 @@ export function ConnectionScreen() {
         >
           {loading ? t("connection.connecting") : t("connection.connect")}
         </button>
+        <div className="connection-divider">
+          <span>{t("connection.or")}</span>
+        </div>
+        <button
+          className="btn btn--secondary"
+          onClick={handleUseLocal}
+          disabled={loading}
+        >
+          {loading ? t("connection.localStarting") : t("connection.useLocal")}
+        </button>
+        <p className="connection-hint">{t("connection.localHint")}</p>
         <p className="connection-footnote">{t("connection.footnote")}</p>
       </div>
     </div>

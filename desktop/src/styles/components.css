@@ -389,6 +389,31 @@
   color: var(--fg-3);
 }
 
+.connection-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 2px;
+  color: var(--fg-3);
+  font-size: 11px;
+}
+.connection-divider::before,
+.connection-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.connection-card .btn--secondary {
+  background: transparent;
+  color: var(--fg-1);
+  border: 1px solid var(--border);
+}
+.connection-card .btn--secondary:hover {
+  background: var(--surface-hover, rgba(0, 0, 0, 0.04));
+}
+
 /* ---------- Opacity slider (manage panel) ---------- */
 
 .opacity-row {

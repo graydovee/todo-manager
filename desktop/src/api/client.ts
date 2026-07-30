@@ -2,6 +2,7 @@ import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from "axio
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { getBackendUrl, getApiKey } from "./config";
 import { tauriHttpAdapter } from "./tauriAdapter";
+import { localInvokeAdapter } from "./localAdapter";
 
 /**
  * HTTP client for the desktop app.
@@ -55,6 +56,25 @@ export async function initClient(): Promise<boolean> {
 export function resetClient(): void {
   client.defaults.baseURL = undefined;
   currentApiKey = "";
+}
+
+/**
+ * Initialise the client for local mode: route requests through the
+ * `localInvokeAdapter` (which forwards to the embedded sidecar over a local
+ * socket) instead of the network HTTP adapter. The baseURL is a bare path —
+ * the adapter strips it and sends only the path to Rust. No API key is needed
+ * (the sidecar runs in auth.mode=none).
+ */
+export async function initLocalClient(): Promise<boolean> {
+  client.defaults.adapter = localInvokeAdapter;
+  client.defaults.baseURL = "/api/v1";
+  currentApiKey = "";
+  return true;
+}
+
+/** True when the client is currently wired to the local sidecar adapter. */
+export function isLocalMode(): boolean {
+  return client.defaults.adapter === localInvokeAdapter;
 }
 
 /** The base URL currently in use (for display). Empty if not initialised. */

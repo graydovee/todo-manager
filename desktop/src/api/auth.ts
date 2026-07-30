@@ -14,6 +14,8 @@ export interface AuthUser {
   backendUrl: string;
   /** A masked prefix of the API key, for display. */
   keyHint: string;
+  /** True when running against the embedded local backend (no login). */
+  isLocal?: boolean;
 }
 
 /**

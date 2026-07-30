@@ -6,21 +6,23 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { initClient, checkAuth, resetClient, getBaseURL } from "../api/client";
-import { getApiKey, clearApiKey } from "../api/config";
+import { initClient, checkAuth, resetClient, getBaseURL, initLocalClient } from "../api/client";
+import { getApiKey, getMode } from "../api/config";
+import { startLocalBackend } from "../api/localBackend";
 import { keyHint, type AuthUser } from "../api/auth";
 
 /**
- * Auth context for the desktop client (API Key mode).
+ * Auth context for the desktop client.
  *
- * Startup behaviour (matches the Fyne desktop client):
- * - If a backend URL + API key are stored, automatically verify the connection
- *   (initClient + checkAuth). On success, go straight to the todo list.
- * - If no credentials are stored, or the stored key is invalid, show the
- *   connection screen.
+ * Two connection modes:
+ * - "remote": connect to a user-configured backend server with an API key.
+ * - "local":  run an embedded backend (sidecar) against a local SQLite database
+ *             with no login required. Data is independent from any remote server.
  *
- * The `ready` flag is false during the initial auto-connect attempt so the app
- * can show a brief loading state instead of flashing the connection screen.
+ * Startup behaviour:
+ * - On launch, read the stored mode. If "local", start the sidecar and verify;
+ *   if "remote" with stored URL+key, auto-connect; otherwise show the connection
+ *   screen.
  */
 
 interface AuthState {
@@ -29,6 +31,7 @@ interface AuthState {
   clientReady: boolean;
   setClientReady: (v: boolean) => void;
   connect: () => Promise<void>;
+  connectLocal: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -39,10 +42,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [clientReady, setClientReady] = useState(false);
 
-  // On startup, attempt auto-connect with stored credentials.
+  // On startup, auto-connect according to the stored mode.
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const mode = await getMode();
+      if (mode === "local") {
+        try {
+          await startLocalBackend();
+          await initLocalClient();
+          if (cancelled) return;
+          setClientReady(true);
+          await checkAuth();
+          if (cancelled) return;
+          setUser({ backendUrl: "local", keyHint: "", isLocal: true });
+        } catch {
+          // Sidecar failed to start — fall back to the connection screen.
+          if (cancelled) return;
+          resetClient();
+          setClientReady(false);
+        } finally {
+          if (!cancelled) setReady(true);
+        }
+        return;
+      }
+
+      // Remote mode: auto-connect with stored credentials.
       const ok = await initClient();
       if (!ok) {
         // No stored URL or key — show connection screen.
@@ -77,8 +102,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser({ backendUrl: url, keyHint: keyHint(key) });
   }, []);
 
+  const connectLocal = useCallback(async () => {
+    await startLocalBackend();
+    await initLocalClient();
+    setClientReady(true);
+    await checkAuth();
+    setUser({ backendUrl: "local", keyHint: "", isLocal: true });
+  }, []);
+
   const logout = useCallback(async () => {
-    await clearApiKey();
+    // In local mode, keep the sidecar running (avoid restart churn); just drop
+    // the user so the connection screen reappears. The sidecar is cleaned up on
+    // app exit. Clearing the mode lets the user pick remote on the next screen.
     resetClient();
     setClientReady(false);
     setUser(null);
@@ -86,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, ready, clientReady, setClientReady, connect, logout }}
+      value={{ user, ready, clientReady, setClientReady, connect, connectLocal, logout }}
     >
       {children}
     </AuthContext.Provider>
