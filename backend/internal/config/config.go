@@ -38,6 +38,15 @@ type AuthConfig struct {
 	Mode  string      `yaml:"mode"`
 	Basic BasicConfig `yaml:"basic"`
 	OIDC  OIDCConfig  `yaml:"oidc"`
+	Local LocalConfig `yaml:"local"`
+}
+
+// LocalConfig holds settings for the no-auth "none" mode, where a single fixed
+// local user owns all data. Used by the embedded desktop sidecar so the app can
+// run entirely against a local SQLite database without any login.
+type LocalConfig struct {
+	// DisplayName is the display name of the auto-provisioned local user.
+	DisplayName string `yaml:"display_name"`
 }
 
 type BasicConfig struct {
@@ -89,15 +98,33 @@ func ValidateLLMConfig(cfg *LLMConfig) error {
 	return nil
 }
 
-func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read config file: %w", err)
-	}
+// skipConfigEnv is the env var that, when set to a truthy value ("1", "true",
+// "yes"), tells Load to skip reading a config file entirely and build the
+// config purely from defaults + env overrides. Used by the embedded desktop
+// sidecar so it can boot without shipping a YAML file.
+const skipConfigEnv = "TODO_MANAGER_SKIP_CONFIG"
 
+func truthy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+func Load(path string) (*Config, error) {
 	cfg := &Config{}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("parse config: %w", err)
+
+	// When no config path is given (or an explicit skip env is set), boot from
+	// defaults + env overrides alone — no YAML file required.
+	if path != "" && !truthy(os.Getenv(skipConfigEnv)) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read config file: %w", err)
+		}
+		if err := yaml.Unmarshal(data, cfg); err != nil {
+			return nil, fmt.Errorf("parse config: %w", err)
+		}
 	}
 
 	applyDefaults(cfg)
@@ -123,6 +150,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Auth.Mode == "" {
 		cfg.Auth.Mode = "basic"
+	}
+	if cfg.Auth.Mode == "none" && strings.TrimSpace(cfg.Auth.Local.DisplayName) == "" {
+		cfg.Auth.Local.DisplayName = "Local"
 	}
 	if cfg.Session.MaxAge == 0 {
 		cfg.Session.MaxAge = 86400
@@ -153,6 +183,9 @@ func applyEnvOverrides(cfg *Config) error {
 	}
 	if v := os.Getenv("TODO_MANAGER_AUTH_MODE"); v != "" {
 		cfg.Auth.Mode = v
+	}
+	if v := os.Getenv("TODO_MANAGER_AUTH_LOCAL_DISPLAY_NAME"); v != "" {
+		cfg.Auth.Local.DisplayName = v
 	}
 	if v := os.Getenv("TODO_MANAGER_SESSION_SECRET"); v != "" {
 		cfg.Session.Secret = v
@@ -185,15 +218,17 @@ func validate(cfg *Config) error {
 	if cfg.DB.Driver != "sqlite" && cfg.DB.Driver != "mysql" && cfg.DB.Driver != "postgres" {
 		return fmt.Errorf("invalid db.driver: %q (must be sqlite, mysql, or postgres)", cfg.DB.Driver)
 	}
-	if cfg.Auth.Mode != "basic" && cfg.Auth.Mode != "oidc" {
-		return fmt.Errorf("invalid auth.mode: %q (must be basic or oidc)", cfg.Auth.Mode)
+	if cfg.Auth.Mode != "basic" && cfg.Auth.Mode != "oidc" && cfg.Auth.Mode != "none" {
+		return fmt.Errorf("invalid auth.mode: %q (must be basic, oidc, or none)", cfg.Auth.Mode)
 	}
 	if cfg.Auth.Mode == "oidc" {
 		if cfg.Auth.OIDC.Issuer == "" || cfg.Auth.OIDC.ClientID == "" || cfg.Auth.OIDC.ClientSecret == "" {
 			return fmt.Errorf("auth.oidc issuer, client_id, and client_secret are required when auth.mode=oidc")
 		}
 	}
-	if len(strings.TrimSpace(cfg.Session.Secret)) == 0 {
+	// "none" mode is a single-user, no-login mode (used by the embedded desktop
+	// sidecar): it has no sessions, so the shared secret is not required.
+	if cfg.Auth.Mode != "none" && len(strings.TrimSpace(cfg.Session.Secret)) == 0 {
 		return fmt.Errorf("session.secret is required")
 	}
 	return nil

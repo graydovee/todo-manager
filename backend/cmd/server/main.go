@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/graydovee/todo-manager/internal/app"
@@ -13,11 +15,16 @@ import (
 	"github.com/graydovee/todo-manager/internal/database"
 	"github.com/graydovee/todo-manager/internal/repository"
 	"github.com/graydovee/todo-manager/internal/service"
+	"github.com/graydovee/todo-manager/internal/transport"
 	"gorm.io/gorm/logger"
 )
 
 func main() {
-	configPath := flag.String("config", "config.yaml", "path to config file")
+	// -config: path to a YAML config file. Defaults to "config.yaml" for normal
+	// deployments. The embedded desktop sidecar passes an empty path together
+	// with TODO_MANAGER_SKIP_CONFIG=1 so it can boot from env vars alone, with
+	// no YAML file shipped alongside the binary.
+	configPath := flag.String("config", "config.yaml", "path to config file (empty + TODO_MANAGER_SKIP_CONFIG=1 = env-only boot)")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
@@ -50,7 +57,29 @@ func main() {
 
 	e := app.New(cfg, db)
 
+	sidecarMode := truthyEnv("TODO_MANAGER_SIDECAR")
 	go func() {
+		if sidecarMode {
+			// Embedded mode: listen on a local socket (Windows named pipe or
+			// Unix domain socket) instead of a TCP port. This avoids Windows
+			// firewall prompts and network permissions entirely. The path is
+			// printed to stdout as a single line so the spawning Tauri process
+			// can discover and dial it.
+			ln, addr, err := transport.ListenSidecar()
+			if err != nil {
+				slog.Error("failed to listen local socket", "error", err)
+				os.Exit(1)
+			}
+			e.Listener = ln
+			fmt.Println(sidecarReadyPrefix + addr)
+			os.Stdout.Sync()
+			slog.Info("starting sidecar server", "addr", addr)
+			if err := e.Start(""); err != nil {
+				slog.Info("sidecar server stopped", "error", err)
+			}
+			return
+		}
+
 		addr := fmt.Sprintf(":%d", cfg.Server.Port)
 		slog.Info("starting server", "addr", addr)
 		if err := e.Start(addr); err != nil {
@@ -63,9 +92,22 @@ func main() {
 	<-quit
 
 	slog.Info("shutting down server")
-	if err := e.Shutdown(nil); err != nil {
+	if err := e.Shutdown(context.Background()); err != nil {
 		slog.Error("shutdown error", "error", err)
 	}
+}
+
+// sidecarReadyPrefix is written to stdout, immediately followed by the local
+// socket address, once the sidecar listener is bound. The Tauri parent reads
+// stdout lines and waits for this sentinel before dialing.
+const sidecarReadyPrefix = "SIDECAR_READY "
+
+func truthyEnv(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
 }
 
 func initLogger(cfg *config.Config) {
