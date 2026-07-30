@@ -16,7 +16,7 @@ SHELL := /bin/sh
 EXE   :=
 endif
 
-.PHONY: frontend-dev backend-dev frontend-build cli-build cli-test desktop-dev desktop-windows desktop-windows-gnu desktop-build test build run docker-build release clean
+.PHONY: frontend-dev backend-dev frontend-build cli-build cli-test desktop-dev desktop-windows desktop-windows-gnu desktop-build backend-windows-exe test build run docker-build release clean
 
 frontend-dev:
 	cd frontend && npm run dev -- --port 5173
@@ -47,10 +47,18 @@ desktop-dev:
 # Note: stale build-script outputs (embedded icon resources etc.) are removed
 # first — cargo clean -p does NOT clean them, and an outdated resource.lib
 # would silently be relinked into the new exe.
-desktop-windows:
+desktop-windows: desktop-sidecar-windows
 	cd desktop && npm run build
 	rm -rf desktop/src-tauri/target/x86_64-pc-windows-msvc/release/build/todo-desktop-*
 	cd desktop/src-tauri && cargo xwin build --release --features prod --target x86_64-pc-windows-msvc
+
+# Cross-compile the Go backend as a Tauri sidecar for Windows. The binary is
+# placed where Tauri expects sidecars: src-tauri/binaries/<name>-<triple>.exe.
+# It is spawned by the desktop app to run a local SQLite backend in "none"
+# auth mode (no login required). Pure-Go SQLite driver => CGO_ENABLED=0.
+desktop-sidecar-windows:
+	mkdir -p desktop/src-tauri/binaries
+	cd backend && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o ../desktop/src-tauri/binaries/todo-manager-sidecar-x86_64-pc-windows-msvc.exe cmd/server/main.go
 
 # Legacy: cross-compile via mingw (produces an .exe + WebView2Loader.dll that
 # must be shipped together). Kept as a fallback in case the MSVC path breaks.
@@ -58,8 +66,18 @@ desktop-windows-gnu:
 	cd desktop && npx tauri build --target x86_64-pc-windows-gnu --no-bundle
 
 # Build for the current platform.
-desktop-build:
+desktop-build: desktop-sidecar
 	cd desktop && npx tauri build
+
+# Build the Go backend sidecar for the CURRENT platform/triple (used by the
+# native desktop-build target). Rust's host target triple is looked up via
+# `rustc -vV`; Tauri matches the sidecar binary by that triple.
+desktop-sidecar:
+	@mkdir -p desktop/src-tauri/binaries
+	@TRIPLE=$$(rustc -vV | sed -n 's/^host: //p'); \
+	echo "building sidecar for triple: $$TRIPLE"; \
+	EXT=$(EXE); \
+	cd backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../desktop/src-tauri/binaries/todo-manager-sidecar-$$TRIPLE$$EXT cmd/server/main.go
 
 test:
 	cd backend && go test ./...

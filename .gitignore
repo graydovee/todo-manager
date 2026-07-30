@@ -14,6 +14,8 @@ frontend/dist/
 desktop/node_modules/
 desktop/dist/
 desktop/src-tauri/target/
+# The bundled backend sidecar binary is built by `make desktop-sidecar*`.
+desktop/src-tauri/binaries/
 
 bin/
 
