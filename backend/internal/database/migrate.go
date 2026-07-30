@@ -5,7 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"log/slog"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 
@@ -42,7 +42,9 @@ func RunMigrations(db *gorm.DB, driver string) error {
 			continue
 		}
 
-		content, err := migrationFS.ReadFile(filepath.Join(dir, name))
+		// embed.FS always uses forward slashes regardless of OS; use path.Join
+		// (not filepath.Join) so this works on Windows too.
+		content, err := migrationFS.ReadFile(path.Join(dir, name))
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", name, err)
 		}
