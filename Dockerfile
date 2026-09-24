@@ -34,13 +34,16 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # Stage 3: Final image
 # 原先用 gcr.io/distroless/static-debian12:nonroot，但 Harbor 里没有 distroless，
 # 改用已有的 alpine 并显式装 ca-certificates（OIDC discovery 与 LLM API 都要走
-# HTTPS）与 tzdata。uid 与原 distroless nonroot 一致，PVC /data 写权限不变。
+# HTTPS）与 tzdata。
+# uid/gid 必须是 65532（distroless static:nonroot 的 uid），不是 65534：PVC 上
+# 已有的 /data/todolist.db 属主是 65532，换成别的 uid 后对它是只读，写会
+# Permission denied。
 FROM harbor.graydove.cn/library/alpine:3.22
 RUN --mount=type=cache,target=/var/cache/apk \
     apk add --no-cache ca-certificates tzdata
 COPY --from=backend /todo-manager /todo-manager
 COPY config.example.yaml /config.yaml
-USER 65534:65534
+USER 65532:65532
 EXPOSE 8080
 ENTRYPOINT ["/todo-manager"]
 CMD ["-config", "/config.yaml"]
