@@ -1,0 +1,23 @@
+# 构建上下文裁剪。CI 用 git clone --depth 1，这些本来也不在；本地构建时能显著瘦身。
+.git
+.gitea
+.github
+.claude
+.agents
+.codex
+.kiro
+.zcode
+.vscode
+bin/
+desktop/
+todo-cli/
+charts/
+frontend/node_modules/
+frontend/dist/
+backend/static/frontend_dist/
+*.db
+config.yaml
+CLAUDE.md
+AGENTS.md
+README.md
+README.zh-CN.md

@@ -1,0 +1,109 @@
+# 由 graydove CI 模板（graydove-project skill）生成，项目：todo-manager。
+# 构建多架构镜像 → 合并 manifest → 回写 charts 的镜像 tag（ArgoCD 随后部署）。
+#
+# 触发：推送到主分支 / 打 tag 都会构建并部署
+#   分支推送 → 镜像 tag 用短 SHA（sha-xxxxxxx）
+#   tag 推送 → 镜像 tag 用 tag 名（vX.Y.Z）
+#
+# 前置：
+#   - charts 仓库里 apps/todolist/overlays/values.yaml 已存在
+#   - 四个 Actions secrets 已建且作用域覆盖本仓库（见 SKILL.md 3.3）
+name: build-and-release
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+
+env:
+  REGISTRY: harbor.graydove.cn
+  IMAGE: harbor.graydove.cn/apps/todo-manager
+  REPO: git.graydove.cn/graydove/todo-manager.git
+
+jobs:
+  build:
+    name: build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: linux-amd64, arch: amd64 }
+          - { runner: linux-arm64, arch: arm64 }
+    # 凭据走环境变量，不要内联进脚本
+    env:
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+      CI_GIT_USER: ${{ secrets.CI_GIT_USER }}
+      CI_GIT_TOKEN: ${{ secrets.CI_GIT_TOKEN }}
+    steps:
+      - name: checkout
+        run: |
+          set -eu
+          git clone --branch '${{ github.ref_name }}' --depth 1 \
+            "https://${CI_GIT_USER}:${CI_GIT_TOKEN}@${REPO}" .
+
+      - name: build & push
+        run: |
+          set -eu
+          case '${{ github.ref }}' in
+            refs/tags/*) TAG='${{ github.ref_name }}' ;;
+            *)           TAG="sha-$(printf %s '${{ github.sha }}' | cut -c1-7)" ;;
+          esac
+          echo "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u "$HARBOR_USERNAME" --password-stdin
+          docker build -t "${IMAGE}:${TAG}-${{ matrix.arch }}" .
+          docker push "${IMAGE}:${TAG}-${{ matrix.arch }}"
+
+  merge:
+    name: merge manifest
+    needs: [build]
+    runs-on: linux-amd64
+    env:
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+    steps:
+      - name: merge per-arch images into one multi-arch manifest
+        run: |
+          set -eu
+          case '${{ github.ref }}' in
+            refs/tags/*) TAG='${{ github.ref_name }}' ;;
+            *)           TAG="sha-$(printf %s '${{ github.sha }}' | cut -c1-7)" ;;
+          esac
+          echo "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u "$HARBOR_USERNAME" --password-stdin
+          docker buildx imagetools create \
+            -t "${IMAGE}:${TAG}" \
+            -t "${IMAGE}:latest" \
+            "${IMAGE}:${TAG}-amd64" "${IMAGE}:${TAG}-arm64"
+          docker buildx imagetools inspect "${IMAGE}:${TAG}"
+
+  bump-charts:
+    name: bump charts
+    needs: [merge]
+    runs-on: linux-amd64
+    env:
+      CI_GIT_USER: ${{ secrets.CI_GIT_USER }}
+      CI_GIT_TOKEN: ${{ secrets.CI_GIT_TOKEN }}
+    steps:
+      - name: update image tag in charts repo
+        run: |
+          set -eu
+          case '${{ github.ref }}' in
+            refs/tags/*) TAG='${{ github.ref_name }}' ;;
+            *)           TAG="sha-$(printf %s '${{ github.sha }}' | cut -c1-7)" ;;
+          esac
+          git clone "https://${CI_GIT_USER}:${CI_GIT_TOKEN}@git.graydove.cn/graydove/charts.git" /tmp/charts
+          cd /tmp/charts
+          # charts 里 tag 行格式为 "  tag: vX.Y.Z"
+          sed -i "s|^  tag: .*|  tag: ${TAG}|" apps/todolist/overlays/values.yaml
+          # 匹配不到就报错退出
+          grep -q "^  tag: ${TAG}$" apps/todolist/overlays/values.yaml \
+            || { echo "charts 里没找到匹配的 tag 行，检查 apps/todolist/overlays/values.yaml 的格式" >&2; exit 1; }
+          git --no-pager diff --stat
+          if git diff --quiet; then
+            echo "charts 里的 tag 已经是 ${TAG}，无需提交"
+            exit 0
+          fi
+          git config user.name "graydove-ci"
+          git config user.email "ci@graydove.cn"
+          git commit -am "todolist: 镜像升级到 ${TAG}（CI 自动提交）"
+          git push origin main
