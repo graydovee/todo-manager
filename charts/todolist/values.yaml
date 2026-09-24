@@ -7,7 +7,7 @@ image:
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Image tag（CI 在打 tag 时回写；也可手工指定）
-  tag: sha-bc75d40
+  tag: v0.2.0
 
 # -- Image pull secrets for private registries
 imagePullSecrets: []
