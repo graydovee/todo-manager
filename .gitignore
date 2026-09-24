@@ -29,11 +29,13 @@ config.yaml
 
 # Build
 *.tsbuildinfo
-todolist
+# 只忽略仓库根目录的编译产物（不加 / 会把 charts/todolist/ 整个目录也忽略掉）
+/todolist
 
-!charts/todolist
-charts/todolist/charts/*.tgz
+# vendored postgresql 子 chart 的 tgz 必须入库（chart 已迁到本仓库）
+!charts/todolist/charts/*.tgz
 
 CLAUDE.md
 .kiro
-.zcode/.claude/
+.zcode/
+.claude/

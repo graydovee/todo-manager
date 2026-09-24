@@ -3,11 +3,11 @@ replicaCount: 1
 
 image:
   # -- Container image repository
-  repository: graydovee/todo-manager
+  repository: harbor.graydove.cn/apps/todo-manager
   # -- Image pull policy
   pullPolicy: IfNotPresent
-  # -- Image tag (defaults to appVersion in Chart.yaml)
-  tag: "latest"
+  # -- Image tag（CI 在打 tag 时回写；也可手工指定）
+  tag: sha-bc75d40
 
 # -- Image pull secrets for private registries
 imagePullSecrets: []
